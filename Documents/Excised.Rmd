@@ -1,0 +1,280 @@
+I'm taking out all the digging into distal eQTL.
+I've learned from Gary that this is a minefield of pseudogenes and 
+chromosome-level variation.
+
+## Aligning Distal eQTL Hotspots {.tabset .tabset-fade .tabset-pills}
+
+The following plots show alignments of distal eQTL hotspots
+across the different tissues. There are quite a few multi-tissue
+hotspots. We investigate these in more detail below.
+
+```{r align_hotspots, fig.height = 5, fig.width = 10, results = "asis"}
+distal.targets.by.chr <- vector(mode = "list", length = 20)
+for(tx in 1:length(distal.target.list)){
+  target.counts <- sapply(distal.target.list[[tx]], function(x) sapply(x, length))
+  for(ch in 1:length(distal.targets.by.chr)){
+    distal.targets.by.chr[[ch]] <- rbind(distal.targets.by.chr[[ch]], target.counts[[ch]])
+  }
+}
+
+#pdf("~/Desktop/hotspots_no_pseudo.pdf", width = 10, height = 5)
+for(ch in 1:20){
+  cat("### Chr", ch, "\n")
+  layout(matrix(c(1,2), nrow = 1), widths = c(1, 0.2))
+  combined.targets <- distal.targets.by.chr[[ch]]
+  rownames(combined.targets) <- tissue.names
+  coord <- as.numeric(colnames(combined.targets))
+  par(mar = c(4,4,4,0))
+  plot.new()
+  plot.window(xlim = c(0, ceiling(max(coord)/50)*50), ylim = c(0, max(combined.targets)))
+  for(tx in 1:nrow(combined.targets)){
+    points(coord, combined.targets[tx,], type = "l", col = tissue.cols[tx], lwd = 3)
+  }
+  axis(1)
+  axis(2)
+  mtext(paste("Chromosome", ch, "Position (Mb)"), side = 1, line = 2.5)
+  mtext("Target Count", side = 2, line = 2.5)
+  mtext(paste("Chromosome", ch), side = 3)
+  par(mar = c(4,0,4,0))
+  plot.new()
+  plot.window(xlim = c(0,1), ylim = c(0,1))
+  legend(x = 0, y = 1, legend = tissue.names, col = tissue.cols, lty = 1, 
+    lwd = 3, adj = 0)
+  cat("\n\n")
+}
+#dev.off()
+```
+
+## Distal hotspot expression {.tabset .tabset-fade .tabset-pills}
+
+In the following plots we show multiple aspects of these
+distal eQTL hotspots. We show the following items for each
+hotspot:
+
+1. The first two PCs of the expression matrix of the target
+  genes in terms of transcripts. Transcripts are colored
+  by the tissue they are expressed in. For some hotspots
+  the transcripts cluster by tissue, and in others they don't.
+
+2. The first two PCs of the expression matrix of the target
+  genes in terms of individuals. Clustering of individuals tends
+  to correspond with high LOD scores for the first PC of the 
+  expression matrix.
+
+3. A LOD trace for the first PC of the target gene expression
+  matrix.
+
+4. The haplotype coefficients for the first PC of the target
+  gene expression matrix.
+
+5. A list of target genes for this eQTL split by tissue.
+
+6. Functional enrichment plots for the target genes if they
+  have any functional enrichment.
+
+
+decomposition of the 
+expression of targets of these hotspots both in terms of
+transcripts and in terms of individuals. Tight clustering
+of individuals corresponds with strong eQTL LOD scores for
+the first principal component of the gene expression of the 
+whole group of targets. 
+
+
+What does expression look like for groups of transcripts
+with shared distal eQTL across tissues? 
+
+Unfortunately, I
+have found that the targets of these hotspots tend to be predicted
+and pseudogenes. If the target genes contain many protein-coding 
+genes, there tends not to be an eQTL for the expression of the 
+target genes as a whole. So multi-tissue eQTL hotspots are
+unlikely to be related to real biology, they are just drift.
+
+
+```{r pos_candidate_expression}
+get_region_info <- function(chr, min.mbp, max.mbp){
+  chr.tables <- lapply(tissue.data, function(x) x$annot.mrna[which(x$annot.mrna$chr == chr),])
+  in_region <- lapply(chr.tables, function(x) intersect(which(x$start >= min.mbp), which(x$end <= max.mbp)))
+  region.tables <- lapply(1:length(chr.tables), function(x) chr.tables[[x]][in_region[[x]],])
+  return(region.tables)
+}
+
+get_region_expr <- function(chr, min.mbp, max.mbp){
+  region.tables <- get_region_info(chr, min.mbp, max.mbp)
+  common.id <- lapply(1:length(region.tables), function(x) intersect(region.tables[[x]]$gene.id, colnames(ind.matched.expr[[x]])))
+  region.expr <- lapply(1:length(region.tables), function(x) ind.matched.expr[[x]][,common.id[[x]]])
+  expr.names <- unlist(lapply(1:length(region.expr), function(x) paste(colnames(region.expr[[x]]), tissue.names[x], sep = "_")))
+  merged.region.expr <- Reduce("cbind", region.expr)
+  colnames(merged.region.expr) <- expr.names
+  return(merged.region.expr)
+}
+
+```
+
+```{r fig.width = 12, fig.height = 9, results = "asis", error = FALSE, warning = FALSE, message = FALSE}
+
+#pdf("~/Desktop/hotspot_decomp.pdf", width = 12, height = 9)
+min.thresh <- 10
+n.hot <- 0
+for(ch in 1:20){
+  cat("### Ch", ch, "{.tabset .tabset-fade .tabset-pills}\n")
+  combined.targets <- distal.targets.by.chr[[ch]]
+  rownames(combined.targets) <- tissue.names
+  shared.hotspot <- which(apply(combined.targets, 2, function(x) length(which(x >= min.thresh))) > 1)
+  #n.hot <- n.hot + length(shared.hotspot)
+
+  if(length(shared.hotspot) == 0){next()}
+  for(h in 1:length(shared.hotspot)){
+    cat("####", paste("Chromomsome", ch, names(shared.hotspot)[h], "Mb"), "\n")
+    tx.transcripts <- lapply(distal.target.list, function(x) x[[ch]][match(names(shared.hotspot)[h], names(x[[ch]]))])
+    target.expr <- lapply(1:length(tx.transcripts), function(x) ind.matched.expr[[x]][,unlist(tx.transcripts[[x]]),drop=FALSE])
+    target.info <- lapply(1:length(target.expr), function(x) tissue.data[[x]]$annot.mrna[match(colnames(target.expr[[x]]), tissue.data[[x]]$annot.mrna$gene.id),])
+    
+    expr.names <- unlist(lapply(1:length(target.expr), function(x) if(length(target.expr[[x]]) > 0){paste(colnames(target.expr[[x]]), tissue.names[x], sep = "_")}))
+    merged.expr <- Reduce("cbind", target.expr)
+    colnames(merged.expr) <- expr.names
+    combined.hap.effects <- lapply(1:8, function(x) sapply(expr.scan, function(y) y[,x]))
+    expr.col <- unlist(lapply(1:length(target.expr), function(x) rep(tissue.cols[x], ncol(target.expr[[x]]))))
+    #pheatmap(cor(merged.expr))
+    layout(matrix(c(1,2,3,6,4,4,4,7,5,5,5,8), nrow = 3, byrow = TRUE), widths = c(1,0.2,1,2))
+    par(mar = c(4,4,4,0))
+    plot.decomp(cor(merged.expr), main = "Transcripts", cols = expr.col)
+    par(mar = c(4,0,4,0))
+    plot.new()
+    plot.window(xlim = c(0,1), ylim = c(0,1))
+    legend(x = 0, y = 1, legend = tissue.names, col = tissue.cols, pch = 16)
+    par(mar = c(4,4,4,4))
+    expr.decomp <- plot.decomp(merged.expr, main = "Individuals")
+    expr.pc <- expr.decomp$u
+    rownames(expr.pc) <- rownames(merged.expr)[expr.decomp$rows.used]
+    decomp.scan <- scan1coef(genoprobs[,ch], expr.pc[,1])
+    decomp.lod <- scan1(genoprobs[,ch], expr.pc[,1])
+    peak.pos <- find_peaks(decomp.lod, map = map, prob = 0.9)
+
+    ##====================================================
+    ## plot mapping results
+    ##====================================================
+    par(mar = c(4,4,4,4))
+    plot(decomp.lod, map = map)
+    plot.lim <- par("usr")
+    segments(x0 = as.numeric(names(shared.hotspot)[h]), 
+      y0 = plot.lim[3], y1 = plot.lim[4], lwd = 2)
+    plot_coefCC(decomp.scan, map = map, main = "PC1 coefficients")
+    plot.lim <- par("usr")
+    segments(x0 = as.numeric(names(shared.hotspot)[h]), 
+      y0 = plot.lim[3], y1 = plot.lim[4], lwd = 2)
+
+    ##====================================================
+    ## enrichment
+    ##====================================================
+    mtext(paste("Chromomsome", ch, names(shared.hotspot)[h], "Mb"), outer = TRUE, line = -1.5)
+    enrich <- gost(unique(unlist(tx.transcripts)), organism = "mmusculus")
+    target.list <- lapply(target.info, function(x) words_to_paragraph(x$symbol))
+    gene.text <- unlist(lapply(1:length(target.list), 
+      function(x) paste(paste(tissue.names[x], target.list[[x]], sep = ": "), "\n")))
+    par(mar = c(0,0,0,0))
+    plot.text("Target Genes", y = 1)
+    plot.text(paste(gene.text, collapse = "\n"), add = TRUE)
+    plot.enrichment.wordcloud(enrich,  num.terms = 20, order.by = "p_value", 
+    just.wordcloud = TRUE)  
+
+
+    ##====================================================
+    ## mediation
+    ##====================================================
+
+    mediation.file <- here("Results",paste0("Mediation_Results_Chr", ch, "_", names(shared.hotspot)[h], "Mb.txt"))
+
+    if(!file.exists(mediation.file)){
+      candidate.info <- get_region_info(ch, peak.pos[1,"ci_lo"]-1, peak.pos[1,"ci_hi"]+1)
+      candidate.expr <- get_region_expr(ch, peak.pos[1,"ci_lo"]-1, peak.pos[1,"ci_hi"]+1)
+      peak.marker <- find_marker(map, ch, peak.pos[,"pos"])
+      peak.geno <- genoprobs[[ch]][,,peak.marker]
+      med.test <- bmediatR(y = expr.pc[,1], M = candidate.expr, X = peak.geno,
+        ln_prior_c = "reactive", options_X = list(sum_to_zero = TRUE, 
+        center = FALSE, scale = FALSE))
+      #plot_posterior_bar(med.test, mediator_id = colnames(candidate.expr)[1])
+      post.mat <- get_posterior(med.test, med_var = "transcript.id")
+      write.table(post.mat, mediation.file, sep = "\t", quote = FALSE, row.names = FALSE)
+    }else{
+      post.mat <- read.table(mediation.file, sep = "\t", header = TRUE)
+    }
+
+    interesting.mat <- as.matrix(post.mat[,c(5, 9, 12, 13)])
+    rownames(interesting.mat) <- post.mat[,1]
+
+    min.region <- min(sapply(candidate.info, function(x) min(x$start)))
+    max.region <- max(sapply(candidate.info, function(x) max(x$start)))
+
+    split.tx <- strsplit(colnames(candidate.expr), "_")
+    just.tx <- sapply(split.tx, function(x) x[1])  
+    just.tissue <- sapply(split.tx, function(x) x[2])
+    info.idx <- sapply(1:length(just.tx), function(x) which(tissue.names == just.tissue[x]))
+    tx.pos <- unlist(sapply(1:length(just.tx), function(x) candidate.info[[info.idx[x]]][which(candidate.info[[info.idx[x]]]$gene.id == just.tx[x]),"start"]))
+
+    par(mar = c(4,4,4,4))
+    plot.new()
+    plot.window(xlim = c(min.region-1, max.region), ylim = c(0.5, 5))
+    for(i in 1:ncol(interesting.mat)){
+      segments(x0 = tx.pos, y0 = rep(i, length(tx.pos)), 
+        y1 = rep(i, length(tx.pos))+interesting.mat[,i]*0.9, lwd = 2, 
+        col = tissue.cols[sapply(just.tissue, function(x) which(tissue.names == x))])
+      text(x = min.region-0.15, y = i+0.5, labels = colnames(interesting.mat)[i], adj = 1)
+      draw.rectangle(min.region-0.1, max.region, i-0.05, i+0.9)
+    }  
+    ax.ticks <- pretty(floor(min.region):ceiling(max.region), n = 5)
+    show.which <- intersect(which(ax.ticks >= min.region-0.1), which(ax.ticks <= max.region))
+    segments(x0 = ax.ticks[show.which], y0 = 0.95, y1 = 0.85)
+    text(x = ax.ticks[show.which], y = 0.75, labels = ax.ticks[show.which])
+    text(x = mean(c(min.region, max.region)), y = 0.45, paste("Chromosome", ch, "Position (Mb)"))
+    #legend("bottomleft", lty = 1, lwd = 3, col = tissue.cols, legend = tissue.names)
+    text(x = mean(c(min.region, max.region)), y = 5.1, labels = "Mediation Results")
+    ##cat(unique(colnames(merged.expr)), sep = "\n")
+
+    ##====================================================
+    cat("\n\n")
+  }
+  cat("\n\n")
+}
+#dev.off()
+```
+## Distal eQTL Hotspot Enrichments {.tabset .tabset-fade .tabset-pills}
+
+We looked for functional enrichments in distal targets of 
+eQTL hotspots defined above.
+
+```{r hotspot_enrich, fig.height = 12, fig.width = 9, message = FALSE, error = FALSE, warning = FALSE, results = "asis"}
+
+for(tx in 1:length(tissue.names)){
+  cat("###", tissue.names[tx], "{.tabset .tabset-fade .tabset-pills}\n")
+  tx.distal <- distal.target.list[[tx]]
+  tx.distal.counts <- lapply(tx.distal, function(x) sapply(x, length))
+  hotspot.idx <- lapply(tx.distal.counts, function(x) which(x >= hotspot.min))  
+  hotspot.names <- lapply(1:length(hotspot.idx), function(x) if(length(hotspot.idx[[x]]) > 0){tx.distal[[x]][hotspot.idx[[x]]]})
+  
+  #u_hotspot.transcripts <- unique(unlist(hotspot.names))
+  #eqtl.chr <- sapply(u_hotspot.transcripts, function(x) grep(x, hotspot.names)[1])
+  #hotspot.expr  <- adj.expr[[tx]][,u_hotspot.transcripts]
+  #expr.decomp <- plot.decomp(cor(hotspot.expr), plot.results = FALSE)
+  #plot(expr.decomp$u, type = "n", xlab = "PC1", ylab = "PC2", 
+  #  main = paste(tissue.names[tx], "distal eQTL target expression decomposition"))
+  #text(expr.decomp$u[,1], expr.decomp$u[,2], col = eqtl.chr, labels = eqtl.chr)
+
+  hotspot.enrich <- lapply(hotspot.names, function(x) lapply(x, function(y) gost(y, organism = "mmusculus")))
+  for(i in 1:length(hotspot.enrich)){
+    if(length(hotspot.enrich[[i]])  > 0){
+      names(hotspot.enrich[[i]]) <- paste0("Chr", i, "_", names(hotspot.enrich[[i]]), "Mb")
+    }
+  }
+  enrich.list <- unlist(hotspot.enrich, recursive = FALSE)  
+  if(length(unlist(enrich.list)) == 0){next()}
+  #pdf(paste0("~/Desktop/enrich_", tissue.names[tx], ".pdf"), height = 14, width = 9)
+  plot.enrichment.group(enrich.list, transformation = "sqrt", 
+    plot.label = paste("Distal eQTL targets in", tissue.names[tx]),
+    cluster_cols = FALSE)
+  #dev.off()
+  cat("\n\n")
+}
+
+```

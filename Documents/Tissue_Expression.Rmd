@@ -1,0 +1,1016 @@
+---
+title: "DO Multi-Tissue Gene Expression"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+bibliography: hdm.bib 
+---
+
+```{r param}
+min.lod <- 8
+remove.pseudogenes = TRUE #if TRUE, removes pseudogenes and predicted genes 
+```
+
+## Introduction
+This workflow explores data from the Attie 500 data set.
+Here we re-create and expand on observations made by 
+Isabela Gerdes-Gyuricza when she was in Gary Churchill's 
+lab. Her workflow followed the workflow of an early GTEx 
+paper. 
+
+## Data
+
+Data were generated through a collaboration between the Attie
+lab at the University of Wisconsin, and The Jackson Laboratory
+Detailed descriptions of mouse handling, phenotype gathering,
+and initial data processing can be found elsewhere. 
+
+Here we focus exclusively on the transcriptomic data from
+five tissues: adipose, heart, islet, liver, and skeletal 
+muscle.
+
+I downloaded the following data from the 
+[DO QTL viewer](https://churchilllab.jax.org/qtlviewer/attie/DO500HFD)
+On March 20, 2023.
+
+1. Adipose.RDS - adipose tissue transcriptome
+2. Heart.RDS - cardiac muscle transcriptome
+3. Islet.RDS - pancreatic islet transcriptome
+4. Liver.RDS - liver transcriptome
+5. QTLViewer_Geno_V10.Rdata - Genotypes for mice
+6. SkeletalMuscle.RDS - skeletal muscle transcriptome
+
+The initial results from Isabela are in 
+Results > Isabelas_Results. They are also stored in a Dropbox 
+folder that Gary shared with me. 
+
+### Transcriptome Decomposition
+
+The following plot shows the PCA for the transcriptomes
+collected from the five different tissues. Each dot is
+a sample, and the samples are colored by their tissue
+of origin. 
+
+Before performing the PCA, we regressed out covariates
+from each transcriptome. Covariates included sex and 
+generation.
+
+```{r here, message = FALSE, warning = FALSE}
+library(here)
+```
+
+```{r load_code, message = FALSE, warning = FALSE}
+all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
+for(i in 1:length(all.fun)){source(all.fun[i])}
+
+all.packages <- c("igraph", "pheatmap", "gprofiler2", "qtl2", "stringr",
+  "wordcloud", "wordcloud2")
+load_libraries(all.packages)
+```
+
+```{r read_transcriptomes}
+tissue.names <- c("Adipose", "Heart", "Islet", "Liver", "SkeletalMuscle")
+tissue.cols <- categorical_pal(length(tissue.names))
+tissue.data <- lapply(tissue.names, 
+  function(x) readRDS(here("Data", paste0(x, ".RDS"))))
+names(tissue.data) <- tissue.names
+load(here("Data", "QTLViewer_Geno_V10.Rdata"))
+```
+
+```{r setup}
+#set up some objects that we will use throughout the workflow
+tissue.pairs <- pair.matrix(1:length(tissue.names))
+pair.names <- apply(tissue.pairs, 1, function(x) paste(tissue.names[x], collapse = "-"))
+
+
+#make a matrix of all binary combinations of tissues
+#to compare to.
+combo.mat <- t(sapply(2:(2^5)-1, function(x) number2binary(x, 5)))
+colnames(combo.mat) <- tissue.names
+```
+
+```{r remove_pseudogenes}
+if(remove.pseudogenes){
+
+  require("biomaRt")
+
+  all.var <- ls()
+
+  lib.loaded <- as.logical(length(which(all.var == "mus")))
+  if(!lib.loaded){
+      mus <- useEnsembl(biomart="ensembl", dataset="mmusculus_gene_ensembl") 
+      }
+
+  for(tx in 1:length(tissue.data)){
+    description.file <- here("Data", paste0("Gene_Description_", tissue.names[tx], ".RDS"))
+    if(!file.exists(description.file)){
+      one.gene.info <- getBM(attributes = c("ensembl_gene_id", "description"), 
+        filters = "ensembl_gene_id", values = tissue.data[[tx]]$annot.mrna$gene.id,
+        mart = mus)
+      saveRDS(one.gene.info, description.file)
+    }else{
+      one.gene.info <- readRDS(description.file)
+    }
+
+    pred.idx <- grep("predicted", one.gene.info[,"description"], ignore.case = TRUE)
+    pseudo.idx <- grep("pseudogene", one.gene.info[,"description"], ignore.case = TRUE)
+    remove.idx <- Reduce("union", list(pred.idx, pseudo.idx))
+
+    remove.gene.id <- one.gene.info[remove.idx, "ensembl_gene_id"]
+    keep.gene.id <- setdiff(colnames(tissue.data[[tx]]$data$norm), remove.gene.id)
+    
+    #replace the reduced gene expression data set
+    #since we only use the normalized, only replace
+    #that matrix.
+    subset.expr <- tissue.data[[tx]]$data$norm[,keep.gene.id]
+    tissue.data[[tx]]$data$norm <- subset.expr
+
+    #also remove pseudogenes from the eQTL tables
+    keep.idx <- which(tissue.data[[tx]]$lod.peaks$additive$gene.id %in% keep.gene.id)
+    tissue.data[[tx]]$lod.peaks$additive <- tissue.data[[tx]]$lod.peaks$additive[keep.idx,]
+  }
+}
+```
+
+```{r adjust}
+#regress out covariates, and normalize residuals
+adj.expr <- lapply(tissue.data, function(x) adjust(x$data$norm, x$covar.matrix))
+```
+
+```{r match_expr}
+#make transcript-matched and individual matched expression data sets
+
+common.expr <- Reduce("intersect", lapply(adj.expr, colnames))
+tx.matched.expr <- lapply(adj.expr, function(x) x[,common.expr])
+
+common.ind <- Reduce("intersect", lapply(tissue.data, function(x) rownames(x$data$norm)))
+ind.matched.expr <- lapply(tissue.data, function(x) x$data$norm[common.ind,])
+```
+
+```{r decomp, fig.width = 7, fig.height = 5}
+#combine samples from all tissues into one matrix. Align along common transcripts
+
+tissue.col <- unlist(lapply(1:length(tissue.names), 
+  function(x) rep(tissue.cols[x], nrow(tx.matched.expr[[x]]))))
+sample.sex <- unlist(lapply(tissue.data, function(x) x$covar.matrix[,1]))
+
+#plot decomposition
+decomp.file <- here("Results", "Tissue.Decomposition.RDS")
+if(!file.exists(decomp.file)){
+  all.expr <- Reduce("rbind", tx.matched.expr)
+  expr.decomp <- plot.decomp(all.expr, plot.results = FALSE)
+  saveRDS(expr.decomp, decomp.file)
+}else{
+  expr.decomp <- readRDS(decomp.file)
+}
+
+par(mar = c(4,4,4,1))
+layout(matrix(c(1,2), nrow = 1), widths = c(1, 0.3))
+plot(expr.decomp$u,
+  xlab = paste0("PC1 (", round(expr.decomp$var.exp[1]*100), "%)"),
+  ylab = paste0("PC2 (", round(expr.decomp$var.exp[2]*100), "%)"), type = "n")
+abline(v = seq(-0.02, 0.03, 0.01), col = rgb(0.9, 0.9, 0.9), lwd = 0.8)
+abline(v = seq(-0.025, 0.035, 0.01), col = "lightgray", lwd = 0.5, lty = "dotted")
+abline(h = seq(-0.03, 0.03, 0.01), col = rgb(0.9, 0.9, 0.9), lwd = 0.8)
+abline(v = seq(-0.025, 0.035, 0.01), col = "lightgray", lwd = 0.5, lty = "dotted")
+points(expr.decomp$u, col = tissue.col, pch = sample.sex+16)
+par(mar = c(4,0,4,0))
+plot.new()
+plot.window(xlim = c(0,1), ylim = c(0,1))
+legend(0, 1, legend = tissue.names, col = tissue.cols, pch = 16, adj = 0, title = "Tissue")
+legend(0, 0.5, legend = c("Female", "Male"), col = "black", pch = unique(sample.sex)+16, 
+  adj = 0, title = "Sex")
+```
+
+## Tissue-Specific Genes
+
+The following barplot shows the number of transcripts
+identified in each tissue.
+
+```{r tissue_spec, warning = FALSE, error = FALSE, message = FALSE}
+tx.list <- lapply(adj.expr, colnames)
+n.tx <- sapply(tx.list, length)
+barplot(n.tx, col = tissue.cols, main = "Number of Transcripts")
+```
+
+The following heatmap shows the Jaccard indices for the
+transcripts found in each pair of tissues. Heart and 
+skeletal muscle have the most shared transcripts, and
+liver and islet are the most different from each other
+in terms of transcripts expressed.
+
+```{r tissue_jacc}
+jacc.mat <- jaccard.matrix(tx.list)
+pheatmap(jacc.mat, display_numbers = TRUE)
+```
+
+## Pairwise Tissue Correlations  {.tabset .tabset-fade .tabset-pills}
+
+For the transcripts that are shared across all tissues,
+how well correlated are the levels of expression?
+
+The following plot shows pairwise correlations for the
+average expression value for each transcript common 
+to all tissues. Again, heart and skeletal muscle are 
+the most highly correlated. 
+
+```{r gene_levels}
+
+#calculate average expression for all transcripts
+#across the tissues.
+avg.expr <- sapply(tx.matched.expr, colMeans)
+tissue.cor <- cor(avg.expr)
+pheatmap(tissue.cor, display_numbers = TRUE)
+```
+
+
+The following plots show a more detailed picture of the
+pairwise correlations between tissues. There is a subset
+of genes that is very highly correlated across tissue
+pairs (diagonal). However, for each tissue pair, there 
+is also a substantial set of genes that are up in one
+tissue of the pair and down in the other (off-diagonal).
+
+```{r fine_cor, fig.width = 8, fig.height = 8}
+par(mfrow = c(2,2))
+for(i in 1:nrow(tissue.pairs)){
+plot.hexbin.as.plot(avg.expr[,tissue.pairs[i,1]], avg.expr[,tissue.pairs[i,2]],
+  xlab = tissue.names[tissue.pairs[i,1]], ylab = tissue.names[tissue.pairs[i,2]],
+  n.bins = 10, round.legend = 10, 
+  main = paste(tissue.names[tissue.pairs[i,1]], "vs.", tissue.names[tissue.pairs[i,2]]))
+  abline(0,1)
+}
+```
+
+I tried looking at which genes were significantly off the diagonal
+by looking at genes that were significantly differentially expressed
+between tissues, but they are basically all significantly differentially 
+expressed.
+
+```{r tx_enrich, results = "asis"}
+#pdf("~/Desktop/tx_enrich.pdf")
+for(i in 1:nrow(combo.mat)){
+  tx.yes <- which(combo.mat[i,] == 1)
+  tx.no <- which(combo.mat[i,] == 0)
+  in_text <- paste(tissue.names[tx.yes], collapse = ", ")
+  out_text <- paste(tissue.names[tx.no], collapse = ", ")
+  cat("### In", in_text, "\n")
+  in_tx <- Reduce("intersect", tx.list[tx.yes])
+  out_tx <- Reduce("intersect", tx.list[tx.no])
+  in_tx_not_rest <- setdiff(in_tx, out_tx)
+  enrich <- gost(in_tx_not_rest, organism = "mmusculus", sources = c("GO", "KEGG", "REACTOME"))
+  plot.enrichment(enrich, plot.label = paste(length(in_tx_not_rest), "Genes in:", in_text, "\nNot in:", out_text), 
+    num.terms = 20)
+  cat("\n\n")
+}
+#dev.off()
+```
+
+## eQTL maps {.tabset .tabset-fade .tabset-pills}
+
+The following plots show eQTL maps for each tissue. There are 
+some prominent trans bands. 
+
+```{r eqtl_maps, fig.width = 7, fig.height = 7, results = "asis", message = FALSE, warning = FALSE}
+#pdf("~/Desktop/eQTL_maps.pdf")
+for(tx in 1:length(tissue.data)){
+  cat("###", tissue.names[tx], "\n")
+  tissue.eqtl <- tissue.data[[tx]]$lod.peaks$additive
+  tissue.eqtl <- tissue.eqtl[which(tissue.eqtl[,"lod"] >= min.lod),]
+  split.eqtl <- strsplit(tissue.eqtl$marker.id, "_")
+  eqtl.chr <- sapply(split.eqtl, function(x) x[1])
+  eqtl.pos <- as.numeric(sapply(split.eqtl, function(x) x[2]))/1e6
+  allowed.chr <- which(eqtl.chr %in% c(1:19, "X"))
+
+  eqtl.table <- cbind("ID" = tissue.eqtl[allowed.chr,1], "chr" = eqtl.chr[allowed.chr], 
+    "pos" = eqtl.pos[allowed.chr], "lod" = tissue.eqtl[allowed.chr,"lod"])
+  transcript.pos.table <- as.matrix(tissue.data[[tx]]$annot.mrna[,c("gene.id", "chr", "start")])
+
+  lod.col <- colors.from.values(log(log(as.numeric(eqtl.table[,"lod"]))), 
+    col.scale = "blue", grad.dir = "high", light.dark = "d")
+
+  plot.cistrans.table(as.matrix(eqtl.table), as.matrix(transcript.pos.table), 
+    map, col = lod.col, cex = 0.5)
+  cat("\n\n")
+}
+#dev.off()
+```
+
+## eQTL hotspots {.tabset .tabset-fade .tabset-pills}
+
+The following plots show both local and distal eQTL counts 
+along the genome. We used a sliding window of 4 Mb with an
+overlap of 2 Mb. eQTL were considered local if they were
+within 4 Mb of the gene body. 
+
+Chromosome 17 has a large local eQTL hotspot in all tissues.
+This is the chromosome housing the MHC locus, so this hotspot
+is not surprising. 
+
+```{r hotspot_thresh}
+hotspot.min <- 20 #minimum number of gene targets for hotspot
+```
+
+There are also multiple distal eQTL hotspots in each tissue,
+defined as an eQTL with at least `r hotspot.min` distal targets.
+
+```{r hotspots, fig.width = 14, fig.height = 3, results = "asis"}
+local.target.list <- distal.target.list <- vector(mode = "list", length = length(tissue.names))
+names(local.target.list) <- names(distal.target.list) <- tissue.names
+for(tx in 1:length(tissue.data)){
+  cat("###", tissue.names[tx], "\n")
+  tissue.eqtl <- tissue.data[[tx]]$lod.peaks$additive
+  tissue.eqtl <- tissue.eqtl[which(tissue.eqtl[,"lod"] >= min.lod),]
+  split.eqtl <- strsplit(tissue.eqtl$marker.id, "_")
+  eqtl.chr <- sapply(split.eqtl, function(x) x[1])
+  eqtl.pos <- as.numeric(sapply(split.eqtl, function(x) x[2]))/1e6
+  allowed.chr <- which(eqtl.chr %in% c(1:19, "X"))
+  eqtl.table <- cbind("ID" = tissue.eqtl[allowed.chr,1], "chr" = eqtl.chr[allowed.chr], 
+    "pos" = eqtl.pos[allowed.chr], "lod" = tissue.eqtl[allowed.chr,"lod"])
+  transcript.pos.table <- as.matrix(tissue.data[[tx]]$annot.mrna[,c("gene.id", "chr", "start")])
+
+  #count local and distal eQTL in a sliding window to look for hotspots
+  #pdf("~/Desktop/test.pdf", width = 10, height = 5)
+  gene.lists <- cistrans.hotspots(as.matrix(eqtl.table), as.matrix(transcript.pos.table), 
+    map, mb.buffer = 4, window.mb = 4, window.gap.mb = 2)
+  #dev.off()
+  local.target.list[[tx]] <- gene.lists$local_targets
+  distal.target.list[[tx]] <- gene.lists$distal_targets
+  cat("\n\n")
+}
+```
+
+
+## eQTL composition
+
+Here we count the number of local and distal eQTLs in 
+each tissue. Local eQTLs are defined as being within
+4 Mb of the gene position (start or end).
+
+```{r eqtl_fun}
+#this function separates local and distal eQTL and returns
+#their coefficients
+get_local_distal_coef <- function(transcript.id, eqtl.table, gene.table, bp.buffer = 4e6){
+    
+    tr.idx <- which(gene.table[,1] == transcript.id)
+
+    if(length(tr.idx) == 0){
+        cis.coef <- trans.coef <- rep(NA, ncol(eqtl.table))
+        names(cis.coef) <- names(trans.coef) <- colnames(eqtl.table)
+    }else{
+        gene.chr <- gene.table[tr.idx,"chr"]
+        gene.start <- as.numeric(gene.table[tr.idx,"start"])*1e6
+        gene.end <- as.numeric(gene.table[tr.idx,"end"])*1e6
+
+        eqtl.idx <- which(eqtl.table$gene.id == transcript.id)
+
+        if(length(eqtl.idx) == 0){
+          cis.coef <- trans.coef <- rep(NA, ncol(eqtl.table))
+          names(cis.coef) <- names(trans.coef) <- colnames(eqtl.table)
+        }else{
+
+            eqtl.id <- strsplit(eqtl.table$marker.id[eqtl.idx], "_")
+            eqtl.chr <- sapply(eqtl.id, function(x) x[1])
+            eqtl.pos <- as.numeric(sapply(eqtl.id, function(x) x[2]))
+
+            on.chr <- which(eqtl.chr %in% gene.chr)
+            above.min <- eqtl.pos[on.chr] >= (gene.start-bp.buffer)
+            below.max <- eqtl.pos[on.chr] <= (gene.end+bp.buffer)
+            nearby <- union(which(above.min), which(below.max))
+
+            if(length(nearby) > 0){
+                cis.coef <- eqtl.table[eqtl.idx[on.chr[nearby]],,drop=FALSE]
+            }else{
+                cis.coef <- rep(NA, ncol(eqtl.table))
+                names(cis.coef) <- colnames(eqtl.table)
+
+            }
+
+            trans.coef.idx <- setdiff(eqtl.idx, eqtl.idx[on.chr[nearby]])
+            if(length(trans.coef.idx) == 0){
+              trans.coef <- rep(NA, ncol(eqtl.table))
+              names(trans.coef) <- colnames(eqtl.table)
+
+            }else{
+              trans.coef <- eqtl.table[trans.coef.idx,,drop=FALSE]
+            }
+        }
+    }
+    result <- list("local" = cis.coef, "distal" = trans.coef)
+    return(result)
+}
+```
+
+
+```{r get_coef}
+
+#pull out only local eQTL coefficients for this test.
+local.coef.file <- here("Results", "eQTL_coef_local.RDS")
+distal.coef.file <- here("Results", "eQTL_coef_distal.RDS")
+
+if(!file.exists(local.coef.file)){
+    local.coef <- distal.coef <- vector(mode = "list", length = length(tissue.names))
+    names(local.coef) <- names(distal.coef) <- tissue.names
+    for(tx in 1:length(tissue.names)){
+        tissue.eqtl <- tissue.data[[tx]]$lod.peaks$additive
+        tissue.eqtl <- tissue.eqtl[which(tissue.eqtl[,"lod"] >= min.lod),]
+        gene.table <- tissue.data[[tx]]$annot.mrna
+        eqtl.transcripts <- unique(tissue.eqtl$gene.id)
+
+        split.coef <- lapply(eqtl.transcripts, 
+          function(x) get_local_distal_coef(x, tissue.eqtl, gene.table))
+        cis.coef <- Reduce("rbind", lapply(split.coef, function(x) x$local))
+        trans.coef <- Reduce("rbind", lapply(split.coef, function(x) x$distal))
+
+        cis.has.vals <- which(apply(cis.coef, 1, function(x) !all(is.na(x))))
+        trans.has.vals <- which(apply(trans.coef, 1, function(x) !all(is.na(x))))
+
+        cis.coef  <- cis.coef[cis.has.vals,]
+        trans.coef <- trans.coef[trans.has.vals,]
+
+        local.coef[[tx]] <- cis.coef
+        distal.coef[[tx]] <- trans.coef
+    }
+    saveRDS(local.coef, local.coef.file)
+    saveRDS(distal.coef, distal.coef.file)
+}else{
+    local.coef <- readRDS(local.coef.file)
+    distal.coef <- readRDS(distal.coef.file)
+}
+```
+
+The following barplot compares the number of total, distal, and 
+local eQTL across tissues. The minimum LOD score for these
+eQTL is `r min.lod`.
+
+The bars are stacked, which makes comparing the total number
+of eQTL across tissues easier. It is harder to compare the number
+of distal eQTL because these start at different heights, but it
+is clear from this plot that there are many more local eQTL than
+distal eQTL.
+
+
+```{r compare, fig.width = 7, fig.height = 5}
+local.eQTL.count <- sapply(local.coef, nrow)
+distal.eQTL.count <- sapply(distal.coef, nrow)
+total.eQTL.count <- sapply(tissue.data, function(x) nrow(x$lod.peaks$additive))
+
+eqtl.count.table <- rbind(total.eQTL.count, distal.eQTL.count, local.eQTL.count)
+rownames(eqtl.count.table) <- c("Total", "Distal", "Local")
+
+#par(mfrow = c(2,1))
+#barplot(eqtl.table, beside = TRUE)
+layout(matrix(c(1,2), nrow = 1), widths = c(1,0.2))
+par(mar = c(4,4,4,1))
+barplot(eqtl.count.table[c("Local", "Distal"),], col = c("#d95f02", "#1b9e77"))
+par(mar = c(4,0,4,1))
+plot.new()
+plot.window(xlim = c(0,1), ylim = c(0,1))
+legend(x = 0, y = 0.5, legend = c("Distal", "Local"), fill = c("#1b9e77", "#d95f02"))
+```
+
+
+## Tissue Specificity {.tabset .tabset-fade .tabset-pills}
+
+The following plots explore the overlap of eQTLs across tissues.
+
+Following Isabella's methods, local and distal eQTL for a given 
+gene were considered shared across two tissues if their positions 
+in their corresponding tissues (LOD > `r min.lod`) were within 4 Mb.
+
+The first plot shows the counts of shared *local* eQTL across
+tissues, and the second shows the counts of shared *distal* 
+eQTL across tissues. The plots are complex, but the main 
+take-away is that local eQTL are much more likely to be shared
+across tissues than distal eQTL, which are much more likely 
+to be tissue-specific: For the local eQTL, the largest group 
+is the eQTL that are shared across all tissues. For the distal 
+eQTL, the largest groups are those that are specific to a single 
+tissue.
+
+```{r eQTL_fun}
+#functions for listing and comparing eQTL
+
+#this function creates a list of eQTL for a 
+get_eQTL <- function(transcript.id, coef.list){
+  transcript.idx <- lapply(coef.list, function(x) which(x[,1] == transcript.id))
+  transcript.eQTL <- lapply(1:length(coef.list), function(x) coef.list[[x]][transcript.idx[[x]],])
+  return(transcript.eQTL)
+}
+
+#This function identifies shared eQTL within a given Mb range
+assess_shared <- function(eqtl.list, mb.buffer = 4){
+
+    #count the QTL for this transcript across all tissues
+    n.qtl <- sapply(eqtl.list, nrow)
+    #count the number of tissues with eQTL for this transcript
+    has.eqtl <- which(n.qtl > 0)
+    #if there are no eQTL, there is nothing to compare
+    if(length(has.eqtl) < 1){return(NULL)} 
+
+    #make a table for all eQTL for this transcript
+    eqtl.mat <- Reduce("rbind", eqtl.list)
+    #keep track of which tissue each came from
+    eqtl.tissue <- unlist(lapply(1:length(eqtl.list), function(x) rep(tissue.names[x], nrow(eqtl.list[[x]]))))
+    full.mat <- cbind(eqtl.tissue, eqtl.mat)
+ 
+    #if there is only one eQTL, there is nothing to compare
+    #return the lone eQTL
+    if(nrow(full.mat) < 2){
+      shared.eqtl.mat <- matrix(0, nrow = nrow(full.mat), ncol = length(tissue.names))
+      colnames(shared.eqtl.mat) <- tissue.names
+      rownames(shared.eqtl.mat) <- full.mat[,"marker.id"]
+      shared.eqtl.mat[,tissue.names[has.eqtl]] <- 1
+      shared.result = list("eqtl.tissues" = shared.eqtl.mat, "eqtl.coef" = list(full.mat))
+      return(shared.result)
+    }
+
+    #test all pairs of eQTL for overlap
+    #make a matrix holding all eQTL pairs, and indicate
+    #whether each pair overlaps (1) or doesn't (0)
+    test.mat <- pair.matrix(1:nrow(eqtl.mat))
+    split.eqtl <- strsplit(eqtl.mat[,2], "_")
+    eqtl.chr <- sapply(split.eqtl, function(x) x[1])
+    eqtl.chr[which(eqtl.chr == "X")] <- 20
+    eqtl.chr <- as.numeric(eqtl.chr)
+    eqtl.pos <- as.numeric(sapply(split.eqtl, function(x) x[2]))
+    full.mat <- cbind(full.mat, eqtl.chr, eqtl.pos)
+    sorted.qtl <- sort.by.then.by(full.mat, sort.cols = c(13,14), col.type = c("n", "n")) 
+    sorted.tissue <- sorted.qtl[,1]    
+
+    eqtl.chr <- sorted.qtl[,13]
+    eqtl.pos <- sorted.qtl[,14]    
+
+    #cluster by position
+    dist.tree <- hclust(dist(eqtl.pos/1e6))
+    #plot(dist.tree);abline(h = 4)
+    #split into multiple QTL based on our specified distance
+    eqtl.mem <- cutree(dist.tree, h = mb.buffer)
+
+    num.eqtl <- length(unique(eqtl.mem))
+
+    eqtl.names <- sapply(1:num.eqtl, 
+        function(x) paste(eqtl.chr[which(eqtl.mem == x)[1]], 
+        round(mean(eqtl.pos[which(eqtl.mem == x)])[1]), sep = "_"))
+
+    #for the unique eQTL, tally which tissues each is in.
+    shared.eqtl.mat <- matrix(0, nrow = num.eqtl, ncol = length(tissue.names))
+    colnames(shared.eqtl.mat) <- tissue.names
+    rownames(shared.eqtl.mat) <- eqtl.names
+
+    shared.eqtl.coef <- vector(mode = "list", length = num.eqtl)
+    names(shared.eqtl.coef) <- eqtl.names
+
+    for(eq in 1:num.eqtl){
+        eqtl.markers <- sorted.qtl[which(eqtl.mem == eq),"marker.id"]
+        eqtl.tissues <- unique(sorted.tissue[which(sorted.qtl[,"marker.id"] %in% eqtl.markers)])
+        shared.eqtl.mat[eq,eqtl.tissues] <- 1
+
+        shared.eqtl.coef[[eq]] <- full.mat[which(full.mat[,"marker.id"] %in% eqtl.markers),1:12]
+    }
+    
+    shared.result = list("eqtl.tissues" = shared.eqtl.mat, "eqtl.coef" = shared.eqtl.coef)
+
+    return(shared.result)
+
+}
+
+
+```
+
+### Local eQTL
+
+```{r shared_local, fig.width = 8, fig.height = 5}
+#get all unique transcripts across all tissues.
+u_transcripts <- unique(unlist(lapply(tissue.data, function(x) x$annot.mrna[,1])))
+
+#find all local eQTL associated with each transcript across all tissues
+local.eQTL.pos <- lapply(u_transcripts, function(x) get_eQTL(x, local.coef))
+names(local.eQTL.pos) <- u_transcripts
+
+#identify unique local eQTLs that are shared across tissues
+local.eqtl.binary.file <- here("Results", "Shared_eQTL_Local_Binary.RDS")
+local.eqtl.coef.file <- here("Results", "Shared_eQTL_Local_Coef.RDS")
+if(!file.exists(local.eqtl.binary.file)){
+  shared.local.list <- lapply(local.eQTL.pos, function(x) assess_shared(x, mb.buffer = 4))
+  local.shared.binary <- Reduce("rbind", lapply(shared.local.list, function(x) if(length(x) > 0){x$eqtl.tissues}))
+  local.shared.coef <- lapply(shared.local.list, function(x) if(length(x) > 0){x$eqtl.coef})
+  saveRDS(local.shared.binary, local.eqtl.binary.file)
+  saveRDS(local.shared.coef, local.eqtl.coef.file)
+}else{
+  local.shared.binary <- readRDS(local.eqtl.binary.file)
+  local.shared.coef <- readRDS(local.eqtl.coef.file)
+}
+
+#eqtl.list = local.eQTL.pos[[94]]
+#shared.local.list[[94]]
+#assess_shared(eqtl.list)
+
+combo.list <- apply(combo.mat, 1, 
+  function(x) which(apply(local.shared.binary, 1, function(y) all(x == y))))
+combo.counts <- sapply(combo.list, length)
+
+bar.col <- rep("gray", nrow(combo.mat))
+single.tissue <- which(rowSums(combo.mat) == 1)
+bar.col[single.tissue] <- rev(tissue.cols)
+layout(matrix(c(1,2), ncol = 1), heights = c(1, 0.7))
+par(mar = c(0,6,4,4))
+a <- barplot(combo.counts, ylab = "eQTL Count", col = bar.col, ylim = c(0, 5000))
+text(x = a[single.tissue], y = combo.counts[single.tissue]+100, 
+  labels = rev(tissue.names), srt = 90, adj = 0)
+par(mar = c(1,6,0,4))
+imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
+mtext("Shared Local eQTL", side = 3, outer = TRUE, line = -1.5)
+```
+
+### Distal eQTL
+
+```{r shared_distal, fig.width = 8, fig.height = 5}
+
+#find all distal eQTL associated with each transcript across all tissues
+distal.eQTL.pos <- lapply(u_transcripts, function(x) get_eQTL(x, distal.coef))
+names(distal.eQTL.pos) <- u_transcripts
+
+#identify unique local eQTLs that are shared across tissues
+distal.eqtl.binary.file <- here("Results", "Shared_eQTL_Distal_Binary.RDS")
+distal.eqtl.coef.file <- here("Results", "Shared_eQTL_Distal_Coef.RDS")
+if(!file.exists(distal.eqtl.binary.file)){
+  shared.distal.list <- lapply(distal.eQTL.pos, function(x) assess_shared(x, mb.buffer = 4))
+  distal.shared.binary <- Reduce("rbind", lapply(shared.distal.list, function(x) if(length(x) > 0){x$eqtl.tissues}))
+  distal.shared.coef <- lapply(shared.distal.list, function(x) if(length(x) > 0){x$eqtl.coef})
+  saveRDS(distal.shared.binary, distal.eqtl.binary.file)
+  saveRDS(distal.shared.coef, distal.eqtl.coef.file)
+}else{
+  distal.shared.binary <- readRDS(distal.eqtl.binary.file)
+  distal.shared.coef <- readRDS(distal.eqtl.coef.file)
+}
+
+combo.list <- apply(combo.mat, 1, 
+  function(x) which(apply(distal.shared.binary, 1, function(y) all(x == y))))
+combo.counts <- sapply(combo.list, length)
+
+bar.col <- rep("gray", nrow(combo.mat))
+single.tissue <- which(rowSums(combo.mat) == 1)
+bar.col[single.tissue] <- rev(tissue.cols)
+layout(matrix(c(1,2), ncol = 1), heights = c(1, 0.7))
+par(mar = c(0,6,4,4))
+a <- barplot(combo.counts, ylab = "eQTL Count", col = bar.col, ylim = c(0, 5000))
+text(x = a[single.tissue], y = combo.counts[single.tissue]+100, 
+  labels = rev(tissue.names), srt = 90, adj = 0)
+par(mar = c(1,6,0,4))
+imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
+mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
+```
+
+## Allele Effects and Expression Correlation
+
+How do allele effects and gene expression correspond across
+tissues? Do two local eQTL shared across tissues also have 
+correlated allele effects? And if so, is gene expression 
+correlated across the tissues?
+
+### Allele Effect Correlations {.tabset .tabset-fade .tabset-pills}
+
+The following plots show the distribution of correlations
+between allele effects for transcripts with shared
+eQTL in all pairs of tissues. The boxes are ordered by 
+increasing mean correlation. Heart and skeletal muscle 
+have the most highly correlated allele effects for shared
+local eQTL, as we might expect. 
+
+Allele effects for shared distal eQTL are weirdly highly
+correlated. Much more highly correlated than allele effects
+for local eQTL. 
+
+#### Shared Local eQTL
+
+```{r local_allele_effects, fig.width = 8, fig.height = 6}
+
+allele_effect_cor <- function(shared.coef, filename){
+  
+  if(file.exists(filename)){
+    coef.cor <- readRDS(filename)
+    return(coef.cor)
+  }
+  
+  total.eqtl <- sum(sapply(shared.coef, length))
+  coef.cor <- matrix(NA, ncol = nrow(tissue.pairs), nrow = total.eqtl)
+  colnames(coef.cor) <- pair.names
+  eqtl_tID <- rep(NA, total.eqtl)
+  
+  qtl.idx <- 1
+  for(exp in 1:length(shared.coef)){
+    #count the number of eQTL for this transcript
+    n.qtl <- length(shared.coef[[exp]])
+    if(n.qtl > 0){
+      #for each qtl that has more than one tissue involved...
+      for(eq in 1:n.qtl){
+          one.eqtl.coef <- shared.coef[[exp]][[eq]]
+          num.tissues <- length(unique(one.eqtl.coef[,"eqtl.tissue"]))
+          if(num.tissues < 2){next()}
+          eqtl.tissues <- sort(unique(one.eqtl.coef[,1])) #only compare correlations across tissues
+          u_mat <- one.eqtl.coef[match(eqtl.tissues, one.eqtl.coef[,1]),]
+          eqtl.tissue.pairs <- apply(pair.matrix(eqtl.tissues), 1, function(x) paste(x[1], x[2], sep = "-"))
+          pair.cor <- cor(t(u_mat[,LETTERS[1:8]]))
+          #test.mat <- u_mat[,LETTERS[1:8]]
+          #rownames(test.mat) <- u_mat[,1]
+          #pheatmap(test.mat, cluster_rows = FALSE, cluster_cols = FALSE)
+          #pheatmap(cor(t(test.mat)), display_numbers = TRUE)
+          tissue.pair.cor <- as.numeric(pair.cor[upper.tri(pair.cor, diag = FALSE)])
+          #par(mar = c(12,4,4,4));barplot(tissue.pair.cor, names = eqtl.tissue.pairs, las = 2, main = names(shared.coef)[exp])
+          name.idx <- match(eqtl.tissue.pairs, pair.names)
+          coef.cor[qtl.idx,name.idx] <- tissue.pair.cor 
+          eqtl_tID[qtl.idx] <- paste0(names(shared.coef)[exp], "_qtl", eq)
+          qtl.idx <- qtl.idx + 1
+      }
+    }  
+  }
+  rownames(coef.cor) <- eqtl_tID
+  saveRDS(coef.cor, filename)
+  return(coef.cor)
+}
+
+#for(i in 1:length(tissue.names)){
+#  write.table(tissue.data[[i]]$lod.peaks$additive, 
+#  paste0("~/Desktop/", paste0(tissue.names[i], "_eQTL.csv")), sep = ",", quote = FALSE,
+#  row.names = FALSE)
+#}
+
+local.eqtl.cor.file <- here("Results", "Correlation_Allele_Effects_Local.RDS")
+local.eqtl.cor <- allele_effect_cor(local.shared.coef, local.eqtl.cor.file)
+
+mean.order <- order(apply(local.eqtl.cor, 2, function(x) mean(x, na.rm = TRUE)))
+par(mar = c(12,4,4,4))
+boxplot(local.eqtl.cor[,mean.order], las = 2, 
+  main = "Correlation of Allele Effects\nFor Shared Local eQTL")
+abline(h = c(0.5, 0, -0.5), lty = c(2,1,2))
+```
+
+
+#### Shared Distal eQTL
+
+```{r distal_eqtl_cor, fig.width = 8, fig.height = 6}
+distal.eqtl.cor.file <- here("Results", "Correlation_Allele_Effects_Distal.RDS")
+distal.eqtl.cor <- allele_effect_cor(distal.shared.coef, distal.eqtl.cor.file)
+
+mean.order <- order(apply(distal.eqtl.cor, 2, function(x) mean(x, na.rm = TRUE)))
+par(mar = c(12,4,4,4))
+boxplot(distal.eqtl.cor[,mean.order], las = 2,
+  main = "Correlation of Allele Effects\nFor Genes with Shared Distal eQTL")
+abline(h = c(0.5, 0, -0.5), lty = c(2,1,2))
+```
+
+#### Local vs Distal Comparison
+
+This plot shows the correlations of the local allele effects
+(upper triangle) and the distal allele effects (lower triangle)
+across pairs of tissues.
+
+```{r compare_mean_cor}
+mean.cor.mat <- matrix(NA, nrow = length(tissue.names), ncol = length(tissue.names))
+rownames(mean.cor.mat) <- colnames(mean.cor.mat) <- tissue.names
+for(i in 1:nrow(tissue.pairs)){
+  mean.cor.mat[tissue.pairs[i,1], tissue.pairs[i,2]] <- median(local.eqtl.cor[,i], na.rm = TRUE)
+  mean.cor.mat[tissue.pairs[i,2], tissue.pairs[i,1]] <- median(distal.eqtl.cor[,i],  na.rm = TRUE)
+}
+pheatmap(mean.cor.mat, cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE)
+```
+
+### Gene Expression Correlation {.tabset .tabset-fade .tabset-pills}
+
+The following plots show expression correlation across 
+tissues for transcripts with shared eQTL, both local
+and distal.
+
+Boxes are ordered by mean correlation. For the transcripts
+with local eQTL, heart and skeletal muscle have the highest 
+correlation between gene expression. The gene expression 
+correlation is lower than the allele effect correlations.
+
+The correlations between transcripts with distal eQTL
+is again weirdly highly correlated. I have spot-checked
+some of these, and they do seem right...
+
+#### Local eQTL
+
+```{r expr_cor, fig.width = 8, fig.height = 6}
+
+expr_cor <- function(shared.coef, expr.mat, filename){
+
+  if(!file.exists(filename)){
+
+    total.eqtl <- sum(sapply(shared.coef, length))
+    expr.cor <- matrix(NA, ncol = nrow(tissue.pairs), nrow = total.eqtl)
+    colnames(expr.cor) <- pair.names
+    qtl.idx <- 1
+    tx.id <- rep(NA, total.eqtl)
+
+      for(i in 1:length(shared.coef)){
+        if(length(shared.coef[[i]]) == 0){next()}
+          qtl.info <- shared.coef[[i]]
+          n.qtl <- length(qtl.info)
+          for(qtl in 1:n.qtl){
+            transcript.id <- qtl.info[[qtl]][1,2]
+            tx.id[qtl.idx] <- paste0(transcript.id, "_qtl", qtl)
+            tissue.id <- sort(unique(qtl.info[[qtl]][,1])) #only compare cross-tissue expression
+            eqtl.tissue.pairs <- apply(pair.matrix(tissue.id), 1, function(x) paste(x[1], x[2], sep = "-"))
+            
+            tissue.idx <- match(tissue.id, tissue.names)
+            tx.expr <- sapply(expr.mat[tissue.idx], function(x) x[,transcript.id])
+            pair.cor <- cor(tx.expr)
+
+            tissue.pair.cor <- as.numeric(pair.cor[upper.tri(pair.cor, diag = FALSE)])
+            name.idx <- match(eqtl.tissue.pairs, pair.names)
+            expr.cor[qtl.idx,name.idx] <- tissue.pair.cor 
+            qtl.idx <- qtl.idx + 1
+
+          } #end looping through qtl
+      } #end looping through shared.coef
+    rownames(expr.cor) <- tx.id
+
+    saveRDS(expr.cor, filename)
+  }else{
+    expr.cor <- readRDS(filename)
+  }
+  return(expr.cor)
+
+}
+
+local.expr.cor.file <- here("Results", "Correlation_Expression_Local.RDS")
+local.expr.cor <- expr_cor(shared.coef = local.shared.coef, 
+  expr.mat = ind.matched.expr, filename = local.expr.cor.file)
+
+mean.order <- order(apply(local.expr.cor, 2, function(x) mean(x, na.rm = TRUE)))
+par(mar = c(12,4,2,4))
+boxplot(local.expr.cor[,mean.order], las = 2, 
+  main = "Correlation of Gene Expression\nFor Genes with Shared Local eQTL")
+abline(h = c(0.5, 0, -0.5), lty = c(2,1,2))
+
+```
+
+#### Distal eQTL
+
+```{r expr_cor_distal, fig.width = 8, fig.height = 6}
+distal.expr.cor.file <- here("Results", "Correlation_Expression_Distal.RDS")
+distal.expr.cor <- expr_cor(shared.coef = distal.shared.coef, 
+  expr.mat = ind.matched.expr, filename = distal.expr.cor.file)
+
+mean.order <- order(apply(distal.expr.cor, 2, function(x) mean(x, na.rm = TRUE)))
+par(mar = c(12,4,4,4))
+boxplot(distal.expr.cor[,mean.order], las = 2,
+  main = "Correlation of Gene Expression\nFor Genes with Shared Distal eQTL")
+abline(h = c(0.5, 0, -0.5), lty = c(2,1,2))
+```
+
+#### Local vs Distal Comparison
+
+This plot shows the correlations of the local gene expression
+(upper triangle) and the distal gene expression (lower triangle)
+across pairs of tissues.
+
+
+```{r compare_mean_expr_cor}
+mean.cor.mat <- matrix(NA, nrow = length(tissue.names), ncol = length(tissue.names))
+rownames(mean.cor.mat) <- colnames(mean.cor.mat) <- tissue.names
+for(i in 1:nrow(tissue.pairs)){
+  mean.cor.mat[tissue.pairs[i,1], tissue.pairs[i,2]] <- median(local.expr.cor[,i], na.rm = TRUE)
+  mean.cor.mat[tissue.pairs[i,2], tissue.pairs[i,1]] <- median(distal.expr.cor[,i],  na.rm = TRUE)
+}
+pheatmap(mean.cor.mat, cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE)
+```
+
+#### eQTL Groups
+
+Genes can be broken into four groups depending on whether they have
+or don't have local or distal eQTL. What is the correlation of expression
+of these groups of genes?
+
+From the plots below, it looks as if transcripts with distal eQTL,
+regardless of whether they are shared across tissues, have higher
+correlations across tissues than genes with local eQTL or genes with
+no eQTL.
+
+```{r all_four, fig.width = 8, fig.height = 8}
+num.local <- t(sapply(local.eQTL.pos, function(x) sapply(x, nrow)))
+num.distal <- t(sapply(distal.eQTL.pos, function(x) sapply(x, nrow)))
+colnames(num.local) <- colnames(num.distal) <- tissue.names
+
+#pdf("~/Desktop/test.pdf", width = 16, height = 8)
+#for each tissue pair
+par(mfrow = c(2,2))
+for(txp in 1:nrow(tissue.pairs)){
+  local.qtl.combo <- cbind(num.local[,tissue.pairs[txp,1],drop=FALSE], num.local[,tissue.pairs[txp,2],drop=FALSE])
+  distal.qtl.combo <- cbind(num.distal[,tissue.pairs[txp,1],drop=FALSE], num.distal[,tissue.pairs[txp,2],drop=FALSE])  
+  #identify genes that do and don't have local and distal eQTL across both tissues
+  local.no <- Reduce("intersect", apply(local.qtl.combo, 2, function(x) which(x == 0)))
+  local.yes <- Reduce("intersect", apply(local.qtl.combo, 2, function(x) which(x > 0)))
+  distal.no <- Reduce("intersect", apply(distal.qtl.combo, 2, function(x) which(x == 0)))
+  distal.yes <- Reduce("intersect", apply(distal.qtl.combo, 2, function(x) which(x > 0)))
+
+  expr.mat1 <- ind.matched.expr[[tissue.pairs[txp,1]]]
+  expr.mat2 <- ind.matched.expr[[tissue.pairs[txp,2]]]
+  common.tx <- intersect(colnames(expr.mat1), colnames(expr.mat2))
+
+  local.yes.distal.yes <- intersect(rownames(num.local)[intersect(local.yes, distal.yes)], common.tx)
+  local.yes.distal.no <- intersect(rownames(num.local)[intersect(local.yes, distal.no)], common.tx)
+  local.no.distal.yes <- intersect(rownames(num.local)[intersect(local.no, distal.yes)], common.tx)
+  local.no.distal.no <- intersect(rownames(num.local)[intersect(local.no, distal.no)], common.tx)
+
+  #barplot(c(length(local.yes.distal.yes), length(local.yes.distal.no), 
+  #  length(local.no.distal.yes), length(local.no.distal.no)))
+
+  local.yes.distal.yes.cor <- sapply(local.yes.distal.yes, 
+    function(x) cor(expr.mat1[,x], expr.mat2[,x]))
+
+  local.yes.distal.no.cor <- sapply(local.yes.distal.no, 
+    function(x) cor(expr.mat1[,x], expr.mat2[,x]))
+
+  local.no.distal.yes.cor <- sapply(local.no.distal.yes, 
+    function(x) cor(expr.mat1[,x], expr.mat2[,x]))
+
+  local.no.distal.no.cor <- sapply(local.no.distal.no, 
+    function(x) cor(expr.mat1[,x], expr.mat2[,x]))
+
+  all.cor <- sapply(common.tx, function(x) cor(expr.mat1[,x], expr.mat2[,x]))
+
+  boxplot(list("local_distal" = local.yes.distal.no.cor, 
+    "no.local_distal" = local.no.distal.yes.cor, 
+    "local_no.distal" = local.yes.distal.no.cor, 
+    "no.local_no.distal" = local.no.distal.no.cor,
+    "all" = all.cor),
+    main = paste(tissue.names[tissue.pairs[txp,]], collapse = " vs. "),
+    ylim = c(-1,1), las = 2)
+    abline(h = 0)
+
+}
+#dev.off()
+```
+
+## Correlation between gene expression and coefficient correlation {.tabset .tabset-fade .tabset-pills}
+
+Are transcripts with highly correlated eQTL coefficients more
+highly correlated in expression than genes with lower correlations
+between eQTL coefficients?
+
+```{r expression_coef_cor}
+
+plot_expr_cor_v_eqtl_cor <- function(expr.cor, eqtl.cor, 
+  xlab = "eQTL Coefficient Correlation", ylim = c(-1, 1)){
+  common.tx <- intersect(rownames(expr.cor), rownames(eqtl.cor))
+  expr.idx <- match(common.tx, rownames(expr.cor))
+  coef.idx <- match(common.tx, rownames(eqtl.cor))
+  tx.pair.stats <- matrix(NA, nrow = nrow(tissue.pairs), ncol = 2)
+  colnames(tx.pair.stats)  <- c("R2", "p")
+  rownames(tx.pair.stats) <- pair.names
+  layout(get.layout.mat(nrow(tissue.pairs)))
+  for(txp in 1:nrow(tissue.pairs)){
+    tx.pair.stats[txp,] <- plot.with.model(eqtl.cor[coef.idx,txp], 
+      expr.cor[expr.idx,txp],ylim = ylim,
+      main = paste(tissue.names[tissue.pairs[txp,]], collapse = " vs. "), 
+    xlab = xlab, ylab = "Expression Correlation", col = "gray")
+    abline(h = 0, v = 0, lty = "dashed", lwd = 2)
+  }
+
+  invisible(tx.pair.stats)
+}
+
+```
+
+### Local eQTL
+
+The following plot shows the relationship between eQTL coefficient correlations
+and expression correlation across tissue pairs for local eQTL.
+
+```{r local_cor, fig.width = 12, fig.height = 9}
+meta.cor.local <- plot_expr_cor_v_eqtl_cor(local.expr.cor, local.eqtl.cor, 
+  "local eQTL Coefficient Correlation")
+```
+
+### Distal eQTL
+
+The following plot shows the relationship between eQTL coefficient
+correlations and expression correlation across tissue pairs for 
+distal eQTL.
+
+```{r distal_cor, fig.width = 12, fig.height = 9}
+meta.cor.distal <- plot_expr_cor_v_eqtl_cor(distal.expr.cor, distal.eqtl.cor, 
+  "distal eQTL Coefficient Correlation")
+```
+
+
+```{r scratch, eval = FALSE}
+distal.names <- apply(num.distal, 2, function(x) which(x > 0))
+distal.enrich <- lapply(distal.names, function(x) gost(x, organism = "mmusculus"))
+plot.enrichment.group(distal.enrich)
+
+for(i in 1:length(tissue.names)){
+  distal.idx <- match(names(distal.names[[i]]), tissue.data[[i]]$annot.mrna$gene.id)
+  distal.table <- tissue.data[[i]]$annot.mrna[distal.idx,]
+  write.table(distal.table, paste0("~/Desktop/distal_transcripts_", tissue.names[i], ".csv"),
+    quote = FALSE, row.names = FALSE, sep = ",")
+}
+
+```
