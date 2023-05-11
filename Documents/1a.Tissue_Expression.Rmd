@@ -60,6 +60,8 @@ generation.
 
 ```{r here, message = FALSE, warning = FALSE}
 library(here)
+results.dir <- here("Results", "Transcriptomes")
+if(!file.exists(results.dir)){dir.create(results.dir)}
 ```
 
 ```{r load_code, message = FALSE, warning = FALSE}
@@ -163,7 +165,7 @@ tissue.col <- unlist(lapply(1:length(tissue.names),
 sample.sex <- unlist(lapply(tissue.data, function(x) x$covar.matrix[,1]))
 
 #plot decomposition
-decomp.file <- here("Results", "Transcriptomes", "Tissue.Decomposition.RDS")
+decomp.file <- file.path(results.dir, "Tissue.Decomposition.RDS")
 if(!file.exists(decomp.file)){
   all.expr <- Reduce("rbind", tx.matched.expr)
   expr.decomp <- plot.decomp(all.expr, plot.results = FALSE)
@@ -411,8 +413,8 @@ get_local_distal_coef <- function(transcript.id, eqtl.table, gene.table, bp.buff
 ```{r get_coef}
 
 #pull out only local eQTL coefficients for this test.
-local.coef.file <- here("Results", "Transcriptomes", "eQTL_coef_local.RDS")
-distal.coef.file <- here("Results", "Transcriptomes", "eQTL_coef_distal.RDS")
+local.coef.file <- file.path(results.dir, "eQTL_coef_local.RDS")
+distal.coef.file <- file.path(results.dir, "eQTL_coef_distal.RDS")
 
 if(!file.exists(local.coef.file)){
     local.coef <- distal.coef <- vector(mode = "list", length = length(tissue.names))
@@ -595,8 +597,8 @@ local.eQTL.pos <- lapply(u_transcripts, function(x) get_eQTL(x, local.coef))
 names(local.eQTL.pos) <- u_transcripts
 
 #identify unique local eQTLs that are shared across tissues
-local.eqtl.binary.file <- here("Results", "Transcriptomes", "Shared_eQTL_Local_Binary.RDS")
-local.eqtl.coef.file <- here("Results", "Transcriptomes", "Shared_eQTL_Local_Coef.RDS")
+local.eqtl.binary.file <- file.path(results.dir, "Shared_eQTL_Local_Binary.RDS")
+local.eqtl.coef.file <- file.path(results.dir, "Shared_eQTL_Local_Coef.RDS")
 if(!file.exists(local.eqtl.binary.file)){
   shared.local.list <- lapply(local.eQTL.pos, function(x) assess_shared(x, mb.buffer = 4))
   local.shared.binary <- Reduce("rbind", lapply(shared.local.list, function(x) if(length(x) > 0){x$eqtl.tissues}))
@@ -638,8 +640,8 @@ distal.eQTL.pos <- lapply(u_transcripts, function(x) get_eQTL(x, distal.coef))
 names(distal.eQTL.pos) <- u_transcripts
 
 #identify unique local eQTLs that are shared across tissues
-distal.eqtl.binary.file <- here("Results", "Transcriptomes", "Shared_eQTL_Distal_Binary.RDS")
-distal.eqtl.coef.file <- here("Results", "Transcriptomes", "Shared_eQTL_Distal_Coef.RDS")
+distal.eqtl.binary.file <- file.path(results.dir, "Shared_eQTL_Distal_Binary.RDS")
+distal.eqtl.coef.file <- file.path(results.dir, "Shared_eQTL_Distal_Coef.RDS")
 if(!file.exists(distal.eqtl.binary.file)){
   shared.distal.list <- lapply(distal.eQTL.pos, function(x) assess_shared(x, mb.buffer = 4))
   distal.shared.binary <- Reduce("rbind", lapply(shared.distal.list, function(x) if(length(x) > 0){x$eqtl.tissues}))
@@ -742,7 +744,7 @@ allele_effect_cor <- function(shared.coef, filename){
 #  row.names = FALSE)
 #}
 
-local.eqtl.cor.file <- here("Results", "Transcriptomes", "Correlation_Allele_Effects_Local.RDS")
+local.eqtl.cor.file <- file.path(results.dir, "Correlation_Allele_Effects_Local.RDS")
 local.eqtl.cor <- allele_effect_cor(local.shared.coef, local.eqtl.cor.file)
 
 mean.order <- order(apply(local.eqtl.cor, 2, function(x) mean(x, na.rm = TRUE)))
@@ -756,7 +758,7 @@ abline(h = c(0.5, 0, -0.5), lty = c(2,1,2))
 #### Shared Distal eQTL
 
 ```{r distal_eqtl_cor, fig.width = 8, fig.height = 6}
-distal.eqtl.cor.file <- here("Results", "Transcriptomes", "Correlation_Allele_Effects_Distal.RDS")
+distal.eqtl.cor.file <- file.path(results.dir, "Correlation_Allele_Effects_Distal.RDS")
 distal.eqtl.cor <- allele_effect_cor(distal.shared.coef, distal.eqtl.cor.file)
 
 mean.order <- order(apply(distal.eqtl.cor, 2, function(x) mean(x, na.rm = TRUE)))
@@ -842,7 +844,7 @@ expr_cor <- function(shared.coef, expr.mat, filename){
 
 }
 
-local.expr.cor.file <- here("Results", "Transcriptomes", "Correlation_Expression_Local.RDS")
+local.expr.cor.file <- file.path(results.dir, "Correlation_Expression_Local.RDS")
 local.expr.cor <- expr_cor(shared.coef = local.shared.coef, 
   expr.mat = ind.matched.expr, filename = local.expr.cor.file)
 
@@ -857,7 +859,7 @@ abline(h = c(0.5, 0, -0.5), lty = c(2,1,2))
 #### Distal eQTL
 
 ```{r expr_cor_distal, fig.width = 8, fig.height = 6}
-distal.expr.cor.file <- here("Results", "Transcriptomes", "Correlation_Expression_Distal.RDS")
+distal.expr.cor.file <- file.path(results.dir, "Correlation_Expression_Distal.RDS")
 distal.expr.cor <- expr_cor(shared.coef = distal.shared.coef, 
   expr.mat = ind.matched.expr, filename = distal.expr.cor.file)
 
@@ -1024,8 +1026,8 @@ save.every = 100
 tissue.tx <- lapply(ind.matched.expr, function(x) colnames(x))
 all.tx <- Reduce("union", tissue.tx)
 
-int.p.file <- here("Results", "Tissue-Specific_eQTL_p_values.RDS")
-tissue.grid.file <- here("Results", "Transcripts_by_Tissue.RDS")
+int.p.file <- file.path(results.dir, "Tissue-Specific_eQTL_p_values.RDS")
+tissue.grid.file <- file.path(results.dir, "Transcripts_by_Tissue.RDS")
 
 if(file.exists(int.p.file)){
   p.mat <- readRDS(int.p.file)
@@ -1124,4 +1126,106 @@ and add in the kinship correction, etc.
 hist(fdr.mat[,3], breaks = 100, 
   main = "Tissue by Genotype Interaction p values",
   xlab = "p value")
+```
+
+```{r plot_tissue_int}
+plot_tissue_interaction <- function(transcript.id){
+  tx.idx <- which(all.tx == transcript.id)
+  tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
+  has.expr <- which(sapply(tissue.idx, length) > 0)
+  if(length(has.expr) > 1){
+    tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+    colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
+
+    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
+    nearest.marker <- tx.info$nearest.marker.id
+    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+
+    chr.idx <- which(names(K) == tx.info$chr)
+
+    tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+    names(tx.expr) <- tissue.names[has.expr]
+    long.expr <- unlist(tx.expr)
+    tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
+      function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
+    rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))
+
+    test <- lm(long.expr~tissue.factor*rep.geno)    
+    #anova(test)  
+
+
+    expr.mat <- Reduce("cbind", tx.expr)
+    colnames(expr.mat) <- tissue.names[has.expr]
+    test <- apply(expr.mat, 2, function(x) fit1(nearest.geno, x, kinship = K[[chr.idx]]))
+    tissue.lod <- sapply(test, function(x) x$lod)
+    boxplot(expr.mat, main = "Expression by tissue")
+    barplot(tissue.lod, main = "LOD score by tissue")
+    
+    all.coef <- sapply(test, function(x) x$coef)
+    #pheatmap(all.coef[1:8,], scale = "none")
+    barplot(t(all.coef[1:8,]), beside = TRUE, col = tissue.cols)
+    barplot(all.coef[1:8,], beside = TRUE, col = CCcolors)
+
+    all.se <- sapply(test, function(x) x$SE)
+    pheatmap(cor(all.coef[1:8,]), display_numbers = TRUE)
+    pheatmap(cor(t(all.coef[1:8,])), display_numbers = TRUE)
+    #allele.spec.decomp <- plot.decomp(all.coef[1:8,], label.points = TRUE)
+    #barplot(allele.spec.decomp$var.exp)
+    #tissue.spec.decomp <- plot.decomp(t(all.coef[1:8,]), label.points = TRUE)    
+    #barplot(tissue.spec.decomp$var.exp)
+
+    col.order <- hclust(dist(t(all.coef[1:8,])))$order
+
+    min.coef <- all.coef[1:8,]-all.se[1:8,]
+    max.coef <- all.coef[1:8,]+all.se[1:8,]
+
+    overlap.mat <- matrix(NA, ncol = 8, nrow = nrow(tissue.pairs))
+    colnames(overlap.mat) <- LETTERS[1:8]
+    for(txp in 1:nrow(tissue.pairs)){
+      tx1 <- tissue.pairs[txp,1]
+      tx2 <- tissue.pairs[txp,2]
+      if(length(which(colnames(min.coef) == tx1)) > 0 && length(which(colnames(min.coef) == tx2)) > 0){
+        all.overlaps <- sapply(LETTERS[1:8], 
+          function(x) segments.overlap(min.coef[x,tx1], max.coef[x, tx1],
+            min.coef[x,tx2], max.coef[x, tx2]))
+        overlap.mat[txp,] <- as.numeric(all.overlaps)
+      }
+    }
+    cbind(tissue.pairs, overlap.mat)
+    hamming <- apply(overlap.mat, 1, function(x) length(which(x == 0)))
+    cbind(tissue.pairs, hamming)
+
+    plot.new()
+    plot.window(xlim = c(1, length(tissue.names)), ylim = c(min(min.coef), max(max.coef)))
+    for(i in 1:8){
+      plot.poly.xy(1:length(tissue.names), max.coef[i,col.order], 
+        1:length(tissue.names), min.coef[i,col.order], col = CCcolors[i])
+      #points(1:length(tissue.names), y = all.coef[i,col.order], col = CCcolors[i], 
+      #  type = "l", lwd = 3)
+    }
+    text(x = 1:length(tissue.names), y = rep(min(min.coef), length(tissue.names)), 
+      labels = tissue.names[col.order])
+    axis(2)
+    mtext("Coefficient", side = 2, line = 2.5)
+    abline(h = 0)    
+  
+
+
+    row.order <- hclust(dist(all.coef[1:8,]))$order
+    plot.new()
+    plot.window(xlim = c(1, 8), ylim = c(min(min.coef), max(max.coef)))
+    for(i in 1:length(tissue.names)){
+      segments(x0 = row.order, y0 = min.coef[,i], y1 = max.coef[,i],
+      col = tissue.cols[i], lwd = 3)
+    }
+    text(x = 1:8, y = rep(min(min.coef), 8), 
+      labels = LETTERS[1:8][row.order])
+    axis(2)
+    mtext("Coefficient", side = 2, line = 2.5)
+    abline(h = 0)    
+  
+   
+  }
+}
+
 ```
