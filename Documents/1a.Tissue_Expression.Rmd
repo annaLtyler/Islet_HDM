@@ -1019,13 +1019,19 @@ The model looks for an interaction between genotype and
 tissue influencing expression.
 
 ```{r tissue_specific}
-stop()
+save.every = 100
+
 tissue.tx <- lapply(ind.matched.expr, function(x) colnames(x))
 all.tx <- Reduce("union", tissue.tx)
 
 int.p.file <- here("Results", "Tissue-Specific_eQTL_p_values.RDS")
 tissue.grid.file <- here("Results", "Transcripts_by_Tissue.RDS")
-if(!file.exists(int.p.file)){
+
+if(file.exists(int.p.file)){
+  p.mat <- readRDS(int.p.file)
+  tissue.grid <- readRDS(tissue.grid.file)
+  start.at <- max(which(!is.na(p.mat[,1]))) + 1 
+}else{
   p.mat <- matrix(NA, nrow = length(all.tx), ncol = 3)
   rownames(p.mat) <- all.tx
   colnames(p.mat) <- c("Tissue", "Genotype", "Tissue_by_Genotype")
@@ -1033,52 +1039,56 @@ if(!file.exists(int.p.file)){
   tissue.grid <- matrix(0, nrow = length(all.tx), ncol = length(tissue.names)) #keep track of which tissues each transcript is expressed in
   rownames(tissue.grid) <- all.tx
   colnames(tissue.grid) <- tissue.names
+  start.at <- 1
+}
 
-  for(tx.idx in 1:length(all.tx)){
-    report.progress(tx.idx, length(all.tx))
-    tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
-    has.expr <- which(sapply(tissue.idx, length) > 0)
-    tissue.grid[tx.idx,has.expr] <- 1
-    if(length(has.expr) > 1){
-      tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
-      colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
-      
-      tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
-      tx.chr <- tx.info$chr
-      chr.idx <- which(names(K) == tx.chr)
+for(tx.idx in start.at:length(all.tx)){
+  report.progress(tx.idx, length(all.tx))
+  tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
+  has.expr <- which(sapply(tissue.idx, length) > 0)
+  tissue.grid[tx.idx,has.expr] <- 1
+  if(length(has.expr) > 1){
+    tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+    colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
+    
+    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
+    tx.chr <- tx.info$chr
+    chr.idx <- which(names(K) == tx.chr)
 
-      if(!(tx.chr %in% 1:19)){next()}
-      nearest.marker <- tx.info$nearest.marker.id
-      nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+    if(!(tx.chr %in% 1:19)){next()}
+    nearest.marker <- tx.info$nearest.marker.id
+    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
 
-      tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
-      names(tx.expr) <- tissue.names[has.expr]
-      long.expr <- unlist(tx.expr)
-      tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
-        function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
-      rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))      
-      rep.K <- K[[chr.idx]][rownames(rep.geno), rownames(rep.geno)]
-      rownames(rep.K) <- colnames(rep.K) <- names(long.expr)
+    tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+    names(tx.expr) <- tissue.names[has.expr]
+    long.expr <- unlist(tx.expr)
+    tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
+      function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
+    rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))      
+    rep.K <- K[[chr.idx]][rownames(rep.geno), rownames(rep.geno)]
+    rownames(rep.K) <- colnames(rep.K) <- names(long.expr)
 
-      #trying to use cape code to adjust variables
-      adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
-        phenoV = as.matrix(long.expr))
-      adj_test <- lm(adj_data$corrected_pheno~tissue.factor*adj_data$corrected_geno)
-      #anova(adj_test)
-      p.mat[tx.idx,] <- anova(adj_test)[,"Pr(>F)"][1:3]
+    #trying to use cape code to adjust variables
+    adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
+      phenoV = as.matrix(long.expr))
+    adj_test <- lm(adj_data$corrected_pheno~tissue.factor*adj_data$corrected_geno)
+    #anova(adj_test)
+    p.mat[tx.idx,] <- anova(adj_test)[,"Pr(>F)"][1:3]
 
-      #test <- lm(long.expr~tissue.factor*rep.geno)
-      #p.mat[tx.idx,] <- anova(test)[,"Pr(>F)"][1:3]
-      #anova(test)
+    if(tx.idx %% save.every == 0){
+      saveRDS(p.mat, int.p.file)
+      saveRDS(tissue.grid, tissue.grid.file)
     }
 
+    #test <- lm(long.expr~tissue.factor*rep.geno)
+    #p.mat[tx.idx,] <- anova(test)[,"Pr(>F)"][1:3]
+    #anova(test)
   }
-  saveRDS(p.mat, int.p.file)
-  saveRDS(tissue.grid, tissue.grid.file)
-}else{
-  p.mat <- readRDS(int.p.file)
-  tissue.grid <- readRDS(tissue.grid.file)
+
 }
+saveRDS(p.mat, int.p.file)
+saveRDS(tissue.grid, tissue.grid.file)
+
 ```
 
 Most transcripts are expressed in all five tissues.
