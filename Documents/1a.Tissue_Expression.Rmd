@@ -69,8 +69,8 @@ all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
 for(i in 1:length(all.fun)){source(all.fun[i])}
 
 all.packages <- c("igraph", "pheatmap", "gprofiler2", "qtl2", "stringr",
-  "wordcloud", "wordcloud2", "hexbin", "sommer")
-load_libraries(all.packages)
+  "wordcloud", "wordcloud2", "hexbin")
+load_libraries(all.packages, personal.library = TRUE)
 ```
 
 ```{r read_transcriptomes}
