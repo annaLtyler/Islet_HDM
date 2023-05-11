@@ -1,0 +1,297 @@
+library(umap)
+?config
+??config
+library(fastICA)
+?fastICA
+??isomap
+install.packages("vegan")
+op <- par(mar=c(4,4,1,1)+0.2, mfrow=c(2,2))#
+data(BCI)
+library(vegan)
+op <- par(mar=c(4,4,1,1)+0.2, mfrow=c(2,2))#
+data(BCI)
+dis <- vegdist(BCI)
+dis
+tr <- spantree(dis)
+pl <- ordiplot(cmdscale(dis), main="cmdscale")
+lines(tr, pl, col="red")
+op <- par(mar=c(4,4,1,1)+0.2, mfrow=c(2,2))#
+data(BCI)#
+dis <- vegdist(BCI)#
+tr <- spantree(dis)#
+pl <- ordiplot(cmdscale(dis), main="cmdscale")#
+lines(tr, pl, col="red")#
+ord <- isomap(dis, k=3)#
+ord#
+pl <- plot(ord, main="isomap k=3")#
+lines(tr, pl, col="red")#
+pl <- plot(isomap(dis, k=5), main="isomap k=5")#
+lines(tr, pl, col="red")#
+pl <- plot(isomap(dis, epsilon=0.45), main="isomap epsilon=0.45")#
+lines(tr, pl, col="red")#
+par(op)#
+## colour points and web by the dominant species#
+dom <- apply(BCI, 1, which.max)#
+## need nine colours, but default palette  has only eight#
+op <- palette(c(palette("default"), "sienna"))#
+plot(ord, pch = 16, col = dom, n.col = dom) #
+palette(op)
+op <- par(mar=c(4,4,1,1)+0.2, mfrow=c(2,2))#
+data(BCI)#
+dis <- vegdist(BCI)#
+tr <- spantree(dis)#
+pl <- ordiplot(cmdscale(dis), main="cmdscale")#
+lines(tr, pl, col="red")#
+ord <- isomap(dis, k=3)#
+ord#
+pl <- plot(ord, main="isomap k=3")#
+lines(tr, pl, col="red")#
+pl <- plot(isomap(dis, k=5), main="isomap k=5")#
+lines(tr, pl, col="red")#
+pl <- plot(isomap(dis, epsilon=0.45), main="isomap epsilon=0.45")#
+lines(tr, pl, col="red")#
+par(op)#
+## colour points and web by the dominant species#
+dom <- apply(BCI, 1, which.max)#
+## need nine colours, but default palette  has only ei
+install.packages("Rdimtools")
+library(Rdimtools)
+install.packages("Rcdsp")
+install.packages("Rcsdp")
+library(Rdimtools)
+install.packages("ANN2")
+test <- function(n,y=gtools::permutations(n,n))y[!colSums(t(y)==1:n),]
+test(8)
+library(parallel)
+library(doParallel)
+?foreach
+?makeCluster
+times(3) %do% rnorm(1)
+d <- data.frame(x=1:10, y=rnorm(10))
+s <- foreach(d=iter(d, by='row'), .combine=rbind) %dopar% d#
+identical(s, d)
+d <- data.frame(x=1:10, y=rnorm(10))
+s <- foreach(d=iter(d, by='row'), .combine=rbind) %dopar% d#
+identical(s, d)
+s
+stopCluster(cl)
+?mcapply
+??mcapply
+?parLapply
+?next
+??saveWidget
+library(htmlwidgets)
+?saveWidget
+library(plotly)
+?plot_ly
+library(qtl2)
+?scan1
+?lm
+library(devtools)#
+install_github("mjcstats", "drmjc")
+library(qtl2)
+?find_peaks
+library(pheatmap)
+?pheatmap
+?dendrogram
+?barplot
+library(qtl2)
+page(scan1)
+page(get_common_ids)
+test <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/Chromatin_State_DO_Coef.RDS")
+str(test)
+length(library(lme4))
+length(test)
+str(test[[1]])
+head(test[[1]])
+test2 <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/chQTL.state.coef.RDS")
+str(test2)
+?t.test
+?kruskal.test
+?chisq.test
+?runif
+?ks.test
+?lm
+?t.test
+test <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/Chromatin.Matrices.Scaled.RDS")
+str(test[[1]])
+test <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/Chromatin.States.Gene.Coords.RDS")
+str(test[[1]])
+test <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/RRBS/RRBS.presence.Expr.Cor.Across.Strains.RDS")
+str(test)
+library(pheatmap)
+?pheatmap
+?order
+library(data.table)
+?foverlaps
+install.packages(data.table)
+remove.packages("data.table")
+install.packages("data.table", type = "source",#
+    repos = "https://Rdatatable.gitlab.io/data.table")
+library(data.table)
+x = data.table(start=c(5,31,22,16), end=c(8,50,25,18), val2 = 7:10)#
+y = data.table(start=c(10, 20, 30), end=c(15, 35, 45), val1 = 1:3)
+setkey(y, start, end)
+y
+x
+foverlaps(x, y, type="any", which=TRUE) ## return overlap indices
+foverlaps(x, y, type="any") ## return overlap joi
+foverlaps(x, y, type="any", mult="first")
+?grid
+?t.test
+?integrate
+test <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/chQTL.state.coef.RDS")
+test <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/chQTL.state.R2.RDS")
+test <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/eQTL.hap.coef.RDS")
+?barplot
+?mtext
+?text
+?synapser
+library(synapser)
+?synapser
+??synapser
+?boxplot
+load('~/Documents/Projects/Islets/CAPE_transcripts/Data/dataset.DO.CUBE.multissue.RData')
+source('~/Documents/Projects/Islets/CAPE_transcripts/Code/plot.decomp.R', chdir = TRUE)
+ls()
+names(dataset.DO.Cube.Adipose)
+names(dataset.DO.Cube.Adipose$data)
+expr <- ataset.DO.Cube.Adipose$data$rz
+expr <- dataset.DO.Cube.Adipose$data$rz
+dim(expr)
+test <- plot.decomp(expr)
+barplot(test$var.exp)
+barplot(test$var.exp[1:10])
+test$var.exp[1:10]*100
+signif(test$var.exp[1:10]*100, 2)
+round(test$var.exp[1:10]*100, 3)
+round(test$var.exp[1:10]*100, 2)
+cat(round(test$var.exp[1:10]*100, 2), sep = ", ")
+pheno <- read.csv("~/Documents/Projects/Islets/CAPE_transcripts/Data/DO_clinical_phenotypes.csv")
+head(pheno)
+num.pheno <- pheno[,11:ncol(pheno)]
+num.pheno <- pheno[,11:(ncol(pheno)-1)]
+test2 <- plot.decomp(num.pheno)
+cat(round(test2$var.exp[1:10]*100, 2), sep = ", ")
+library(gprofiler2)
+?gost
+library(easyPubmed)
+library(easyPubMed)
+?get_pubmed_ids
+library(sva)
+?ComBat
+library(bladderbatch)#
+data(bladderdata)#
+dat <- bladderEset[1:50,]
+?model.matrix
+library(e1071)
+citation("e1071")
+update.packages("e1071")
+library(e1071)
+citation("e1071")
+library(e1071)
+citation("e1071")
+?axis
+library(igraph)
+?graph_from_adjacency_matrix
+library(igraph)
+?cluster_fast_greedy
+library(igraph)
+?biconnected_components
+a <- matrix(rnorm(100), 10, 10)
+view(a)
+?view
+??view
+View(a)
+?combn
+combn(letters[1:4], 2)#
+(m <- combn(10, 5, min))
+?assign
+allele.cor <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/Correlation_Allele_Effects_Local.RDS")
+expr.cor <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/Correlation_Expression_Local.RDS")
+head(expr.cor)
+head(allele.cor)
+?mutate
+library(tidyverse)
+?mutate
+devtools::install_github("vqf/nVennR")
+?axis
+?setdiff
+a <- 1:5
+b <- 4:10
+setdiff(a, b)
+?png
+scaling.factor <- 300/72
+3*scaling.factor
+9*scaling.factor
+?mtext
+test <- readRDS("~/Desktop/subset_results/ChromHMM/14_states_C/chQTL.state.coef.RDS")
+test2 <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/chQTL.coef.RDS?)
+test2 <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/chQTL.coef.RDS")
+str(test)
+str(test2)
+str(test1[[1]])
+str(test[[1]])
+test2 <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/chQTL.state.coef.RDS")
+str(test2)
+all_do <- readRDS("~/Documents/Projects/Epigenetics/Epigenetics_Manuscript/Results/ChromHMM/14_states_C/chQTL.state.coef.RDS")
+sub_do <- readRDS("~/Desktop/subset_results/ChromHMM/14_states_C/chQTL.state.coef.RDS")
+str(all_do[[1]])
+str(sub_do[[1]])
+all_do[[1]]
+str(sub_do[[1]])
+plot(as.matrix(all_do[[1]]), as.matrix(sub_do[[1]]))
+library(qtl2)
+?find_peaks
+library(RColorBrewer)
+?brewer.pal
+display.brewer.all()
+?legend
+test <- readRDS("~/Documents/Projects/EAE/Results/Zeros_included_no-batch_no-norm/scan1_results_cds.RDS")
+sapply(test, function(x) sapply)
+sapply(test, function(x) sapply(x, max))
+sapply(test, max)
+library(qtl2)
+?find_marker
+library(qtl2)
+?fit1
+library(sommer)
+install.packages("sommer")
+library(sommer)
+?sommer
+vignette('v1.sommer.quick.start')
+data(DT_example)
+DT <- DT_example
+str(DT)
+DT$EnvName <- paste(DT$Env,DT$Name)
+head(DT)
+unsm(2)
+?vs
+test <- vs(Name, Gtc=unsm(2)) + vs(EnvName, Gtc=unsm(2))
+?vs
+ans4 <- mmer(cbind(Yield, Weight) ~ Env, random= ~ vs(Name, Gtc=unsm(2)) + vs(EnvName, Gtc=unsm(2)), rcov= ~ vs(units, Gtc=unsm(2)), data=DT, verbose = FALSE)
+summary(ans4)
+ans4 <- mmer(cbind(Yield, Weight) ~ Env, random= ~ vs(Name, Gtc=unsm(2)) + vs(EnvName, Gtc=unsm(2)), rcov= ~ vs(units, Gtc=unsm(2)),data=DT, verbose = FALSE)
+summary(ans4)
+ans4 <- mmer(cbind(Yield, Weight) ~ Env, random= ~ vs(Name, Gtc=unsm(2)) + vs(EnvName, Gtc=unsm(2)), rcov= ~ vs(units, Gtc=unsm(2)),data=DT, verbose = FALSE, date.warning = FALSE)
+summary(ans4)
+?mmer
+library(sommer)
+vignette('v1.sommer.quick.start')
+library(pheatmap)
+?pheatmap
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Data/imputed/Expanded_Imputed_CC-RIX_Expression_Adipose.RDS")
+str(test)
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Data/CC-RIX/Expression.by.Tissue.Adjusted.RDS")
+str(test)
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/Transcription_Networks/Transcript_Cor_adipose_CC-RIX_Imputed.RDS")
+str(test)
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/Transcription_Networks/Transcript_Cor_adipose_DO_Measured.RDS")
+test[1:10, 1:10]
+str(test)
+test
+test[1:10, 1:10]
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/Transcription_Networks/Transcript_Cor_adipose_CC-RIX_Imputed.RDS")
+test[1:10, 1:10]
+setwd("~/Documents/Projects/Islets/Islet_HDM/Documents")
+rmarkdown::render("4.Gene_Expression_Correlation.Rmd")

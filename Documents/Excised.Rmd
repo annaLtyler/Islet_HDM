@@ -278,3 +278,127 @@ for(tx in 1:length(tissue.names)){
 }
 
 ```
+
+## Tissue-specific effects
+
+```{r tissue_specific}
+stop()
+tissue.tx <- lapply(ind.matched.expr, function(x) colnames(x))
+all.tx <- Reduce("union", tissue.tx)
+for(tx.idx in 1:length(all.tx)){
+  #tx.idx <- tx.idx + 1
+  tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
+  has.expr <- which(sapply(tissue.idx, length) > 0)
+  if(length(has.expr) > 1){
+    tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+    colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
+    #boxplot(tx.expr)
+    #pheatmap(cor(tx.expr))
+    #pairs(tx.expr)
+
+    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
+    nearest.marker <- tx.info$nearest.marker.id
+    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+
+    chr.idx <- which(names(K) == tx.info$chr)
+
+    #try doing everything at once
+    tx.expr <- lapply(1:length(has.expr), function(x) rankZ(ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]]))
+    names(tx.expr) <- tissue.names[has.expr]
+    long.expr <- unlist(tx.expr)
+    tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
+      function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
+    rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))
+
+    test <- lm(long.expr~tissue.factor*rep.geno)
+    int.p <- anova(test)[,"Pr(>F)"][3]
+    
+  
+    summary(test)
+    par(mar = c(4,16,4,4))
+    barplot(coef(test), las = 2, horiz = TRUE, cex.names = 0.5)
+
+    expr.mat <- Reduce("cbind", tx.expr)
+    colnames(expr.mat) <- tissue.names[has.expr]
+    test <- apply(expr.mat, 2, function(x) fit1(nearest.geno, x, kinship = K[[chr.idx]]))
+    tissue.lod <- sapply(test, function(x) x$lod)
+    #barplot(tissue.lod)
+    
+    all.coef <- sapply(test, function(x) x$coef)
+    #pheatmap(all.coef[1:8,], scale = "none")
+    barplot(t(all.coef[1:8,]), beside = TRUE, col = tissue.cols)
+    barplot(all.coef[1:8,], beside = TRUE, col = CCcolors)
+
+    all.se <- sapply(test, function(x) x$SE)
+    pheatmap(cor(all.coef[1:8,]), display_numbers = TRUE)
+    pheatmap(cor(t(all.coef[1:8,])), display_numbers = TRUE)
+    #allele.spec.decomp <- plot.decomp(all.coef[1:8,], label.points = TRUE)
+    #barplot(allele.spec.decomp$var.exp)
+    #tissue.spec.decomp <- plot.decomp(t(all.coef[1:8,]), label.points = TRUE)    
+    #barplot(tissue.spec.decomp$var.exp)
+
+    col.order <- hclust(dist(t(all.coef[1:8,])))$order
+
+    min.coef <- all.coef[1:8,]-all.se[1:8,]
+    max.coef <- all.coef[1:8,]+all.se[1:8,]
+
+    overlap.mat <- matrix(NA, ncol = 8, nrow = nrow(tissue.pairs))
+    colnames(overlap.mat) <- LETTERS[1:8]
+    for(txp in 1:nrow(tissue.pairs)){
+      tx1 <- tissue.pairs[txp,1]
+      tx2 <- tissue.pairs[txp,2]
+      if(length(which(colnames(min.coef) == tx1)) > 0 && length(which(colnames(min.coef) == tx2)) > 0){
+        all.overlaps <- sapply(LETTERS[1:8], 
+          function(x) segments.overlap(min.coef[x,tx1], max.coef[x, tx1],
+            min.coef[x,tx2], max.coef[x, tx2]))
+        overlap.mat[txp,] <- as.numeric(all.overlaps)
+      }
+    }
+    cbind(tissue.pairs, overlap.mat)
+    hamming <- apply(overlap.mat, 1, function(x) length(which(x == 0)))
+    cbind(tissue.pairs, hamming)
+
+    plot.new()
+    plot.window(xlim = c(1, length(tissue.names)), ylim = c(min(min.coef), max(max.coef)))
+    for(i in 1:8){
+      plot.poly.xy(1:length(tissue.names), max.coef[i,col.order], 
+        1:length(tissue.names), min.coef[i,col.order], col = CCcolors[i])
+      #points(1:length(tissue.names), y = all.coef[i,col.order], col = CCcolors[i], 
+      #  type = "l", lwd = 3)
+    }
+    text(x = 1:length(tissue.names), y = rep(min(min.coef), length(tissue.names)), 
+      labels = tissue.names[col.order])
+    axis(2)
+    mtext("Coefficient", side = 2, line = 2.5)
+    abline(h = 0)    
+  
+
+
+    row.order <- hclust(dist(all.coef[1:8,]))$order
+    plot.new()
+    plot.window(xlim = c(1, 8), ylim = c(min(min.coef), max(max.coef)))
+    for(i in 1:length(tissue.names)){
+      segments(x0 = row.order, y0 = min.coef[,i], y1 = max.coef[,i],
+      col = tissue.cols[i], lwd = 3)
+    }
+    text(x = 1:8, y = rep(min(min.coef), 8), 
+      labels = LETTERS[1:8][row.order])
+    axis(2)
+    mtext("Coefficient", side = 2, line = 2.5)
+    abline(h = 0)    
+  
+   
+  }
+
+}
+par(mfrow = c(2,3))
+for(tx in 1:length(tissue.names)){
+  local.lod <- local.coef[[tx]]$lod
+  common.tx <- intersect(local.coef[[tx]]$gene.id, colnames(tissue.data[[tx]]$data$norm))
+  lod.idx <- match(common.tx, local.coef[[tx]]$gene.id)
+  expr.idx <- match(common.tx, colnames(tissue.data[[tx]]$data$norm))
+  expr.mean <- apply(tissue.data[[tx]]$data$norm[,expr.idx], 2, mean)
+  plot.with.model(local.coef[[tx]]$lod[lod.idx], expr.mean, report = "cor.test",
+    xlab = "local LOD score", ylab = "Expression Mean", main = tissue.names[tx])
+}
+```

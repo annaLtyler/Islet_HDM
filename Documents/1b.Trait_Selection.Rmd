@@ -1,0 +1,537 @@
+---
+title: "Trait Selection"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+This workflow selects traits for use in high-dimensional mediation.
+The final product is a trait matrix that is used in downstream analyses.
+
+```{r load_code}
+is.interactive = FALSE
+#is.interactive = TRUE
+library("here")
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("pheatmap")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+## Data
+
+Data were generated through a collaboration between the Attie
+lab at the University of Wisconsin, and The Jackson Laboratory
+Detailed descriptions of mouse handling, phenotype gathering,
+and initial data processing can be found elsewhere. 
+
+Here we focus exclusively on the clinical phenotoype data.
+
+## Read phenotypes and adjust
+
+Adjust phenotype data for DO generation, sex, and diet days.
+
+```{r pheno}
+pheno.data <- readRDS(here("Data", "DO", "Clinical_Phenotypes_V11.RDS"))
+#write out annotations for phenotypes
+write.table(pheno.data$annot.phenotype, here("Data", "DO", "Phenotype_Annotations.txt"), 
+  sep = "\t", quote = FALSE, row.names = FALSE)
+
+
+num.pheno <- pheno.data$data
+#fix the spelling of adiposity
+colnames(num.pheno)[which(colnames(num.pheno) == "adipocity")] <- "adiposity"
+covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
+num.covar <- dummy_covar(covar)
+rownames(num.covar) <- rownames(num.pheno)
+saveRDS(num.covar, here("Data", "DO", "Clinical_Phenotype_Covariates.RDS"))
+adj.pheno <- adjust(num.pheno, num.covar) #remove sex, wave, and generation from the phenotypes
+```
+
+## Body Weight
+
+Investigate body weight patterns.
+The following boxplot shows two wicked outliers that 
+are definitely mistakes. I am removing the point in 
+week 11 that is 200 grams, and the other in week 17 
+that is 5 grams. 
+
+```{r bw}
+weight.idx <- grep("weight", colnames(adj.pheno))
+#remove organ weights
+organ.idx <- sapply(c("heart", "liver", "fat"), function(x) grep(x, colnames(adj.pheno)))
+bw.idx <- setdiff(weight.idx, organ.idx)
+bw <- adj.pheno[,bw.idx]
+ordered.bw  <- cbind(bw[,-1], bw[,1,drop=FALSE])
+boxplot(ordered.bw, las = 2)
+```
+
+The following boxplot shows the corrected weights
+
+```{r remove_obvious_errors}
+outlier1 <- which(ordered.bw > 100)
+ordered.bw[outlier1] <- NA
+
+outlier2 <- which(ordered.bw < 6)
+ordered.bw[outlier2] <- NA
+boxplot(ordered.bw, las = 2)
+```
+
+There is really one axis of variation in the weight
+matrix that corresponds very highly with the final 
+weight. The following barplot shows the variance
+explained by the PCs of the weight matrix. 
+
+```{r weight_decomp, warning = FALSE}
+bw.decomp <- plot.decomp(ordered.bw, plot.results = FALSE)
+barplot_with_num(round(bw.decomp$var.exp, 2), main = "Variance Explained",
+  text.srt = 45)
+```
+
+The following plot shows the high concordance between the first 
+PC of the weight matrix and the final weight. Thus, I think we
+can safely use final weight as the only weight measurement
+without losing any important information.
+
+```{r weight_pc}
+avg.weight <- apply(ordered.bw, 1, function(x) mean(x, na.rm = TRUE))
+plot.with.model(bw.decomp$u[,1], ordered.bw[bw.decomp$rows.used,"weight_final"],
+  xlab = "PC1 of weight matrix", ylab = "Final Weight")
+
+#plot.with.model(bw.decomp$u[,1], avg.weight[bw.decomp$rows.used],
+#  xlab = "PC1 of weight matrix", ylab = "Average Weight")
+```
+
+```{r final_trait_mat}
+#initialize a trait matrix that contains all the traits we want to examine.
+final.trait.mat <- adj.pheno[,"weight_final",drop=FALSE]
+```
+
+## Food consumption
+
+We also looked at the range of food consumption.
+The following boxplot shows that there is a clear
+error in the food consumption measurements. We
+removed the measurement that was greater than 40.
+
+```{r food}
+food.idx <- grep("food", colnames(num.pheno))
+food.mat <- num.pheno[,food.idx]
+boxplot(food.mat, las = 2)
+```
+
+The following matrix shows food consumption after
+removing the error.
+
+Unlike weight, food consumption remained fairly 
+steady over the course of the experiment. 
+
+```{r remove_food_error}
+outlier1 <- which(food.mat > 40)
+food.mat[outlier1] <- NA
+boxplot(food.mat, las = 2)
+```
+
+The food consumption matrix is also predominantly
+in one dimention.
+
+```{r food_decomp, warning = FALSE}
+food.decomp <- plot.decomp(food.mat, plot.results = FALSE)
+barplot_with_num(round(food.decomp$var.exp, 2), text.srt = 45)
+```
+This dimension is even more highly correlated with 
+the average food intake, so we can safely reduce
+food intake to its averge.
+
+```{r food_pc}
+plot.with.model(food.decomp$u[,1], food.mat[food.decomp$rows.used,"food_ave"],
+  xlab = "PC1 of food intake", ylab = "Food Intake Average")
+```
+
+There is a weak relationship between food consumption and 
+final weight.
+
+```{r weight_v_food}
+plot.with.model(food.mat[,"food_ave"], ordered.bw[,"weight_final"],
+  xlab = "Avg. Food Consumption", ylab = "Final Weight")
+```
+
+Some of the animals are crumblers, which means they store
+food in their bedding. This will falsely increase the amount
+of food they are consuming. However, I can't find any data 
+to indicate which mice are crumblers and which are not.
+
+The phenotypes fall into multiple categories, and some 
+are normalized in different ways; i.e. adjusted for baseline
+measurements or not, rank Z normalized or not. We don't want
+to use all traits indiscriminately. Here we select traits 
+for merging into a combined matrix that will capture multiple
+dimensions of the metabolic state of the animals.
+
+```{r add_food_consumption}
+final.trait.mat <- cbind(final.trait.mat, food.mat[,"food_ave", drop=FALSE])
+```
+
+## Glucose
+
+For glucose measurements we will look at glu_final, the 
+final glucose measurement for each animal.
+
+This measurement of glucose has the most variation.
+It also captures the difference between animals whose glucose measurements
+went up over the course of the experiment and those whose glucose
+measurements went down over the course of the experiment. There is a 
+slight negative correlation between initial glucose measurement and 
+final glucose measurement. That is, animals that started with higher
+glucose measurements tended to end with lower glucose measurements.
+
+```{r glucose, fig.width = 8, fig.height = 8}
+
+glu.mat <- adj.pheno[,c("glu_6", "glu_10", "glu_14", "glu_final")]
+glu.mat[352,] <- NA
+glu.diff <- glu.mat[,"glu_final"] - glu.mat[,"glu_6"] #did glucose go up or down over the course of the experiment?
+glu.dir <- rep(NA, nrow(glu.mat))
+glu.up <- which(glu.diff > 0) 
+glu.down <- which(glu.diff < 0)
+glu.dir[glu.up] <- "Up"
+glu.dir[glu.down] <- "Down"
+
+par(mfrow = c(2,2))
+boxplot(glu.mat[,"glu_6"]~as.factor(glu.dir), xlab = "Glucose Change", 
+  ylab = "Initial Glucose")
+plot.with.model(glu.mat[,"glu_6"], glu.diff, report = "cor.test",
+  xlab = "Initial Glucose", ylab = "Glucose Change")
+plot.with.model(glu.mat[,"glu_final"], glu.diff, report = "cor.test",
+  xlab = "Final Glucose", ylab = "Glucose Change")
+
+```
+
+```{r add_final_glucose}
+final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"glu_final",drop=FALSE])
+```
+
+We also use the glucose total area under the curve. 
+It is more highly correlated with final body weight
+than is glu_iAUC.
+
+```{r glucose_curves, fig.width = 8, fig.height = 8}
+par(mfrow = c(2,2))
+plot.with.model(adj.pheno[,"Glu_tAUC"], adj.pheno[,"Glu_iAUC"],
+  xlab = "Glu_tAUC", ylab = "Glu_iAUC")
+plot.with.model(adj.pheno[,"Glu_iAUC"], adj.pheno[,"weight_final"],
+  xlab = "Glu_iAUC", ylab = "final weight")
+plot.with.model(adj.pheno[,"Glu_tAUC"], adj.pheno[,"weight_final"],
+  xlab = "Glu_tAUC", ylab = "final weight")
+```
+
+```{r add_glu_tAUC}
+final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"Glu_tAUC",drop=FALSE])
+```
+
+## Insulin 
+
+Final insulin levels are also a good single measurement. 
+This measurement captures the most variance, and is highly
+correlated with the change in insulin over the course of the
+experiment.
+
+There is no correlation between initial insulin measurements
+and the change in insulin over the course of the experiment.
+
+```{r ins_levels, fig.width = 8, fig.height = 4}
+
+ins.mat <- adj.pheno[,c("ins_6", "ins_10", "ins_14", "ins_final")]
+ins.diff <- adj.pheno[,"ins_final"] - adj.pheno[,"ins_6"]
+
+par(mfrow = c(1,2))
+plot.with.model(ins.mat[,"ins_6"], ins.diff, xlab = "Initial Insulin", 
+  ylab = "Insulin Change", report = "cor.test")
+plot.with.model(ins.mat[,"ins_final"], ins.diff, xlab = "Final Insulin",
+  ylab = "Insulin Change", report = "cor.test")
+```
+
+```{r add_ins_final}
+final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"ins_final",drop=FALSE])
+```
+
+For the insulin curves, we will select Ins_tAUC. 
+This measurement is positively correlated with 
+final body weight. The adjusted insulin AUC,
+however, has a strange relationship with other traits
+like final weight.
+
+```{r ins_curves, fig.height = 4, fig.width = 8}
+
+par(mfrow = c(1,2))
+plot.with.model(adj.pheno[,"Ins_tAUC"], adj.pheno[,"weight_final"],
+  xlab = "total insulin AUC", ylab = "final body weight", report = "cor.test")
+plot.with.model(adj.pheno[,"Ins_iAUC"], adj.pheno[,"weight_final"],
+  xlab = "adjusted insulin AUC", ylab = "final body weight", report = "cor.test")
+```
+
+```{r add_ins_tAUC}
+final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"Ins_tAUC", drop=FALSE])
+```
+
+## Triglycerides
+
+There is an outlier in the first TG measurement at 6 weeks.
+I'm going to remove it on suspicion that it is an error.
+
+```{r tg}
+tg.mat <- adj.pheno[,c("TG_6", "TG_10", "TG_14", "TG_final")]
+boxplot(tg.mat)
+outliers <- which(tg.mat > 600)
+tg.mat[outliers] <- NA
+```
+
+The TG measurements have an interesting pattern: 
+increasing early on from baseline, and then 
+decreasing again.
+
+```{r tg_final}
+boxplot(tg.mat)
+```
+
+There also isn't one dimenson of variation.
+Should we use all TG measurements? The first PC?
+
+```{r tg_decomp}
+tg.decomp <- plot.decomp(tg.mat, plot.results = FALSE)
+barplot_with_num(round(tg.decomp$var.exp, 2), ylab = "Variance Explained")
+```
+
+```{r add_tg}
+final.trait.mat <- cbind(final.trait.mat, tg.mat)
+```
+
+
+## Pancreas traits and HOMA
+
+We selected all three pancreas traits: WPIC, 
+Ins_per_islet, and num_islets. And both HOMA
+traits
+
+```{r add_panc_traits}
+final.trait.mat <- cbind(final.trait.mat, 
+  adj.pheno[,c("WPIC", "Ins_per_islet", "num_islets", "HOMA_B", "HOMA_IR")])
+```
+
+## Cholesterol
+
+The cholesterol measurements are highly correlated.
+
+
+```{r chol}
+chol.traits <- c("HDL_3_2a", "HDL_2b", "Mid_Zone", "LDL_IVc", 
+  "LDL_IVb", "LDL_IVa", "LDL_IIIb", "LDL_IIIa", "LDL_IIb", 
+  "LDL_IIa", "LDL_I", "IDL_2", "IDL_1", "VLDL_sm", "VLDL_int", 
+  "VLDL_lg", "LDL_pk_diam")
+
+chol.mat <- adj.pheno[,chol.traits]
+keep.rows <- which(apply(chol.mat, 1, function(x) !all(is.na(x))))
+chol.mat <- chol.mat[keep.rows,]
+pheatmap(cor(chol.mat))
+```
+
+There are two major axes of variation in this matrix,
+but eight total axes of variation across the individuals. 
+
+```{r chol_decomp, fig.width = 8, fig.height = 4, warning = FALSE}
+chol.decomp <- plot.decomp(chol.mat, plot.results = FALSE, pc = 8)
+barplot_with_num(round(chol.decomp$var.exp, 2), main = "PC Variance Explained",
+  ylab = "Variance Explained", text.srt = 45)
+```
+
+The PCs of the cholesterol matrix are correlated with the
+original measures in the following way. 
+The first PC captures variance mostly in the LDL and IDL measurements. 
+The second PC captures variance in the VLDL measurements. 
+The third PC is negatively correlated with LDL_pd_diam.
+The fourth PC is negatively correlated with HDL.
+
+It looks as if the first four PCs capture the variance
+that is translatable to the traits. We will use the first
+four PCs of this matrix. 
+
+```{r chol_pc_cor}
+
+chol.pc <- chol.decomp$u
+pc.cor.mat <- matrix(NA, nrow = ncol(chol.pc), ncol = ncol(chol.mat))
+colnames(pc.cor.mat) <- colnames(chol.mat)
+rownames(pc.cor.mat) <- paste0("PC", 1:nrow(pc.cor.mat))
+for(i in 1:ncol(chol.pc)){
+  pc.cor <- apply(chol.mat, 2, function(x) cor(x, chol.pc[,i], 
+    use = "pairwise.complete.obs"))
+  pc.cor.mat[i,] <- pc.cor
+}
+pheatmap(t(pc.cor.mat), cluster_cols = FALSE)
+
+chol.pc.mat <- chol.decomp$u[,1:4]
+rownames(chol.pc.mat) <- rownames(chol.mat)
+colnames(chol.pc.mat) <- paste0("Chol_PC", 1:ncol(chol.pc.mat))
+
+excluded.names <- setdiff(rownames(final.trait.mat), rownames(chol.pc.mat))
+chol.pc.padding <- matrix(NA, nrow = length(excluded.names), ncol = ncol(chol.pc.mat))
+rownames(chol.pc.padding) <- excluded.names
+colnames(chol.pc.padding) <- colnames(chol.pc.mat)
+full.pc.mat <- rbind(chol.pc.padding, chol.pc.mat)
+row.order <- match(rownames(final.trait.mat), rownames(full.pc.mat))
+final.pc.mat <- full.pc.mat[row.order,]
+#identical(rownames(final.pc.mat), rownames(final.trait.mat))
+```
+
+```{r add_chol_pc}
+final.trait.mat <- cbind(final.trait.mat, final.pc.mat)
+```
+
+## The rest
+
+We added:
+* the rank Z normalized glycogen measurement.
+* the rank Z normalized proinsulin measurement.
+* Gcg content
+* Gcg secreted
+* tibia bone mineral density (BMD)
+* leptin and adiponectin levels
+* organ weights (heart, liver, fat pad)
+* adiposity
+
+```{r add_the_rest}
+final.trait.mat <- cbind(final.trait.mat, 
+  adj.pheno[,c("glycogen_rz", "proinsulin_rz", "Gcg_content", "Gcg_secreted",
+  "BMD", "leptin", "adiponectin", "heart_weight", "liver_weight",
+  "fat_pad_weight", "adiposity")])
+```
+
+The following barplot shows the number of individuals
+with measurements for each trait. Some of them don't have
+many individuals.
+
+```{r ind_count, fig.width = 8, fig.height = 5}
+ind.count <- apply(final.trait.mat, 2, function(x) length(which(!is.na(x))))
+par(mar = c(8, 4, 4, 4))
+barplot_with_num(ind.count, las = 2, text.srt = 45, text.gap = 0.2, 
+  text.shift = 0.1)
+
+total.ind <- length(which(!is.na(rowSums(final.trait.mat))))
+```
+
+If we use the full matrix, there are only `r total.ind` individuals
+with all traits measured. Unfortunately we'll have to 
+pare down even from here which traits to use. 
+
+The following heatmap shows where blocks of missing 
+individuals are. We will remove the organ weights, 
+leptin, adiponectin, and glucagon, and adiposity. 
+
+```{r remove_which}
+remove.traits <- c("Gcg_content", "Gcg_secreted", "adiponectin",
+  "leptin", "heart_weight", "liver_weight", "fat_pad_weight", "adiposity")
+
+is.included <- rep("yes", ncol(final.trait.mat))
+not.included <- which(colnames(final.trait.mat) %in% remove.traits)
+is.included[not.included] <- "no"
+included <- data.frame("included" = is.included)
+rownames(included) <- colnames(final.trait.mat)
+```
+
+```{r missing_ind, fig.width = 8, fig.height = 6}
+pheatmap(final.trait.mat, cluster_rows = FALSE, cluster_cols = FALSE,
+  show_rownames = FALSE, annotation_col = included)
+```
+
+Before we remove the traits with lots of missing values, we
+looked at the correlation matrix for these traits to compare
+with the PC matrix below. I used Spearman rank correlation
+because some of these traits have really weird distributions.
+
+```{r trait_cor, fig.width = 9, fig.height = 7}
+full.cor <- cor(final.trait.mat, use = "pairwise.complete.obs", method = "spearman")
+pheatmap(full.cor, annotation_row = included)
+```
+
+The following heatmap shows the correlation matrix
+only for the traits that are included in the final 
+trait set.
+
+```{r remove_traits, warning = FALSE, fig.width = 7, fig.height = 7}
+keep.traits <- setdiff(colnames(final.trait.mat), remove.traits)
+pared.traits <- final.trait.mat[,keep.traits]
+
+norm.traits <- apply(pared.traits, 2, rankZ)
+pheatmap(cor(norm.traits, use = "pairwise.complete.obs"))
+
+norm.decomp <- plot.decomp(norm.traits, pc = ncol(norm.traits), plot.results = FALSE)
+#barplot_with_num(round(norm.decomp$var.exp, 2))
+
+```
+
+This trait set includes `r nrow(norm.decomp$u)` animals.
+Some of the excluded traits are correlated with the first PC of this
+matrix. The organ weights and leptin levels are correlated with 
+insulin_tAUC and HOMA_IR. However, adiposity, adiponectin, and 
+glucagon are not correlated with anything else in this matrix.
+
+I'm not sure how adiposity was measured. It doesn't have an 
+explanation in the phenotype annotation matrix. Although fat
+pad weight and body weight are highly correlated, neither
+is correlated with adiposity, which makes me suspicious of that
+measurement.
+
+Why are those cholesterol PCs dominating some of the PCs?
+Is that a problem? Is it interesting?
+
+
+```{r pc_v_traits, fig.width = 7, fig.height = 7}
+trait.cor.mat <- matrix(NA, nrow = ncol(norm.decomp$u), 
+  ncol = ncol(final.trait.mat))
+colnames(trait.cor.mat) <- colnames(final.trait.mat)
+rownames(trait.cor.mat) <- paste0("PC", 1:nrow(trait.cor.mat))
+
+for(i in 1:ncol(norm.decomp$u)){ #for each PC
+  trait.cor <- apply(final.trait.mat[norm.decomp$rows.used,], 2,
+    function(x) cor(x, norm.decomp$u[,i], use = "pairwise.complete.obs", method = "spearman"))
+  trait.cor.mat[i,] <- trait.cor
+}
+
+pheatmap(t(trait.cor.mat), cluster_cols = FALSE, annotation_row = included)
+```
+
+The variance explained by each of these PCs is the following.
+
+```{r var_exp, fig.width = 7, fig.height = 5}
+var.exp <- round(norm.decomp$var.exp, 2)
+names(var.exp) <- paste("PC", 1:length(var.exp))
+barplot_with_num(var.exp, las = 2, text.srt = 45)
+```
+
+```{r test, eval = FALSE}
+pc.num = 1
+trait.name = "leptin"
+plot.with.model(rankZ(norm.decomp$u[,pc.num]), 
+  rankZ(final.trait.mat[norm.decomp$rows.used,trait.name]), report = "cor.test",
+  xlab = paste("PC", pc.num), ylab = trait.name)
+
+plot.with.model(rankZ(final.trait.mat[,"fat_pad_weight"]), 
+  rankZ(final.trait.mat[,"weight_final"]), report = "cor.test")
+
+```
+
+The final phenotype matrix is stored in the Data folder in the file
+Clinical_Phenotypes_Filtered.RDS
+
+```{r write_data}
+saveRDS(pared.traits, here("Data", "DO", "Clinical_Phenotypes_Adjusted.RDS"))
+```
+

@@ -1,0 +1,435 @@
+---
+title: "CC-RIX Data Parsing"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+The purpose of this workflow is to wrangle some CC-RIX data in 
+preparation for validation of the Sash3 hypothesis and other 
+hypotheses developed in the DO CCA analysis. 
+
+This pipeline does the following:
+
+```{r load_code}
+is.interactive = FALSE
+#is.interactive = TRUE
+library("here")
+
+data.dir <- here("Data", "CC-RIX")
+results.dir <- here("Results", "CC-RIX")
+if(!file.exists(results.dir)){dir.create(results.dir)}
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+
+gene.info <- read.delim(here("Data", "general", "mouse_gene_info.txt"))
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("pheatmap", "qtl2", "gprofiler2")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+
+```{r read_data}
+all.var <- ls()
+data.loaded <- as.logical(length(which(all.var == "expr")))
+
+if(!data.loaded){
+    annot <- read.csv(file.path(data.dir, "final_sample_annotations.csv"))
+    expr.files <- list.files(here("Data", "CC-RIX"), pattern = "vst")
+    expr <- lapply(expr.files, function(x) read.csv(file.path(data.dir, x), row.names = 1))
+
+    #take out gene names and create matrices
+    for(i in 1:length(expr)){
+        expr[[i]] <- as.matrix(expr[[i]][,2:ncol(expr[[i]])])
+    }
+
+    genoprobs <- readRDS(file.path(data.dir, "Genoprobs.RDS")) #created by 3.5.CC-RIX_genotypes.Rmd
+    K <- readRDS(file.path(data.dir, "Kinship.RDS"))
+    map <- readRDS(file.path(data.dir, "Map.RDS"))
+    manifest <- as.matrix(read.csv(file.path(data.dir, "Original_Samples_Manifest.csv")))
+}
+```
+
+## Covariates
+
+Pull out covariates we may want to use. We will at least
+want to subdivide along these groups in the future.
+
+```{r covar}
+factor.covar <- annot[,c("Sex", "Age", "RNAseq_Batch", "Diet", "Treatment")]
+rownames(factor.covar) <- annot[,1]
+write.csv(factor.covar, file.path(data.dir, "Covar.csv"))
+
+group.def <- c("Sex", "Diet", "Treatment") #use these factors to define groups
+groups <- unique(factor.covar[,group.def])
+write.csv(groups, file.path(data.dir, "Groups.csv"), quote = FALSE)
+#covar.mat <- dummy_covar(factor.covar)
+```
+
+## Transpose Expression
+
+Transpose the expression matrices to have
+individuals in rows and transcripts in columns 
+to match other expression data sets we are 
+working with.
+
+```{r filter_expr}
+for(i in 1:length(expr)){
+    expr[[i]] <- t(expr[[i]])
+}
+names(expr) <- gsub(".csv", "", gsub("vst_expression_matrix_", "", expr.files))
+
+```
+
+```{r mouse_id}
+#use the manifest to label samples with a mouse ID
+adj.expr <- expr
+for(i in 1:length(expr)){
+    expr.mouse.info.table <- t(sapply(rownames(expr[[i]]), function(x) get_mouse_info(x, manifest, input.type = "User.Inputs")))
+    rownames(expr[[i]]) <- expr.mouse.info.table[,1]
+
+    #also save adjusted expression
+    expr.covar <- dummy_covar(expr.mouse.info.table[,c("Sex", "Diet", "Treatment", "Timepoint")])
+    adj.expr[[i]] <- adjust(expr[[i]], expr.covar)
+}
+saveRDS(expr, file.path(data.dir, "Expression.by.Tissue.RDS"))
+
+#also save expression adjusted for all covariates
+saveRDS(adj.expr, file.path(data.dir, "Expression.by.Tissue.Adjusted.RDS"))
+
+```
+
+Generate similar matrices for the imputed expression.
+
+```{r imp_expr}
+#read in imputed expression tables
+expr.files <- get.files(here("Data", "imputed"), want = "CC", dont.want = "expanded", full.names = TRUE)
+imp.expr <- lapply(expr.files, readRDS)
+
+split.strains <- strsplit(expr.mouse.info.table[,"User.Defined.Strain"], " ")
+strain1 <- sapply(split.strains, function(x) x[1])
+strain2 <- sapply(split.strains, function(x) x[3])
+
+exp.imp.expr <- vector(mode = "list", length = length(imp.expr))
+names(exp.imp.expr) <- gsub("_imputed_transcriptome_local.RDS", "", gsub("CC-RIX_", "", basename(expr.files)))
+
+for(tx in 1:length(exp.imp.expr)){
+    strain1.idx <- sapply(strain1, function(x) grep(x, rownames(imp.expr[[tx]]$Auto)))
+    strain2.idx <- sapply(strain2, function(x) grep(x, rownames(imp.expr[[tx]]$Auto)))
+    full.imp.expr <- t(sapply(1:length(strain1.idx), function(x) imp.expr[[tx]]$Auto[strain1.idx[x], strain2.idx[x],]))
+    rownames(full.imp.expr) <- expr.mouse.info.table[,1]
+    exp.imp.expr[[tx]] <- full.imp.expr
+}
+saveRDS(exp.imp.expr, here("Data", "imputed", "Expanded_Imputed_CC-RIX_Expression.RDS"))
+```
+
+## Phenotypes
+
+Read in the phenotypes.
+
+```{r pheno_data}
+bw <- as.matrix(read.csv(file.path(data.dir, "Cube Body Weights 8.13.21 FINAL.csv")))
+bw <- bw[which(bw[,1] != ""),]
+food <- as.matrix(read.csv(file.path(data.dir, "Cube Food Intake 7.08.21_FINAL.csv")))
+water <- as.matrix(read.csv(file.path(data.dir, "Cube Water Intake 8.19.21 FINAL.csv")))
+chem <- as.matrix(read.csv(file.path(data.dir, "Cube_RIX_clinical chemistries_FINAL_11.01.2021.csv")))
+chem <- as.matrix(chem[which(chem[,1] != ""),])
+```
+
+### Body weight
+
+Each body weight measurement is in a single row of the bw
+matrix. Here we generate a list with one element per mouse.
+Each element includes all the body weights for that mouse and
+the week at which each body weight was measured.
+
+The bw table does not have any JMUS IDs, and the Lot.Barcodes
+in the bw table are not in the manifest. So I used CLIMB IDs
+to match up mice. 
+
+```{r weight, fig.width = 10, fig.height = 7, message = FALSE, warning = FALSE, error = FALSE}
+
+get_bw_ind <- function(climb.ID, manifest){
+
+    #convert mouse ID to climb ID
+    id.locale <- which(manifest[,"CLIMB.ID"] == climb.ID)[1] #take the first, since each mouse will have multiple assays associated with it
+    jmus.id <- manifest[id.locale,"Barcode.1"]
+    climb.locale <- which(bw[,"CLIMB.ID"] == climb.ID)
+
+    ind.meta <- c(jmus.id, climb.ID, as.matrix(bw[climb.locale[1],c("User.defined.strain", "Sex", "Diet", "Mouse.Treatment")]))
+    names(ind.meta) <- c("JMUSID", "CLIMB.ID", "Strain", "Sex", "Diet", "Treatment")
+    ind.bw <- bw[climb.locale,"Body.Weight..g."]
+    bw.age <- bw[climb.locale,"Age..weeks."]
+    age.order <- order(bw.age)
+    bw.table <- cbind(bw.age[age.order], ind.bw[age.order])
+    colnames(bw.table) <- c("Age_weeks", "BW")
+    full.bw <- list("Individual" = ind.meta, "BW" = bw.table)
+    return(full.bw)
+}
+
+bw.mouse.info <- t(sapply(as.numeric(bw[,"CLIMB.ID"]), 
+    function(x) get_mouse_info(x, manifest, input.type = "CLIMB.ID")))
+#head(bw.mouse.info)
+bw.mouse.info[which(bw.mouse.info[,"Diet"] == "44% fat + fiber"),"Diet"] <- "HFD"
+bw.mouse.info[which(bw.mouse.info[,"Diet"] == "10% fat + fiber"),"Diet"] <- "LFD"
+
+all_mice <- unlist(bw.mouse.info[,2])
+u_mice <- unique(all_mice[which(!is.na(all_mice))])
+bw_mouse_info <- bw.mouse.info[match(u_mice,bw.mouse.info[,"CLIMB.ID"]),]
+#head(bw_mouse_info)
+#length(u_mice)
+
+#get body weight measurements for each mouse
+all.bw <- lapply(u_mice, function(x) get_bw_ind(climb.ID = x, manifest = manifest))
+
+weights <- unlist(lapply(all.bw, function(x) as.numeric(x[[2]][,2])))
+weeks <- unlist(lapply(all.bw, function(x) as.numeric(x[[2]][,1])))
+xlim = c(min(weeks), max(weeks))
+ylim <- c(min(weights), max(weights))
+
+layout.matrix <- matrix(c(1,8,6,4,3,7,2,5), nrow = 2, byrow = TRUE)
+layout(layout.matrix)
+for(g in 1:nrow(groups)){
+    group.locale <- Reduce("intersect", lapply(group.def, function(x) 
+        which(bw_mouse_info[,x] == groups[g,x])))    
+    #bw_mouse_info[group.locale,]
+    plot.new()
+    plot.window(xlim = xlim, ylim = ylim)
+    for(idx in group.locale){
+        sex <- all.bw[[idx]][[1]]["Sex"]
+        if(!is.na(sex)){
+            if(sex == "Female"){col = "#7fc97f"}
+            if(sex == "Male"){col = "#beaed4"}
+            points(apply(all.bw[[idx]][[2]], 2, as.numeric), col = col, 
+            cex = 0.5, pch = 16, type = "l", lwd = 2)
+        }
+    }
+    axis(1);axis(2)
+    mtext("Week", side = 1, line = 2.5)
+    mtext("Weight", side = 2, line = 2.5)
+    mtext(paste(groups[g,], collapse = " "), side = 3)
+    #legend("topleft", legend = c("Male", "Female"), col = c("#beaed4", "#7fc97f"), pch = 16)
+}
+
+pdf(file.path(results.dir, "Weight.Individual.pdf"), width = 15, height = 15)
+par(mfrow = c(5,5), mar = c(2,2,2,2))
+for(i in 1:length(all.bw)){
+    if(nrow(all.bw[[i]][[2]]) > 0){
+        plot(apply(all.bw[[i]][[2]], 2, as.numeric), type = "l", 
+            main = paste(i, paste(all.bw[[i]][[1]][c(1,4:6)], collapse = ", ")),
+            ylim = ylim, lwd = 3)
+    }
+}
+dev.off()
+
+```
+
+### Body weight dimension reduction
+
+Get a single body weight value for each mouse. To do this fit
+smooth splines and predict weekly weights for each 
+mouse using the model. Then use the last value from the predicted
+weight as the weight for the mouse. This is a noise-reduced
+estimate of the body weight closest to the time that gene 
+expression was measured.
+
+```{r predict_weight, message = FALSE, warning = FALSE, error = FALSE}
+all.weeks <- unique(unlist(lapply(all.bw, function(x) as.numeric(x[[2]][,1]))))
+pred.weeks <- ceiling(min(all.weeks)):floor(max(all.weeks))
+pred.weight.mat <- matrix(NA, nrow = length(all.bw), ncol = length(pred.weeks))
+rownames(pred.weight.mat) <- sapply(all.bw, function(x) x[[1]][1])
+colnames(pred.weight.mat) <- pred.weeks
+for(i in 1:length(all.bw)){
+    bw.mat <- apply(all.bw[[i]][[2]], 2, as.numeric)
+    if(length(bw.mat) > 0){
+        model <- smooth.spline(bw.mat[,1], bw.mat[,2], df = (nrow(bw.mat)-1), spar = 0.8)
+        ind.pred.weeks <- ceiling(min(bw.mat[,1])):floor(max(bw.mat[,1]))
+        pred.weight <- predict(model, x = ind.pred.weeks)
+        pred.weight.mat[i,as.character(ind.pred.weeks)] <- pred.weight$y
+    }
+    #plot(all.bw[[i]][[2]]);points(pred.weight, type = "l")    
+}
+
+#remove mice with no weight data
+has.vals <- which(apply(pred.weight.mat, 1, function(x) !all(is.na(x))))
+pred.weight.mat <- pred.weight.mat[has.vals,] #dim(pred.weight.mat)
+all.bw <- all.bw[has.vals] #length(all.bw)
+bw_mouse_info <- bw_mouse_info[has.vals,] #dim(bw_mouse_info)
+
+pdf(file.path(results.dir, "Smoothed.Weight.Individual.pdf"), width = 10, height = 10)
+par(mfrow = c(5,5), mar = c(2,2,2,2))
+for(i in 1:length(all.bw)){
+    plot(all.bw[[i]][[2]]);points(pred.weight.mat[i,], type = "l")
+}
+dev.off()
+
+weight.order <- order(apply(pred.weight.mat, 1, function(x) max(x, na.rm = TRUE)), decreasing = FALSE)
+pheatmap(pred.weight.mat[weight.order,], cluster_rows = FALSE, cluster_cols = FALSE,
+    show_rownames = FALSE, show_colnames = FALSE)
+
+mouse.weight.val <- apply(pred.weight.mat, 1, function(x) x[max(which(!is.na(x)))])
+#hist(mouse.weight.val, breaks = 100)
+write.table(mouse.weight.val, file.path(data.dir, "Weight.Summarized.csv"), 
+col.names = "Body.Weight", sep = ",")
+```
+
+
+## Blood Chemistries {.tabset .tabset-fade .tabset-pills}
+
+```{r chem, results = "asis"}
+#get blood chemistry assay data. Assays were measured at two main
+#time points: one time when the mouse was between 20 and 30 weeks 
+#old, and another when the mouse was greater than 50 weeks old.
+#This function combines those into an early time point and a late
+#time point.
+get_chem_ind <- function(climb.ID, manifest, time.pt.div = 30){
+
+    id.locale <- which(manifest[,"CLIMB.ID"] == climb.ID)[1] #take the first, since each mouse will have multiple assays associated with it
+    ind.meta <- as.matrix(manifest[id.locale[1],c("Barcode.1", "Sex", "Diet", "Treatment")])
+    mouse.id <- manifest[id.locale,"Barcode.1"]
+    climb.locale <- which(chem[,"CLIMB.ID"] == climb.ID)
+
+    if(length(climb.locale) == 0){
+        full.chem <- c(ind.meta, rep(NA, 10))
+    }else{
+        ind.chem <- chem[climb.locale,c("Age..weeks.", "Assay", "Calculated.Concentration")]
+        u_assay <- unique(ind.chem[,"Assay"])
+        tp1.idx <- unlist(sapply(u_assay, 
+            function(x) intersect(which(ind.chem[,"Assay"] == x), 
+            which(ind.chem[,"Age..weeks."] < time.pt.div))))
+        tp1 <- ind.chem[tp1.idx,"Calculated.Concentration"]       
+        if(length(tp1) > 0){
+            names(tp1) <- paste0(names(tp1.idx), "_1")
+        }
+
+        tp2.idx <- unlist(sapply(u_assay, 
+            function(x) intersect(which(ind.chem[,"Assay"] == x), 
+            which(ind.chem[,"Age..weeks."] > time.pt.div))))
+        tp2 <- ind.chem[tp2.idx,"Calculated.Concentration"]
+        if(length(tp2) > 0){       
+            names(tp2) <- paste0(names(tp2.idx), "_2")
+        }
+
+        full.chem <- c(ind.meta, tp1, tp2)
+        names(full.chem) <- c("Mouse.ID", "Sex", "Diet", "Treatment", names(tp1), names(tp2))
+    }
+    return(full.chem)
+}
+
+u_chem_climb <- unique(chem[,"CLIMB.ID"])
+chem.list <- lapply(u_chem_climb, function(x) get_chem_ind(x, manifest))
+all.mouse.id  <- sapply(chem.list, function(x) x[1])
+chem.mouse.id <- all.mouse.id[which(!is.na(all.mouse.id))]
+
+u_assay_names <- unique(unlist(lapply(chem.list, names)))
+assay.order <- order(u_assay_names[5:length(u_assay_names)])
+u_assay_names <- c(u_assay_names[1:4], u_assay_names[5:length(u_assay_names)][assay.order])
+
+chem.mat <- matrix(NA, nrow = length(chem.mouse.id), ncol = length(u_assay_names))
+rownames(chem.mat) <- chem.mouse.id
+colnames(chem.mat) <- u_assay_names
+for(i in 1:nrow(chem.mat)){
+    id.locale <- which(all.mouse.id == chem.mouse.id[i])  
+    chem.mat[i,names(chem.list[[id.locale]])] <- chem.list[[id.locale]]
+}
+chem.mat[which(chem.mat[,"Diet"] == "44% fat + fiber"),"Diet"] <- "HFD"
+chem.mat[which(chem.mat[,"Diet"] == "10% fat + fiber"),"Diet"] <- "LFD"
+
+assays <- c("Insulin", "TRIG", "GLU", "CHOL", "C-peptide")
+
+for(g in 1:nrow(groups)){
+    cat("###", paste(groups[g,], collapse = " "), "\n")
+    group.locale <- Reduce("intersect", lapply(group.def, 
+        function(x) which(chem.mat[,x] == groups[g,x])))
+    #pairs(apply(chem.mat[group.locale,5:ncol(chem.mat)], 2, as.numeric), main = paste(groups[g,], collapse = " "))
+    num.mat <- apply(chem.mat[group.locale,5:ncol(chem.mat)], 2, function(x) rankZ(as.numeric(x)))
+    cor.mat <- cor(num.mat, use = "pairwise.complete.obs")
+    pheatmap(cor.mat, main = paste(groups[g,], collapse = " "), display_numbers = TRUE)
+    cat("\n\n")
+}   
+
+write.csv(chem.mat, file.path(data.dir, "Blood.Chemistries.Summarized.csv"))
+```
+
+I am going to save the food and water processing for another time. 
+
+## Gene Expression and Blood Chemistry {.tabset .tabset-fade .tabset-pills}
+
+Align body weight and blood chemistries with gene expression based on
+mouse ID.
+
+```{r get_expr}
+#This function can get gene expression values for either a single 
+#specified gene or for a set of genes with specified weights, as
+#we would do when analyzing a composite trait. The function rankZ
+#normalizes the gene expression and then multiplies by the genes
+#weights to give one gene expression value for each mouse. 
+
+get_num_covar <- function(mouse.id){
+    #get mouse covariates
+    mouse.covar <- t(sapply(mouse.id, 
+        function(x) get_mouse_info(x, manifest, input.type = "Barcode.1")))
+    num.covar <- c("Sex", "Diet", "Treatment", "Timepoint")
+    factor.info <- lapply(num.covar, function(x) as.factor(mouse.covar[,x]))
+    num.info <- Reduce("cbind", lapply(factor.info, function(x) as.numeric(x)-1))
+    colnames(num.info) <- num.covar
+    rownames(num.info) <- mouse.covar[,1]
+    return(num.info)
+}
+
+get_expr <- function(tissue.expr, weighted.gene.vector, adjust.for.covariates = TRUE){
+    
+    all.mouse.id <- unique(unlist(lapply(tissue.expr, rownames)))
+   
+    gene.names <- names(weighted.gene.vector)
+    common.genes <- lapply(1:length(tissue.expr), function(x) intersect(gene.names, colnames(tissue.expr[[x]])))
+    gene.weights <- lapply(1:length(tissue.expr), function(x) matrix(weighted.gene.vector[match(common.genes[[x]], gene.names)], ncol = 1))
+    updated.expr <- lapply(1:length(tissue.expr), function(x) tissue.expr[[x]][,match(common.genes[[x]], colnames(tissue.expr[[x]])),drop=FALSE])
+    
+    if(adjust.for.covariates){
+        num.info <- get_num_covar(all.mouse.id)
+        adj.expr <- lapply(updated.expr, function(x) adjust(x, num.info))
+    }else{
+        adj.expr <- updated.expr
+    }
+    norm.expr <- lapply(adj.expr, function(x) apply(x, 2, rankZ))
+    weighted.genes <- lapply(1:length(tissue.expr), function(x) norm.expr[[x]]%*%gene.weights[[x]])
+    for(i in 1:length(tissue.expr)){
+        rownames(weighted.genes[[i]]) <- rownames(tissue.expr[[i]])
+    }
+    names(weighted.genes) <- names(tissue.expr)
+    return(weighted.genes)
+}
+
+#This function matches up individuals in gene expression output 
+#from get_expr with individuals in a trait matrix. The names of
+#the values in the gene expression out put are individual mouse
+#IDs, the rownames of the trait matrix also nees to be mouse IDs.
+
+match_pheno_expr <- function(expr.list, pheno.mat){
+    common.ind <- lapply(expr.list, function(x) intersect(rownames(x), rownames(pheno.mat)))
+    common.expr.locale <- lapply(1:length(expr.list), function(x) match(common.ind[[x]], rownames(expr.list[[x]])))
+    common.pheno.locale <- lapply(1:length(expr.list), function(x) match(common.ind[[x]], rownames(pheno.mat)))
+    matched.expr <- lapply(1:length(expr.list), function(x) expr.list[[x]][common.expr.locale[[x]],1,drop=FALSE])
+    names(matched.expr) <- names(expr.list)
+    matched.pheno <- lapply(1:length(expr.list), function(x) pheno.mat[common.pheno.locale[[x]],,drop=FALSE])
+    names(matched.pheno) <- names(expr.list)
+    matched.lists <- list("expr" = matched.expr, "traits" = matched.pheno)
+    return(matched.lists)
+}
+
+```
+
+```{r adjust_expr}
+
+
+```

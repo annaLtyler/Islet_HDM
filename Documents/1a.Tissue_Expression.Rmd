@@ -67,7 +67,7 @@ all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
 for(i in 1:length(all.fun)){source(all.fun[i])}
 
 all.packages <- c("igraph", "pheatmap", "gprofiler2", "qtl2", "stringr",
-  "wordcloud", "wordcloud2")
+  "wordcloud", "wordcloud2", "hexbin", "sommer")
 load_libraries(all.packages)
 ```
 
@@ -75,16 +75,19 @@ load_libraries(all.packages)
 tissue.names <- c("Adipose", "Heart", "Islet", "Liver", "SkeletalMuscle")
 tissue.cols <- categorical_pal(length(tissue.names))
 tissue.data <- lapply(tissue.names, 
-  function(x) readRDS(here("Data", paste0(x, ".RDS"))))
+  function(x) readRDS(here("Data", "DO", paste0(x, ".RDS"))))
 names(tissue.data) <- tissue.names
-load(here("Data", "QTLViewer_Geno_V10.Rdata"))
+load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata")) #ensembl.version, genoprobs, K, map, markers
+
+#write out gene information for later use
+gene.tables <- lapply(tissue.data, function(x) x$annot.mrna)
+saveRDS(gene.tables, here("Data", "DO", "Gene_Tables.RDS"))
 ```
 
 ```{r setup}
 #set up some objects that we will use throughout the workflow
 tissue.pairs <- pair.matrix(1:length(tissue.names))
 pair.names <- apply(tissue.pairs, 1, function(x) paste(tissue.names[x], collapse = "-"))
-
 
 #make a matrix of all binary combinations of tissues
 #to compare to.
@@ -94,25 +97,27 @@ colnames(combo.mat) <- tissue.names
 
 ```{r remove_pseudogenes}
 if(remove.pseudogenes){
+  description.files <- here("Data", "DO", paste0("Gene_Description_", tissue.names, ".RDS"))
+  if(any(!file.exists(description.files))){
 
-  require("biomaRt")
+    require("biomaRt")
 
-  all.var <- ls()
+    all.var <- ls()
 
-  lib.loaded <- as.logical(length(which(all.var == "mus")))
-  if(!lib.loaded){
-      mus <- useEnsembl(biomart="ensembl", dataset="mmusculus_gene_ensembl") 
-      }
+    lib.loaded <- as.logical(length(which(all.var == "mus")))
+    if(!lib.loaded){
+        mus <- useEnsembl(biomart="ensembl", dataset="mmusculus_gene_ensembl") 
+        }
+  }
 
   for(tx in 1:length(tissue.data)){
-    description.file <- here("Data", paste0("Gene_Description_", tissue.names[tx], ".RDS"))
-    if(!file.exists(description.file)){
+    if(!file.exists(description.files[tx])){
       one.gene.info <- getBM(attributes = c("ensembl_gene_id", "description"), 
         filters = "ensembl_gene_id", values = tissue.data[[tx]]$annot.mrna$gene.id,
         mart = mus)
-      saveRDS(one.gene.info, description.file)
+      saveRDS(one.gene.info, description.files[tx])
     }else{
-      one.gene.info <- readRDS(description.file)
+      one.gene.info <- readRDS(description.files[tx])
     }
 
     pred.idx <- grep("predicted", one.gene.info[,"description"], ignore.case = TRUE)
@@ -138,11 +143,11 @@ if(remove.pseudogenes){
 ```{r adjust}
 #regress out covariates, and normalize residuals
 adj.expr <- lapply(tissue.data, function(x) adjust(x$data$norm, x$covar.matrix))
+saveRDS(adj.expr, here("Data", "DO", "Tissue_Expression_Adjusted.RDS"))
 ```
 
 ```{r match_expr}
 #make transcript-matched and individual matched expression data sets
-
 common.expr <- Reduce("intersect", lapply(adj.expr, colnames))
 tx.matched.expr <- lapply(adj.expr, function(x) x[,common.expr])
 
@@ -158,7 +163,7 @@ tissue.col <- unlist(lapply(1:length(tissue.names),
 sample.sex <- unlist(lapply(tissue.data, function(x) x$covar.matrix[,1]))
 
 #plot decomposition
-decomp.file <- here("Results", "Tissue.Decomposition.RDS")
+decomp.file <- here("Results", "Transcriptomes", "Tissue.Decomposition.RDS")
 if(!file.exists(decomp.file)){
   all.expr <- Reduce("rbind", tx.matched.expr)
   expr.decomp <- plot.decomp(all.expr, plot.results = FALSE)
@@ -218,14 +223,12 @@ to all tissues. Again, heart and skeletal muscle are
 the most highly correlated. 
 
 ```{r gene_levels}
-
 #calculate average expression for all transcripts
 #across the tissues.
 avg.expr <- sapply(tx.matched.expr, colMeans)
 tissue.cor <- cor(avg.expr)
 pheatmap(tissue.cor, display_numbers = TRUE)
 ```
-
 
 The following plots show a more detailed picture of the
 pairwise correlations between tissues. There is a subset
@@ -408,8 +411,8 @@ get_local_distal_coef <- function(transcript.id, eqtl.table, gene.table, bp.buff
 ```{r get_coef}
 
 #pull out only local eQTL coefficients for this test.
-local.coef.file <- here("Results", "eQTL_coef_local.RDS")
-distal.coef.file <- here("Results", "eQTL_coef_distal.RDS")
+local.coef.file <- here("Results", "Transcriptomes", "eQTL_coef_local.RDS")
+distal.coef.file <- here("Results", "Transcriptomes", "eQTL_coef_distal.RDS")
 
 if(!file.exists(local.coef.file)){
     local.coef <- distal.coef <- vector(mode = "list", length = length(tissue.names))
@@ -592,8 +595,8 @@ local.eQTL.pos <- lapply(u_transcripts, function(x) get_eQTL(x, local.coef))
 names(local.eQTL.pos) <- u_transcripts
 
 #identify unique local eQTLs that are shared across tissues
-local.eqtl.binary.file <- here("Results", "Shared_eQTL_Local_Binary.RDS")
-local.eqtl.coef.file <- here("Results", "Shared_eQTL_Local_Coef.RDS")
+local.eqtl.binary.file <- here("Results", "Transcriptomes", "Shared_eQTL_Local_Binary.RDS")
+local.eqtl.coef.file <- here("Results", "Transcriptomes", "Shared_eQTL_Local_Coef.RDS")
 if(!file.exists(local.eqtl.binary.file)){
   shared.local.list <- lapply(local.eQTL.pos, function(x) assess_shared(x, mb.buffer = 4))
   local.shared.binary <- Reduce("rbind", lapply(shared.local.list, function(x) if(length(x) > 0){x$eqtl.tissues}))
@@ -635,8 +638,8 @@ distal.eQTL.pos <- lapply(u_transcripts, function(x) get_eQTL(x, distal.coef))
 names(distal.eQTL.pos) <- u_transcripts
 
 #identify unique local eQTLs that are shared across tissues
-distal.eqtl.binary.file <- here("Results", "Shared_eQTL_Distal_Binary.RDS")
-distal.eqtl.coef.file <- here("Results", "Shared_eQTL_Distal_Coef.RDS")
+distal.eqtl.binary.file <- here("Results", "Transcriptomes", "Shared_eQTL_Distal_Binary.RDS")
+distal.eqtl.coef.file <- here("Results", "Transcriptomes", "Shared_eQTL_Distal_Coef.RDS")
 if(!file.exists(distal.eqtl.binary.file)){
   shared.distal.list <- lapply(distal.eQTL.pos, function(x) assess_shared(x, mb.buffer = 4))
   distal.shared.binary <- Reduce("rbind", lapply(shared.distal.list, function(x) if(length(x) > 0){x$eqtl.tissues}))
@@ -739,7 +742,7 @@ allele_effect_cor <- function(shared.coef, filename){
 #  row.names = FALSE)
 #}
 
-local.eqtl.cor.file <- here("Results", "Correlation_Allele_Effects_Local.RDS")
+local.eqtl.cor.file <- here("Results", "Transcriptomes", "Correlation_Allele_Effects_Local.RDS")
 local.eqtl.cor <- allele_effect_cor(local.shared.coef, local.eqtl.cor.file)
 
 mean.order <- order(apply(local.eqtl.cor, 2, function(x) mean(x, na.rm = TRUE)))
@@ -753,7 +756,7 @@ abline(h = c(0.5, 0, -0.5), lty = c(2,1,2))
 #### Shared Distal eQTL
 
 ```{r distal_eqtl_cor, fig.width = 8, fig.height = 6}
-distal.eqtl.cor.file <- here("Results", "Correlation_Allele_Effects_Distal.RDS")
+distal.eqtl.cor.file <- here("Results", "Transcriptomes", "Correlation_Allele_Effects_Distal.RDS")
 distal.eqtl.cor <- allele_effect_cor(distal.shared.coef, distal.eqtl.cor.file)
 
 mean.order <- order(apply(distal.eqtl.cor, 2, function(x) mean(x, na.rm = TRUE)))
@@ -839,7 +842,7 @@ expr_cor <- function(shared.coef, expr.mat, filename){
 
 }
 
-local.expr.cor.file <- here("Results", "Correlation_Expression_Local.RDS")
+local.expr.cor.file <- here("Results", "Transcriptomes", "Correlation_Expression_Local.RDS")
 local.expr.cor <- expr_cor(shared.coef = local.shared.coef, 
   expr.mat = ind.matched.expr, filename = local.expr.cor.file)
 
@@ -854,7 +857,7 @@ abline(h = c(0.5, 0, -0.5), lty = c(2,1,2))
 #### Distal eQTL
 
 ```{r expr_cor_distal, fig.width = 8, fig.height = 6}
-distal.expr.cor.file <- here("Results", "Correlation_Expression_Distal.RDS")
+distal.expr.cor.file <- here("Results", "Transcriptomes", "Correlation_Expression_Distal.RDS")
 distal.expr.cor <- expr_cor(shared.coef = distal.shared.coef, 
   expr.mat = ind.matched.expr, filename = distal.expr.cor.file)
 
@@ -1000,17 +1003,115 @@ meta.cor.distal <- plot_expr_cor_v_eqtl_cor(distal.expr.cor, distal.eqtl.cor,
   "distal eQTL Coefficient Correlation")
 ```
 
+It turns out that the distal eQTL are probably not worth
+digging into. Most of the targets are pseudogenes, so there
+are issues with alignments. We will ignore distal eQTL
+for the remainder of this analysis. 
 
-```{r scratch, eval = FALSE}
-distal.names <- apply(num.distal, 2, function(x) which(x > 0))
-distal.enrich <- lapply(distal.names, function(x) gost(x, organism = "mmusculus"))
-plot.enrichment.group(distal.enrich)
+## Tissue-specific eQTL
 
-for(i in 1:length(tissue.names)){
-  distal.idx <- match(names(distal.names[[i]]), tissue.data[[i]]$annot.mrna$gene.id)
-  distal.table <- tissue.data[[i]]$annot.mrna[distal.idx,]
-  write.table(distal.table, paste0("~/Desktop/distal_transcripts_", tissue.names[i], ".csv"),
-    quote = FALSE, row.names = FALSE, sep = ",")
+We are interested in whether there can be tissue-specific
+local allele effects. To get at this, we will look for 
+interaction effects between genotype and tissue in a 
+linear model.
+
+The model looks for an interaction between genotype and
+tissue influencing expression.
+
+```{r tissue_specific}
+stop()
+tissue.tx <- lapply(ind.matched.expr, function(x) colnames(x))
+all.tx <- Reduce("union", tissue.tx)
+
+int.p.file <- here("Results", "Tissue-Specific_eQTL_p_values.RDS")
+tissue.grid.file <- here("Results", "Transcripts_by_Tissue.RDS")
+if(!file.exists(int.p.file)){
+  p.mat <- matrix(NA, nrow = length(all.tx), ncol = 3)
+  rownames(p.mat) <- all.tx
+  colnames(p.mat) <- c("Tissue", "Genotype", "Tissue_by_Genotype")
+
+  tissue.grid <- matrix(0, nrow = length(all.tx), ncol = length(tissue.names)) #keep track of which tissues each transcript is expressed in
+  rownames(tissue.grid) <- all.tx
+  colnames(tissue.grid) <- tissue.names
+
+  for(tx.idx in 1:length(all.tx)){
+    report.progress(tx.idx, length(all.tx))
+    tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
+    has.expr <- which(sapply(tissue.idx, length) > 0)
+    tissue.grid[tx.idx,has.expr] <- 1
+    if(length(has.expr) > 1){
+      tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+      colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
+      
+      tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
+      tx.chr <- tx.info$chr
+      chr.idx <- which(names(K) == tx.chr)
+
+      if(!(tx.chr %in% 1:19)){next()}
+      nearest.marker <- tx.info$nearest.marker.id
+      nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+
+      tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+      names(tx.expr) <- tissue.names[has.expr]
+      long.expr <- unlist(tx.expr)
+      tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
+        function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
+      rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))      
+      rep.K <- K[[chr.idx]][rownames(rep.geno), rownames(rep.geno)]
+      rownames(rep.K) <- colnames(rep.K) <- names(long.expr)
+
+      #trying to use cape code to adjust variables
+      adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
+        phenoV = as.matrix(long.expr))
+      adj_test <- lm(adj_data$corrected_pheno~tissue.factor*adj_data$corrected_geno)
+      #anova(adj_test)
+      p.mat[tx.idx,] <- anova(adj_test)[,"Pr(>F)"][1:3]
+
+      #test <- lm(long.expr~tissue.factor*rep.geno)
+      #p.mat[tx.idx,] <- anova(test)[,"Pr(>F)"][1:3]
+      #anova(test)
+    }
+
+  }
+  saveRDS(p.mat, int.p.file)
+  saveRDS(tissue.grid, tissue.grid.file)
+}else{
+  p.mat <- readRDS(int.p.file)
+  tissue.grid <- readRDS(tissue.grid.file)
 }
+```
 
+Most transcripts are expressed in all five tissues.
+
+```{r tissue_grid}
+num.tissues <- rowSums(tissue.grid)
+hist(num.tissues, main = "Number of Expressing Tissues")
+```
+
+All but a handful of genes were differentially 
+expressed across tissues.
+
+```{r ptissue}
+fdr.mat <- apply(p.mat, 2, function(x) p.adjust(x, "fdr"))
+plot(sort(fdr.mat[,1]), ylab = "p value", main = "Tissue Effect FDR")
+```
+
+The vast majority also had a significant effect of genotype.
+Is this right?
+
+```{r pgeno}
+hist(fdr.mat[,2], breaks = 100, main = "Genotype Main Effect p values",
+  xlab = "p value")
+#length(which(fdr.mat[,2] > 0.1))
+```
+
+The vast majority also had a significant 
+tissue by genotype effect. This seems like too much. 
+I think we'll have to fix our model using sumner,
+and add in the kinship correction, etc.
+
+```{r pint}
+hist(fdr.mat[,3], breaks = 100, 
+  main = "Tissue by Genotype Interaction p values",
+  xlab = "p value")
 ```
