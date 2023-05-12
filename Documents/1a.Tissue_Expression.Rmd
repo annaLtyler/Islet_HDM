@@ -69,7 +69,7 @@ all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
 for(i in 1:length(all.fun)){source(all.fun[i])}
 
 all.packages <- c("igraph", "pheatmap", "gprofiler2", "qtl2", "stringr",
-  "wordcloud", "wordcloud2", "hexbin")
+  "wordcloud", "wordcloud2", "hexbin", "regress")
 load_libraries(all.packages, personal.library = TRUE)
 ```
 
@@ -1130,7 +1130,7 @@ hist(fdr.mat[,3], breaks = 100,
 ```
 
 ```{r plot_tissue_int, eval = FALSE}
-plot_tissue_interaction <- function(transcript.id){
+plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
   tx.idx <- which(all.tx == transcript.id)
   tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
   has.expr <- which(sapply(tissue.idx, length) > 0)
@@ -1151,16 +1151,21 @@ plot_tissue_interaction <- function(transcript.id){
       function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
     rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))
 
-    test <- lm(long.expr~tissue.factor*rep.geno)    
+    if(use.kinship){
+      adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
+        phenoV = as.matrix(long.expr))
+      test <- lm(adj_data$corrected_pheno~tissue.factor*adj_data$corrected_geno)
+    }else{
+      test <- lm(long.expr~tissue.factor*rep.geno)    
+    }
     #anova(test)  
-
 
     expr.mat <- Reduce("cbind", tx.expr)
     colnames(expr.mat) <- tissue.names[has.expr]
     test <- apply(expr.mat, 2, function(x) fit1(nearest.geno, x, kinship = K[[chr.idx]]))
     tissue.lod <- sapply(test, function(x) x$lod)
-    boxplot(expr.mat, main = "Expression by tissue")
-    barplot(tissue.lod, main = "LOD score by tissue")
+    boxplot(expr.mat, main = "Expression by tissue", col = tissue.cols)
+    barplot(tissue.lod, main = "LOD score by tissue", col = tissue.cols)
     
     all.coef <- sapply(test, function(x) x$coef)
     #pheatmap(all.coef[1:8,], scale = "none")
