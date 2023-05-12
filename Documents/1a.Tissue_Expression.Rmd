@@ -537,7 +537,7 @@ assess_shared <- function(eqtl.list, mb.buffer = 4){
     #make a matrix holding all eQTL pairs, and indicate
     #whether each pair overlaps (1) or doesn't (0)
     test.mat <- pair.matrix(1:nrow(eqtl.mat))
-    split.eqtl <- strsplit(eqtl.mat[,2], "_")
+    split.eqtl <- strsplit(eqtl.mat$marker.id, "_")
     eqtl.chr <- sapply(split.eqtl, function(x) x[1])
     eqtl.chr[which(eqtl.chr == "X")] <- 20
     eqtl.chr <- as.numeric(eqtl.chr)
@@ -1021,6 +1021,7 @@ The model looks for an interaction between genotype and
 tissue influencing expression.
 
 ```{r tissue_specific}
+
 save.every = 100
 
 tissue.tx <- lapply(ind.matched.expr, function(x) colnames(x))
@@ -1128,7 +1129,7 @@ hist(fdr.mat[,3], breaks = 100,
   xlab = "p value")
 ```
 
-```{r plot_tissue_int}
+```{r plot_tissue_int, eval = FALSE}
 plot_tissue_interaction <- function(transcript.id){
   tx.idx <- which(all.tx == transcript.id)
   tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
