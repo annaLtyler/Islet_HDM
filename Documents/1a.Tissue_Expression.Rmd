@@ -1023,6 +1023,7 @@ tissue influencing expression.
 ```{r tissue_specific}
 
 save.every = 100
+use.kinship = FALSE
 
 tissue.tx <- lapply(ind.matched.expr, function(x) colnames(x))
 all.tx <- Reduce("union", tissue.tx)
@@ -1045,52 +1046,56 @@ if(file.exists(int.p.file)){
   start.at <- 1
 }
 
-for(tx.idx in start.at:length(all.tx)){
-  report.progress(tx.idx, length(all.tx))
-  tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
-  has.expr <- which(sapply(tissue.idx, length) > 0)
-  tissue.grid[tx.idx,has.expr] <- 1
-  if(length(has.expr) > 1){
-    tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
-    colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
-    
-    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
-    tx.chr <- tx.info$chr
-    chr.idx <- which(names(K) == tx.chr)
+if(start.at < length(all.tx)){
+  sink(file.path(results.dir, "progress.txt"))
+  for(tx.idx in start.at:length(all.tx)){
+    print(tx.idx)
+    tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
+    has.expr <- which(sapply(tissue.idx, length) > 0)
+    tissue.grid[tx.idx,has.expr] <- 1
+    if(length(has.expr) > 1){
+      tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+      colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
+      
+      tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
+      tx.chr <- tx.info$chr
+      chr.idx <- which(names(K) == tx.chr)
 
-    if(!(tx.chr %in% 1:19)){next()}
-    nearest.marker <- tx.info$nearest.marker.id
-    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+      if(!(tx.chr %in% c(1:19, "X"))){next()}
+      nearest.marker <- tx.info$nearest.marker.id
+      nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
 
-    tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
-    names(tx.expr) <- tissue.names[has.expr]
-    long.expr <- unlist(tx.expr)
-    tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
-      function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
-    rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))      
-    rep.K <- K[[chr.idx]][rownames(rep.geno), rownames(rep.geno)]
-    rownames(rep.K) <- colnames(rep.K) <- names(long.expr)
+      tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+      names(tx.expr) <- tissue.names[has.expr]
+      long.expr <- unlist(tx.expr)
+      tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
+        function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
+      rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))      
+      rep.K <- K[[chr.idx]][rownames(rep.geno), rownames(rep.geno)]
+      rownames(rep.K) <- colnames(rep.K) <- names(long.expr)
 
-    #trying to use cape code to adjust variables
-    adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
-      phenoV = as.matrix(long.expr))
-    adj_test <- lm(adj_data$corrected_pheno~tissue.factor*adj_data$corrected_geno)
-    #anova(adj_test)
-    p.mat[tx.idx,] <- anova(adj_test)[,"Pr(>F)"][1:3]
+      if(use.kinship){
+        #use cape code to adjust variables
+        adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
+          phenoV = as.matrix(long.expr))
+        test <- lm(adj_data$corrected_pheno~tissue.factor*adj_data$corrected_geno)
+      }else{
+        test <- lm(long.expr~tissue.factor*rep.geno)
+        #anova(test)
+      }
+      p.mat[tx.idx,] <- anova(test)[,"Pr(>F)"][1:3]
 
-    if(tx.idx %% save.every == 0){
-      saveRDS(p.mat, int.p.file)
-      saveRDS(tissue.grid, tissue.grid.file)
+      if(tx.idx %% save.every == 0){
+        saveRDS(p.mat, int.p.file)
+        saveRDS(tissue.grid, tissue.grid.file)
+      }
+
     }
-
-    #test <- lm(long.expr~tissue.factor*rep.geno)
-    #p.mat[tx.idx,] <- anova(test)[,"Pr(>F)"][1:3]
-    #anova(test)
   }
-
+  saveRDS(p.mat, int.p.file)
+  saveRDS(tissue.grid, tissue.grid.file)
+  sink()
 }
-saveRDS(p.mat, int.p.file)
-saveRDS(tissue.grid, tissue.grid.file)
 
 ```
 
@@ -1135,13 +1140,14 @@ plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
   tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
   has.expr <- which(sapply(tissue.idx, length) > 0)
   if(length(has.expr) > 1){
+
     tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
     colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
 
     tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
     nearest.marker <- tx.info$nearest.marker.id
     nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
-
+    gene.name <- tx.info$symbol
     chr.idx <- which(names(K) == tx.info$chr)
 
     tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
@@ -1164,74 +1170,45 @@ plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
     colnames(expr.mat) <- tissue.names[has.expr]
     test <- apply(expr.mat, 2, function(x) fit1(nearest.geno, x, kinship = K[[chr.idx]]))
     tissue.lod <- sapply(test, function(x) x$lod)
-    boxplot(expr.mat, main = "Expression by tissue", col = tissue.cols)
-    barplot(tissue.lod, main = "LOD score by tissue", col = tissue.cols)
+
+    layout(matrix(c(1,2,3,3), nrow = 2, byrow = TRUE))
+    par(mar = c(4,4,4,4))
+    boxplot(expr.mat, main = "Expression by tissue", col = tissue.cols, las = 2)
+    barplot(tissue.lod, main = "LOD score by tissue", col = tissue.cols, las = 2)
     
     all.coef <- sapply(test, function(x) x$coef)
     #pheatmap(all.coef[1:8,], scale = "none")
-    barplot(t(all.coef[1:8,]), beside = TRUE, col = tissue.cols)
-    barplot(all.coef[1:8,], beside = TRUE, col = CCcolors)
+    par(mar = c(4,4,0,4))
+    barplot(t(all.coef[1:8,]), beside = TRUE, col = tissue.cols, 
+      ylab = "Allele Effects")
+    
+    mtext(gene.name, side = 3, outer = TRUE, line = -1.5, font = 4, cex = 1.5)
 
-    all.se <- sapply(test, function(x) x$SE)
-    pheatmap(cor(all.coef[1:8,]), display_numbers = TRUE)
-    pheatmap(cor(t(all.coef[1:8,])), display_numbers = TRUE)
+    #all.se <- sapply(test, function(x) x$SE)
+    #pheatmap(cor(all.coef[1:8,]), display_numbers = TRUE)
+    #pheatmap(cor(t(all.coef[1:8,])), display_numbers = TRUE)
     #allele.spec.decomp <- plot.decomp(all.coef[1:8,], label.points = TRUE)
     #barplot(allele.spec.decomp$var.exp)
     #tissue.spec.decomp <- plot.decomp(t(all.coef[1:8,]), label.points = TRUE)    
     #barplot(tissue.spec.decomp$var.exp)
-
-    col.order <- hclust(dist(t(all.coef[1:8,])))$order
-
-    min.coef <- all.coef[1:8,]-all.se[1:8,]
-    max.coef <- all.coef[1:8,]+all.se[1:8,]
-
-    overlap.mat <- matrix(NA, ncol = 8, nrow = nrow(tissue.pairs))
-    colnames(overlap.mat) <- LETTERS[1:8]
-    for(txp in 1:nrow(tissue.pairs)){
-      tx1 <- tissue.pairs[txp,1]
-      tx2 <- tissue.pairs[txp,2]
-      if(length(which(colnames(min.coef) == tx1)) > 0 && length(which(colnames(min.coef) == tx2)) > 0){
-        all.overlaps <- sapply(LETTERS[1:8], 
-          function(x) segments.overlap(min.coef[x,tx1], max.coef[x, tx1],
-            min.coef[x,tx2], max.coef[x, tx2]))
-        overlap.mat[txp,] <- as.numeric(all.overlaps)
-      }
-    }
-    cbind(tissue.pairs, overlap.mat)
-    hamming <- apply(overlap.mat, 1, function(x) length(which(x == 0)))
-    cbind(tissue.pairs, hamming)
-
-    plot.new()
-    plot.window(xlim = c(1, length(tissue.names)), ylim = c(min(min.coef), max(max.coef)))
-    for(i in 1:8){
-      plot.poly.xy(1:length(tissue.names), max.coef[i,col.order], 
-        1:length(tissue.names), min.coef[i,col.order], col = CCcolors[i])
-      #points(1:length(tissue.names), y = all.coef[i,col.order], col = CCcolors[i], 
-      #  type = "l", lwd = 3)
-    }
-    text(x = 1:length(tissue.names), y = rep(min(min.coef), length(tissue.names)), 
-      labels = tissue.names[col.order])
-    axis(2)
-    mtext("Coefficient", side = 2, line = 2.5)
-    abline(h = 0)    
-  
-
-
-    row.order <- hclust(dist(all.coef[1:8,]))$order
-    plot.new()
-    plot.window(xlim = c(1, 8), ylim = c(min(min.coef), max(max.coef)))
-    for(i in 1:length(tissue.names)){
-      segments(x0 = row.order, y0 = min.coef[,i], y1 = max.coef[,i],
-      col = tissue.cols[i], lwd = 3)
-    }
-    text(x = 1:8, y = rep(min(min.coef), 8), 
-      labels = LETTERS[1:8][row.order])
-    axis(2)
-    mtext("Coefficient", side = 2, line = 2.5)
-    abline(h = 0)    
-  
-   
+ 
+  }else{ #end case for having expression in at least two tissues
+    plot.text("Not expressed in multiple tissues.")
   }
 }
 
+```
+
+The following plot shows an example of a transcript with a tissue-specific
+eQTL and a transcript without a tissue-specific eQTL.
+
+```{r no_int, fig.width = 7, fig.height = 7}
+no.int <- rownames(p.mat)[which.max(p.mat[,"Tissue_by_Genotype"])]
+plot_tissue_interaction(no.int, FALSE)
+```
+
+
+```{r strong_int}
+strong.int <- rownames(p.mat)[which.min(p.mat[,"Tissue_by_Genotype"])]
+plot_tissue_interaction(strong.int, FALSE)
 ```

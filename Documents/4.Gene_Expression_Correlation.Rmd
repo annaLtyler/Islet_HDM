@@ -303,7 +303,9 @@ with low mediated genetic effects.
 
 The plots below show the correlation between degree
 in the correlation network and local LOD score. There
-is a strong negative corrlation.
+is a strong negative corrlation. That is, eQTL with 
+strong local effects mostly influence peripheral genes.
+
 
 ```{r cor_vs_allele, fig.width = 9, fig.height = 3, message = FALSE, error = FALSE, warning = FALSE}
 tissue.data.file <- lapply(tissue.names, 
@@ -332,7 +334,15 @@ saveRDS(gene.deg, here("Results", "Transcription_Networks", "Gene_Degree_DO_Meas
 
 The following figures show the relationship between
 mediated genetic effect calculated in 3.High_Dimensional_Mediation.Rmd
-and degree in the gene correlation network.
+and degree in the gene correlation network. There also seems 
+to be a negative correlation here, although, it is much
+weaker. This suggests that genes with high MGE are also 
+peripheral to the network. LOD score is one component of MGE, 
+so that could be driving the negative effect. Maybe we should 
+look at loading, rather than MGE here. 
+
+Also, there is no correlation in adipose tissue between MGE
+and gene degree. What does that mean?
 
 ```{r mge_v_degree, fig.width = 9, fig.height = 3}
 mge.results.dir <- here("Results", "High_Dim_Med", "tissue_together-local_imp-_-complete_mediation")
