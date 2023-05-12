@@ -75,7 +75,10 @@ load_libraries(all.packages, personal.library = TRUE)
 
 ```{r read_transcriptomes}
 tissue.names <- c("Adipose", "Heart", "Islet", "Liver", "SkeletalMuscle")
-tissue.cols <- categorical_pal(length(tissue.names))
+#tissue.cols <- categorical_pal(length(tissue.names)) #these overlap a lot with DO/CC colors
+#tissue.cols <- brewer.pal(length(tissue.names), "Set2")
+tissue.cols <- c("orange", "brown", "#8dd3c7", "tan", "pink") #colors that are not related to the DO/CC colors
+
 tissue.data <- lapply(tissue.names, 
   function(x) readRDS(here("Data", "DO", paste0(x, ".RDS"))))
 names(tissue.data) <- tissue.names
@@ -1023,7 +1026,7 @@ tissue influencing expression.
 ```{r tissue_specific}
 
 save.every = 100
-use.kinship = FALSE
+use.kinship = TRUE
 
 tissue.tx <- lapply(ind.matched.expr, function(x) colnames(x))
 all.tx <- Reduce("union", tissue.tx)
@@ -1110,16 +1113,20 @@ All but a handful of genes were differentially
 expressed across tissues.
 
 ```{r ptissue}
-fdr.mat <- apply(p.mat, 2, function(x) p.adjust(x, "fdr"))
-plot(sort(fdr.mat[,1]), ylab = "p value", main = "Tissue Effect FDR")
+fdr.mat <- apply(p.mat, 2, function(x) p.adjust(x, "holm"))
+hist(-log10(fdr.mat[,1]), breaks = 100, 
+  main = "Tissue Main Effect -log10(p value)",
+  xlab = "-log10(p value)")
+
 ```
 
 The vast majority also had a significant effect of genotype.
 Is this right?
 
 ```{r pgeno}
-hist(fdr.mat[,2], breaks = 100, main = "Genotype Main Effect p values",
-  xlab = "p value")
+hist(-log10(fdr.mat[,2]), breaks = 100, 
+  main = "Genotype Main Effect -log10(p value)",
+  xlab = "-log10(p value)")
 #length(which(fdr.mat[,2] > 0.1))
 ```
 
@@ -1129,9 +1136,9 @@ I think we'll have to fix our model using sumner,
 and add in the kinship correction, etc.
 
 ```{r pint}
-hist(fdr.mat[,3], breaks = 100, 
-  main = "Tissue by Genotype Interaction p values",
-  xlab = "p value")
+hist(-log10(fdr.mat[,3]), breaks = 100, 
+  main = "Tissue by Genotype Interaction -log10(p value)",
+  xlab = "-log10(p value)")
 ```
 
 ```{r plot_tissue_int, eval = FALSE}
@@ -1164,6 +1171,7 @@ plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
     }else{
       test <- lm(long.expr~tissue.factor*rep.geno)    
     }
+    int.p <- signif(anova(test)[3,"Pr(>F)"], 2)
     #anova(test)  
 
     expr.mat <- Reduce("cbind", tx.expr)
@@ -1173,16 +1181,28 @@ plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
 
     layout(matrix(c(1,2,3,3), nrow = 2, byrow = TRUE))
     par(mar = c(4,4,4,4))
-    boxplot(expr.mat, main = "Expression by tissue", col = tissue.cols, las = 2)
-    barplot(tissue.lod, main = "LOD score by tissue", col = tissue.cols, las = 2)
+    boxplot(expr.mat, main = "Expression by tissue", col = tissue.cols[has.expr], 
+      las = 2)
+    barplot(tissue.lod, main = "LOD score by tissue", col = tissue.cols[has.expr], 
+      las = 2)
     
     all.coef <- sapply(test, function(x) x$coef)
     #pheatmap(all.coef[1:8,], scale = "none")
     par(mar = c(4,4,0,4))
-    barplot(t(all.coef[1:8,]), beside = TRUE, col = tissue.cols, 
-      ylab = "Allele Effects")
+    a <- barplot(t(all.coef[1:8,]), beside = TRUE, col = tissue.cols[has.expr], 
+      ylab = "Allele Effects", names = rep("", 8))
+    bar.range <- max(all.coef[1:8,]) - min(all.coef[1:8,])
+    par(xpd = NA)
+    text(x = colMeans(a), y = rep(min(all.coef[1:8,])-bar.range*0.05, 8), 
+      labels = names(CCcolors), col = CCcolors, font = 2)
+    par(xpd = FALSE)
+
+    #I think this barplot is less useful
+    #barplot(all.coef[1:8,], beside = TRUE, col = CCcolors, 
+    #  ylab = "Allele Effects")
     
-    mtext(gene.name, side = 3, outer = TRUE, line = -1.5, font = 4, cex = 1.5)
+    mtext(paste0(gene.name, " (p = ", int.p, ")"), 
+      side = 3, outer = TRUE, line = -1.5, font = 4, cex = 1.5)
 
     #all.se <- sapply(test, function(x) x$SE)
     #pheatmap(cor(all.coef[1:8,]), display_numbers = TRUE)
@@ -1199,16 +1219,59 @@ plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
 
 ```
 
-The following plot shows an example of a transcript with a tissue-specific
-eQTL and a transcript without a tissue-specific eQTL.
+The following plot shows an example of a transcript that
+does not have a significant tissue-specific eQTL. All 
+alleles have similar effects across all tissues.
 
 ```{r no_int, fig.width = 7, fig.height = 7}
-no.int <- rownames(p.mat)[which.max(p.mat[,"Tissue_by_Genotype"])]
-plot_tissue_interaction(no.int, FALSE)
+no.int <- rownames(p.mat)[order(p.mat[,"Tissue_by_Genotype"], decreasing = TRUE)][1:10]
+plot_tissue_interaction(no.int[2], FALSE)
+```
+
+The following plot shows an example of a transcript 
+with strongly tissue-specific eQTL. To identify the
+interaction look for different bar heights in each
+group of effects. Each group represents the effects
+of a single allele on transcript levels across all 
+tissues. If there is a tissue-specific effect, the
+bars in a single group will have very different 
+heights.
+
+In the following example, the PWK allele has 
+a strong positive effect on Mybl expression in
+liver, but neglible to modestly negative effects
+on Mybls expression in other tissues.
+
+
+```{r strong_int, fig.width = 7, fig.height = 7}
+strong.int <- rownames(p.mat)[which(p.mat[,"Tissue_by_Genotype"] == min(p.mat[,"Tissue_by_Genotype"], na.rm = TRUE))]
+plot_tissue_interaction(strong.int[3], FALSE)
 ```
 
 
-```{r strong_int}
-strong.int <- rownames(p.mat)[which.min(p.mat[,"Tissue_by_Genotype"])]
-plot_tissue_interaction(strong.int, FALSE)
+There is a very positive correlation between LOD score and 
+interaction p value, which makes sense. We can't see 
+tissue-specific eQTL for transcripts with low local LOD 
+scores.
+
+```{r lod_v_int}
+local.lod <- sapply(local.coef, function(x) x$lod[match(all.tx, x$gene.id)])
+rownames(local.lod) <- all.tx
+max.lod <- apply(tissue.lod, 1, function(x) if(!all(is.na(x))){max(x, na.rm = TRUE)}else{NA})
+plot(max.lod, -log10(p.mat[,"Tissue_by_Genotype"]), xlab = "LOD", ylab = "-log Interaction p value")
+```
+
+```{r example_grid, eval = FALSE}
+#examples of genes with high LOD scores but no interaction
+non.int.examples <- intersect(which(max.lod > 100), which(-log10(p.mat[,"Tissue_by_Genotype"]) < 3))
+plot_tissue_interaction(rownames(p.mat)[non.int.examples[1]], FALSE)
+
+#examples of genes with low LOD scores and significant interactions
+#only the extremely significant values have clear effects.
+#many interaction effects are messy looking
+int.examples <- intersect(which(max.lod < 50), which(-log10(p.mat[,"Tissue_by_Genotype"]) > 3))
+plot_tissue_interaction(rownames(p.mat)[int.examples[7]], FALSE)
+
+#Wfdc21
+plot_tissue_interaction("ENSMUSG00000051748", FALSE)
 ```
