@@ -1024,15 +1024,19 @@ The model looks for an interaction between genotype and
 tissue influencing expression.
 
 ```{r tissue_specific}
-
 save.every = 100
-use.kinship = TRUE
+use.kinship = FALSE
 
 tissue.tx <- lapply(ind.matched.expr, function(x) colnames(x))
 all.tx <- Reduce("union", tissue.tx)
 
-int.p.file <- file.path(results.dir, "Tissue-Specific_eQTL_p_values.RDS")
-tissue.grid.file <- file.path(results.dir, "Transcripts_by_Tissue.RDS")
+if(use.kinship){
+  int.p.file <- file.path(results.dir, "Tissue-Specific_eQTL_p_values.RDS")
+  tissue.grid.file <- file.path(results.dir, "Transcripts_by_Tissue.RDS")
+}else{
+  int.p.file <- file.path(results.dir, "Tissue-Specific_eQTL_p_values_with_kin.RDS")
+  tissue.grid.file <- file.path(results.dir, "Transcripts_by_Tissue_no_kin.RDS")
+}
 
 if(file.exists(int.p.file)){
   p.mat <- readRDS(int.p.file)
@@ -1141,7 +1145,7 @@ hist(-log10(fdr.mat[,3]), breaks = 100,
   xlab = "-log10(p value)")
 ```
 
-```{r plot_tissue_int, eval = FALSE}
+```{r plot_tissue_int}
 plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
   tx.idx <- which(all.tx == transcript.id)
   tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
@@ -1163,6 +1167,8 @@ plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
     tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
       function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
     rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))
+    rep.K <- K[[chr.idx]][rownames(rep.geno), rownames(rep.geno)]
+    rownames(rep.K) <- colnames(rep.K) <- names(long.expr)
 
     if(use.kinship){
       adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
@@ -1183,8 +1189,8 @@ plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
     par(mar = c(4,4,4,4))
     boxplot(expr.mat, main = "Expression by tissue", col = tissue.cols[has.expr], 
       las = 2)
-    barplot(tissue.lod, main = "LOD score by tissue", col = tissue.cols[has.expr], 
-      las = 2)
+    barplot_with_num(round(tissue.lod), main = "LOD score by tissue", 
+      col = tissue.cols[has.expr], las = 2)
     
     all.coef <- sapply(test, function(x) x$coef)
     #pheatmap(all.coef[1:8,], scale = "none")
@@ -1217,16 +1223,71 @@ plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
   }
 }
 
+
+#This function plots expression for all alleles
+#in a given tissue.
+expr_across_alleles <- function(transcript.id, tissue.name){
+
+  tx.idx <- which(all.tx == transcript.id)
+  tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
+  has.expr <- which(sapply(tissue.idx, length) > 0)
+  selected <- which(names(has.expr) == tissue.name)
+  
+  if(length(selected) == 1){
+
+    tx.expr <- ind.matched.expr[[has.expr[selected]]][,tissue.idx[[has.expr[selected]]],drop=FALSE]
+    colnames(tx.expr) <- names(ind.matched.expr)[has.expr[selected]]
+
+    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
+    nearest.marker <- tx.info$nearest.marker.id
+    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+    gene.name <- tx.info$symbol
+    chr.idx <- which(names(K) == tx.info$chr)
+
+    par(mfrow = c(2,4))
+    for(a in 1:ncol(nearest.geno)){
+      plot.with.model(nearest.geno[rownames(tx.expr),a], tx.expr, 
+        xlab = "Genotype", ylab = paste(gene.name, "expression"),
+        main = names(CCcolors[a]), col = CCcolors[a], report = "cor.test")
+    }  
+    mtext(tissue.name, side = 3, outer = TRUE, line = -1.5, font = 2)
+  }
+}
+
+#This function plots expression across tissues for a 
+#given allele.
+expr_across_tissues <- function(transcript.id, allele.name){
+
+  allele.idx <- c(which(names(CCcolors) == allele.name), which(LETTERS[1:8] == allele.name))
+  allele.label <- names(CCcolors)[allele.idx]
+
+  tx.idx <- which(all.tx == transcript.id)
+  tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
+  has.expr <- which(sapply(tissue.idx, length) > 0)
+  
+  if(length(tissue.idx) > 1){
+
+    tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+    colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
+
+    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
+    nearest.marker <- tx.info$nearest.marker.id
+    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+    gene.name <- tx.info$symbol
+    chr.idx <- which(names(K) == tx.info$chr)
+
+    layout(get.layout.mat(length(has.expr)))
+    for(tx in 1:ncol(tx.expr)){
+      plot.with.model(nearest.geno[rownames(tx.expr),allele.idx], tx.expr[,tx], 
+        xlab = "Genotype", ylab = paste(gene.name, "expression"),
+        main = tissue.names[has.expr[tx]], col = tissue.cols[has.expr[tx]],
+        report = "cor.test")
+    }  
+    mtext(allele.label, side = 3, outer = TRUE, line = -1.5, font = 2)
+  }
+}
 ```
 
-The following plot shows an example of a transcript that
-does not have a significant tissue-specific eQTL. All 
-alleles have similar effects across all tissues.
-
-```{r no_int, fig.width = 7, fig.height = 7}
-no.int <- rownames(p.mat)[order(p.mat[,"Tissue_by_Genotype"], decreasing = TRUE)][1:10]
-plot_tissue_interaction(no.int[2], FALSE)
-```
 
 The following plot shows an example of a transcript 
 with strongly tissue-specific eQTL. To identify the
@@ -1248,6 +1309,13 @@ strong.int <- rownames(p.mat)[which(p.mat[,"Tissue_by_Genotype"] == min(p.mat[,"
 plot_tissue_interaction(strong.int[3], FALSE)
 ```
 
+We can see this when we plot the PWK effect across
+tissues. The positive effect in liver is in stark
+contrast to the effects in the other tissues.
+
+```{r pwk_int, fig.width = 7, fig.height = 5}
+expr_across_tissues(strong.int[3], "PWK")
+```
 
 There is a very positive correlation between LOD score and 
 interaction p value, which makes sense. We can't see 
@@ -1257,21 +1325,89 @@ scores.
 ```{r lod_v_int}
 local.lod <- sapply(local.coef, function(x) x$lod[match(all.tx, x$gene.id)])
 rownames(local.lod) <- all.tx
-max.lod <- apply(tissue.lod, 1, function(x) if(!all(is.na(x))){max(x, na.rm = TRUE)}else{NA})
+max.lod <- apply(local.lod, 1, function(x) if(!all(is.na(x))){max(x, na.rm = TRUE)}else{NA})
 plot(max.lod, -log10(p.mat[,"Tissue_by_Genotype"]), xlab = "LOD", ylab = "-log Interaction p value")
 ```
 
-```{r example_grid, eval = FALSE}
+## Examples
+
+I'm curious to see examples of genes with significant and 
+non-significant tissue-specific eQTL and high and low 
+LOD scores.
+
+### Strong eQTL, no interaction
+
+The plot below shows an example of a transcript with a high
+LOD score, but no tissue-specific eQTL. Rspl9 has a significant
+eQTL in all tissues, and all allele coefficients are the same
+across all tissues.
+
+```{r high_lod_no_int}
 #examples of genes with high LOD scores but no interaction
 non.int.examples <- intersect(which(max.lod > 100), which(-log10(p.mat[,"Tissue_by_Genotype"]) < 3))
 plot_tissue_interaction(rownames(p.mat)[non.int.examples[1]], FALSE)
+```
 
+
+### Strong eQTL, strong interaction
+
+These don't all seem sound either. The following
+example shows data for a transcript with a strong
+eQTL, and a highly significant interaction score. 
+However, the allele effects all look pretty similar.
+
+```{r high_lod_high_int}
+#examples of genes with high LOD scores but no interaction
+int.examples <- rownames(p.mat)[intersect(which(max.lod > 100), which(-log10(p.mat[,"Tissue_by_Genotype"]) > 50))]
+plot_tissue_interaction(int.examples[1], FALSE)
+```
+
+In contrast, the next example from this category, does 
+look as if it has a genuine interaction. The WSB allele
+has a strong positive effect on expression only in islet
+and liver.
+
+```{r good_example, fig.width = 7, fig.height = 7}
+plot_tissue_interaction(int.examples[2], FALSE)
+```
+
+The expression plots across tissues convincingly
+support this interaction.
+
+```{r wsb_effect, fig.height = 6, fig.width = 9}
+expr_across_tissues(int.examples[2], "WSB")
+```
+
+### No eQTL, strong interaction
+
+The plot below shows an example of a transcript with 
+a weak eQTL, but a strongly significant tissue interaction.
+
+CAST and NZO appear to have strong negative effects on 
+transcription, but only in liver. B6 has a strong negative
+effect, but only in adipose.
+
+```{r no_eqtl_strong_int, fig.height = 7, fig.width = 7}
 #examples of genes with low LOD scores and significant interactions
 #only the extremely significant values have clear effects.
 #many interaction effects are messy looking
-int.examples <- intersect(which(max.lod < 50), which(-log10(p.mat[,"Tissue_by_Genotype"]) > 3))
-plot_tissue_interaction(rownames(p.mat)[int.examples[7]], FALSE)
+int.examples <- rownames(p.mat)[intersect(which(is.na(max.lod)), which(-log10(fdr.mat[,"Tissue_by_Genotype"]) > 3))]
+plot_tissue_interaction(int.examples[8], FALSE)
+```
 
+The effects of the CAST allele across different tissues
+are shown below, and I'm not convinced that there is a
+tissue-specific effect. All the effects are fairly weak.
+
+```{r cast_effect, fig.width = 9, fig.heigh = 6}
+expr_across_tissues(int.examples[8], "CAST")
+#expr_across_tissues(int.examples[8], "B6")
+```
+
+
+```{r, eval = FALSE}
 #Wfdc21
 plot_tissue_interaction("ENSMUSG00000051748", FALSE)
+expr_across_tissues(transcript.id = "ENSMUSG00000051748", "WSB")
+expr_across_alleles(transcript.id = "ENSMUSG00000051748", "Liver")
 ```
