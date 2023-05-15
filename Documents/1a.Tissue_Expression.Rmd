@@ -258,7 +258,7 @@ by looking at genes that were significantly differentially expressed
 between tissues, but they are basically all significantly differentially 
 expressed.
 
-```{r tx_enrich, results = "asis"}
+```{r tx_enrich, results = "asis", eval = FALSE}
 #pdf("~/Desktop/tx_enrich.pdf")
 for(i in 1:nrow(combo.mat)){
   tx.yes <- which(combo.mat[i,] == 1)
