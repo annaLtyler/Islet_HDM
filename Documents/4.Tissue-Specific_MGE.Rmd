@@ -1,0 +1,147 @@
+---
+title: "Tissue-Specific MGE"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+The purpose of this workflow is to combine results from the
+high-dimensional mediation with tissue-specific eQTL. 
+Can we learn more about physiology and tissue of action 
+by looking at tissue-specific action of genes with high 
+mediated genetic effect?
+
+```{r setup}
+library(here)
+mge.results <- "tissue_together-local_imp-_-complete_mediation"
+mge.results.dir <- here("Results", "High_Dim_Med", mge.results)
+eqtl.results.dir <- here("Results", "Transcriptomes")
+tissue.names = c("Adipose", "Islet", "Liver", "SkeletalMuscle")
+tissue.cols <- c("orange", "brown", "#8dd3c7", "tan") #colors that are not related to the DO/CC colors
+
+```
+
+```{r read_previous_results}
+mge <- readRDS(here("Results", "High_Dim_Med", mge.results, "Population_MGE_Loadings.RDS"))
+transcript.loadings <- readRDS(here("Results", "High_Dim_Med", mge.results, "Loadings_Transcripts.RDS"))
+eqtl.pval <- readRDS(here("Results", "Transcriptomes", "Tissue-Specific_eQTL_p_values_no_kin.RDS"))
+eqtl.prop <- readRDS(here("Results", "Transcriptomes", "Transcripts_Relative_Effects.RDS"))
+```
+
+```{r here, message = FALSE, warning = FALSE}
+results.dir <- here("Results", "eQTL")
+if(!file.exists(results.dir)){dir.create(results.dir)}
+```
+
+```{r load_code, message = FALSE, warning = FALSE}
+all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
+for(i in 1:length(all.fun)){source(all.fun[i])}
+
+all.packages <- c("pheatmap")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+```{r read_transcriptomes}
+
+tissue.data <- lapply(tissue.names, 
+  function(x) readRDS(here("Data", "DO", paste0(x, ".RDS"))))
+names(tissue.data) <- tissue.names
+load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata")) #ensembl.version, genoprobs, K, map, markers
+
+tissue.expr <- lapply(tissue.data, function(x) x$data$norm)
+gene.tables <- lapply(tissue.data, function(x) x$annot.mrna)
+```
+
+MGE scores are not highly related to each other across 
+tissues. This indicates a fairly high level of tissue-specificity
+in terms of which transcripts are mediating risk across
+the tissues.
+
+```{r cross_tissue_mge}
+tx.idx <- match(tissue.names, names(mge))
+common.tx <- Reduce("intersect", lapply(mge[tx.idx], names))
+mge.mat <- sapply(mge[tx.idx], function(x) x[common.tx])
+pairs(mge.mat)
+#pheatmap(cor(mge.mat), display_numbers = TRUE)
+```
+
+
+What do the tissue-specific effects of some high-MGE transcripts look like?
+
+```{r examples}
+high.mge <- names(sort(mge.mat[,1], decreasing = TRUE))[4]
+mge.mat[high.mge,]
+barplot(mge.mat[high.mge,], ylab = "MGE")
+
+plot_tissue_interaction(high.mge, tissue.expr, 
+    gene.tables, genoprobs, K, use.kinship = FALSE, 
+    text.gap = 0.1, text.shift = 0.05)
+
+expr_across_alleles(high.mge, tissue.name = "Adipose", 
+    tissue.expr, gene.information, genoprobs, K, use.kinship = FALSE)
+
+expr_across_alleles(high.mge, tissue.name = "Liver", 
+    tissue.expr, gene.information, genoprobs, K, use.kinship = FALSE)
+
+expr_across_alleles(high.mge, tissue.name = "Heart", 
+    tissue.expr, gene.information, genoprobs, K, use.kinship = FALSE)
+
+expr_across_alleles(high.mge, tissue.name = "SkeletalMuscle", 
+    tissue.expr, gene.information, genoprobs, K, use.kinship = FALSE)
+
+
+expr_across_tissues(high.mge, allele.name = "B6", 
+    tissue.expr, gene.information, genoprobs, K, use.kinship = FALSE)
+
+```
+
+What is the relationship between MGE, or transcript loading,
+for each tissue and the tissue-specific 
+
+Heart is not included, because the imputation hasn't been 
+run on heart data yet.
+
+```{r}
+
+for(tx in 1:length(mge)){
+  if(length(mge[[tx]]) > 0){
+    common.transcripts <- intersect(names(mge[[tx]]), rownames(eqtl.pval))
+    par(mfrow = c(1,2))
+    tx.mge <- abs(mge[[tx]][common.transcripts])
+    nlogp <- -log10(eqtl.pval[common.transcripts,"Tissue_by_Genotype"])
+    finite.idx <- which(is.finite(nlogp))
+
+    test <- chull(tx.mge[finite.idx], nlogp[finite.idx])
+    col <- rep("black", length(finite.idx))
+    col[test] <- "red"
+    plot.with.model(tx.mge[finite.idx], nlogp[finite.idx], xlab = "MGE", 
+      ylab = "-log10(interaction p value", report = "cor.test", col = col)
+
+    plot(tx.mge, -log10(eqtl.pval[common.transcripts,2]), xlab = "MGE", 
+      ylab = "-log10(interaction p value")
+
+
+
+
+    top.mge.perc <- get.percentile(abs(mge[[tx]][common.transcripts]), 95)
+    top.p.val <- get.percentile(-log10(eqtl.pval[common.transcripts,"Tissue_by_Genotype"]), 95)
+
+
+    ranked.transcripts <- rank.2D(cbind(abs(mge[[tx]][common.transcripts]), -log10(eqtl.pval[common.transcripts,"Tissue_by_Genotype"])))
+
+    transcript.id <- tissue.data[[tx]]$annot.mrna$gene.id[match(rownames(transcript.loadings[[tx]]), tissue.data[[tx]]$annot.mrna$symbol)]
+    common.transcripts <- intersect(transcript.id, names(mge[[tx]]))
+    transcript.idx <- match(common.transcripts, transcript.id)
+    plot(abs(transcript.loadings[[tx]][transcript.idx]), 
+      -log10(eqtl.pval[common.transcripts, "Tissue_by_Genotype"]),
+      xlab = "Transcript Loading", ylab = "-log10(interaction p value")
+    mtext(tissue.names[tx], side = 3, outer = TRUE, line = -1.5, font = 2)
+  }
+}
+
+```

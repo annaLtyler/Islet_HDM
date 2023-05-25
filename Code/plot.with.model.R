@@ -2,8 +2,8 @@
 
 
 plot.with.model <- function(x, y, xlim = NULL, ylim = NULL, col = "black", 
-pch = 16, main, xlab, ylab, report = c("lm", "cor.test"), cex = 1,
-plot.results = TRUE, add = FALSE, plot.type = "p"){
+line.col = "#a6bddb", pch = 16, main, xlab, ylab, report = c("lm", "cor.test"), 
+cex = 1, plot.results = TRUE, add = FALSE, plot.type = "p"){
 	
 	if(missing(main)){main = ""}
 	if(missing(xlab)){xlab = deparse(substitute(x))}
@@ -49,7 +49,7 @@ plot.results = TRUE, add = FALSE, plot.type = "p"){
 	}
 
 	if(!is.na(coef(model)[2])){
-		abline(model, col = "#a6bddb", lwd = 3)
+		abline(model, col = line.col, lwd = 3)
 	}
 	}
 	

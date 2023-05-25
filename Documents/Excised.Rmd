@@ -402,3 +402,144 @@ for(tx in 1:length(tissue.names)){
     xlab = "local LOD score", ylab = "Expression Mean", main = tissue.names[tx])
 }
 ```
+
+
+## From 2a.Kinship_Expression_Traits.Rmd
+
+## Gene expression, kinship, and trait correlations
+
+We expect that transcripts with more polygenic 
+inheritance will correlate more with kinship and
+with the trait matrix. Conversely, we expect that
+transcripts with large contributions from local eQTL
+will have weaker correlations with traits.
+
+For each transcript, we calculate its correlation to
+the first PC of the trait matrix, and to the first PC
+of the LOCO kinship matrix. 
+
+The kinship matrix has many more axes of variation than
+the trait matrix. Below is an example plot from the 
+chr 1 LOCO kinship matrix.
+
+```{r k_decomp}
+#look at the first 10 PCs
+num.pc <- 10
+
+common.ind <- rownames(ind.matched.expr[[1]])
+K.decomp <- lapply(K, function(x) plot.decomp(x[common.ind, common.ind], 
+  plot.results = FALSE, pc = num.pc))
+
+K.pc <- lapply(K.decomp, function(x) x$u[,1:num.pc])
+for(i in 1:length(K.pc)){
+    rownames(K.pc[[i]]) <- names(K.decomp[[i]]$rows.used)
+    colnames(K.pc[[i]]) <- paste0("PC", 1:num.pc)
+}
+K.var.expl <- sapply(K.decomp, function(x) x$var.exp)
+
+barplot(K.var.expl[,1], ylab = "Variance Explained", xlab = "PCs")
+```
+
+```{r k_pheno_cor}
+common.trait.kin.ind <- intersect(rownames(trait.pc), rownames(K.pc[[1]]))
+trait.kin.cor <- lapply(1:10, function(z) apply(trait.pc[common.trait.kin.ind,], 2, 
+    function(x) sapply(K.pc, function(y) cor(x, y[common.trait.kin.ind,z]))))
+sapply(trait.kin.cor, max)
+sapply(trait.kin.cor, min)
+
+pheatmap(trait.kin.cor)
+barplot(t(trait.kin.cor), beside = TRUE)
+```
+
+```{r kcor}
+common.expr.pheno <- intersect(rownames(ind.matched.expr[[1]]), rownames(pheno)[trait.decomp$rows.used])
+common.expr.kin <- intersect(rownames(ind.matched.expr[[1]]), rownames(K.pc[[1]]))
+
+expr.trait.cor.file <- here("Results", "Transcriptomes", "Expression_TraitPC_Cor.RDS")
+expr.kin.cor.file <- here("Results", "Transcriptomes", "Expression_KinPC_Cor.RDS")
+
+if(!file.exists(expr.trait.cor.file)){
+    expr.trait.cor <- expr.kin.cor <- vector(mode = "list", length = nrow(local.lod))
+    names(expr.trait.cor) <- names(expr.kin.cor) <- rownames(local.lod)
+
+    for(trx in 1:nrow(local.lod)){
+        report.progress(trx, nrow(local.lod))
+        gene.id <- rownames(local.lod)[trx]
+        tx.idx <- which(!is.na(local.lod[trx,]))
+        if(length(tx.idx) == 0){next()}
+        gene.table <- gene.tables[[tx.idx[[1]]]]
+        gene.info <- gene.table[which(gene.table$gene.id == gene.id),]
+        gene.chr <- gene.info$chr
+        gene.expr <- sapply(ind.matched.expr[tx.idx], function(x) x[,gene.id,drop=FALSE])
+        rownames(gene.expr) <- rownames(ind.matched.expr[[1]])
+        
+        trait.cor <- lapply(1:2, 
+            function(x) apply(gene.expr[common.expr.pheno,,drop=FALSE], 2, 
+            function(y) cor(y, trait.pc[common.expr.pheno,x])))
+        names(trait.cor) <- c("PC1", "PC2")
+        expr.trait.cor[[trx]]  <- trait.cor
+
+        kin.idx <- which(names(K) == gene.chr)
+        kin.cor <- lapply(1:num.pc, 
+            function(x) apply(gene.expr[common.expr.kin,,drop=FALSE], 2, 
+            function(y) cor(y, K.pc[[kin.idx]][common.expr.kin,x])))
+        names(kin.cor) <- paste0("PC", 1:num.pc)
+        expr.kin.cor[[trx]] <- kin.cor
+    }
+    saveRDS(expr.trait.cor, expr.trait.cor.file)
+    saveRDS(expr.kin.cor, expr.kin.cor.file)
+}else{
+    expr.trait.cor <- readRDS(expr.trait.cor.file)
+    expr.kin.cor <- readRDS(expr.kin.cor.file)
+}
+```
+
+```{r get_vals}
+get_cor_vals <- function(cor.list, tissue.name, PC.label = "PC1"){
+    pc.idx <- which(names(cor.list) == PC.label)
+    cor.vals <- cor.list[[pc.idx]]
+    tissue.idx <- which(names(cor.vals) == tissue.name)
+    if(length(tissue.idx) == 0){
+        return(NA)
+    }else{
+        return(as.numeric(cor.vals[tissue.idx]))
+    }
+}
+```
+
+```{r plot_cor}
+#start with PC1 in traits and kinship
+par(mfrow = c(2,2))
+for(tx in tissue.names){
+    pc1.trait.cor <- sapply(expr.trait.cor, function(x) get_cor_vals(x, tx, "PC1"))
+    pc1.kin.cor <- sapply(expr.kin.cor, function(x) get_cor_vals(x, tx, "PC1"))
+    ymax <- max(abs(c(pc1.trait.cor, pc1.kin.cor)), na.rm = TRUE)
+    par(mar = c(4,4,4,6))
+    plot.with.model(local.lod[,tx], abs(pc1.trait.cor), xlab = "LOD", 
+        ylab = "Trait Correlation", ylim = c(0, ymax), report = "cor.test",
+        line.col = "black", main = tx)
+    test.results <- plot.with.model(local.lod[,tx], abs(pc1.kin.cor), 
+        col = "blue", add = TRUE, line.col = "blue")
+    axis(4)
+    mtext("Kinship Correlation", side = 4, line = 2.5)
+}
+
+```
+
+## from 2a.Kinship_Expression_Traits.Rmd
+
+```{r pc_cor, fig.width = 9, fig.height = 5}
+trait.pc <- trait.decomp$u
+rownames(trait.pc) <- rownames(pheno)[trait.decomp$rows.used]
+
+
+pc.cor <- sapply(1:2, function(x) apply(pheno, 2, function(y) cor(y[trait.decomp$rows.used], trait.decomp$u[,x])))
+cor.order <- hclust(dist(pc.cor))$order
+par(mar = c(8, 4, 4, 4))
+barplot(t(pc.cor[cor.order,]), beside = TRUE, las = 2, ylab = "Loading", 
+    ylim = c(-1, 1), col = c("#7fc97f", "#beaed4"))
+legend("topright", fill = c("#7fc97f", "#beaed4"), 
+    legend = c(paste0("PC1 (", var.exp[1], "%)"), paste0("PC2 (", var.exp[2], "%)")))
+abline(h = 0)
+#pheatmap(pc.cor, display_numbers = TRUE)
+```

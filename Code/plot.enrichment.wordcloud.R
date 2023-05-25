@@ -44,7 +44,7 @@ plot.enrichment.wordcloud <- function(enrichment, num.terms = 10, plot.label = "
     if(order.by == "default"){
         result.order <- order(1:nrow(sub.result))[1:num.terms]
     }else{
-        result.order <- order(sub.result[,order.by,drop=FALSE], decreasing = decreasing)[1:num.terms]
+        result.order <- order(sub.result[,order.by], decreasing = decreasing)[1:num.terms]
     }
 
     sub.result <- sub.result[result.order,,drop=FALSE]

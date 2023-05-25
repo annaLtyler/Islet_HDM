@@ -12,6 +12,12 @@ bibliography: hdm.bib
 ```{r param}
 min.lod <- 8
 remove.pseudogenes = TRUE #if TRUE, removes pseudogenes and predicted genes 
+tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
+tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
+
+#tissue.names <- c("Adipose", "Heart", "Islet", "Liver", "SkeletalMuscle")
+#tissue.cols <- c("orange", "brown", "#8dd3c7", "tan", "pink") #colors that are not related to the DO/CC colors
+
 ```
 
 ## Introduction
@@ -37,15 +43,17 @@ I downloaded the following data from the
 On March 20, 2023.
 
 1. Adipose.RDS - adipose tissue transcriptome
-2. Heart.RDS - cardiac muscle transcriptome
-3. Islet.RDS - pancreatic islet transcriptome
-4. Liver.RDS - liver transcriptome
-5. QTLViewer_Geno_V10.Rdata - Genotypes for mice
-6. SkeletalMuscle.RDS - skeletal muscle transcriptome
+2. Islet.RDS - pancreatic islet transcriptome
+3. Liver.RDS - liver transcriptome
+4. QTLViewer_Geno_V10.Rdata - Genotypes for mice
+5. SkeletalMuscle.RDS - skeletal muscle transcriptome
 
 The initial results from Isabela are in 
 Results > Isabelas_Results. They are also stored in a Dropbox 
 folder that Gary shared with me. 
+
+There is a transcriptome from the heart, but we are not 
+using those data for this paper. 
 
 ### Transcriptome Decomposition
 
@@ -74,11 +82,6 @@ load_libraries(all.packages, personal.library = TRUE)
 ```
 
 ```{r read_transcriptomes}
-tissue.names <- c("Adipose", "Heart", "Islet", "Liver", "SkeletalMuscle")
-#tissue.cols <- categorical_pal(length(tissue.names)) #these overlap a lot with DO/CC colors
-#tissue.cols <- brewer.pal(length(tissue.names), "Set2")
-tissue.cols <- c("orange", "brown", "#8dd3c7", "tan", "pink") #colors that are not related to the DO/CC colors
-
 tissue.data <- lapply(tissue.names, 
   function(x) readRDS(here("Data", "DO", paste0(x, ".RDS"))))
 names(tissue.data) <- tissue.names
@@ -96,7 +99,8 @@ pair.names <- apply(tissue.pairs, 1, function(x) paste(tissue.names[x], collapse
 
 #make a matrix of all binary combinations of tissues
 #to compare to.
-combo.mat <- t(sapply(2:(2^5)-1, function(x) number2binary(x, 5)))
+combo.mat <- t(sapply(2:(2^length(tissue.names))-1, 
+  function(x) number2binary(x, length(tissue.names))))
 colnames(combo.mat) <- tissue.names
 ```
 
@@ -203,14 +207,14 @@ identified in each tissue.
 ```{r tissue_spec, warning = FALSE, error = FALSE, message = FALSE}
 tx.list <- lapply(adj.expr, colnames)
 n.tx <- sapply(tx.list, length)
-barplot(n.tx, col = tissue.cols, main = "Number of Transcripts")
+barplot_with_num(n.tx, col = tissue.cols, main = "Number of Transcripts",
+ text.gap = 0.8, text.shift = 0.2)
 ```
 
 The following heatmap shows the Jaccard indices for the
-transcripts found in each pair of tissues. Heart and 
-skeletal muscle have the most shared transcripts, and
-liver and islet are the most different from each other
-in terms of transcripts expressed.
+transcripts found in each pair of tissues. Liver and 
+islet are the most different from each other in terms 
+of transcripts expressed.
 
 ```{r tissue_jacc}
 jacc.mat <- jaccard.matrix(tx.list)
@@ -485,7 +489,7 @@ legend(x = 0, y = 0.5, legend = c("Distal", "Local"), fill = c("#1b9e77", "#d95f
 
 The following plots explore the overlap of eQTLs across tissues.
 
-Following Isabella's methods, local and distal eQTL for a given 
+Following Isabela's methods, local and distal eQTL for a given 
 gene were considered shared across two tissues if their positions 
 in their corresponding tissues (LOD > `r min.lod`) were within 4 Mb.
 
@@ -552,17 +556,31 @@ assess_shared <- function(eqtl.list, mb.buffer = 4){
     eqtl.chr <- sorted.qtl[,13]
     eqtl.pos <- sorted.qtl[,14]    
 
-    #cluster by position
-    dist.tree <- hclust(dist(eqtl.pos/1e6))
-    #plot(dist.tree);abline(h = 4)
+    #cluster by position for each unique chromosome
+    u_chr <-  unique(eqtl.chr)
+    chr.pos <- lapply(u_chr, function(x) eqtl.pos[which(eqtl.chr == x)])
+    names(chr.pos) <- u_chr
+    #if any chromosomes have more than one eQTL logged, 
+    #cluster them such that positions within 4Mb of each
+    #other are clustered into a single QTL.        
+    dist.tree <- lapply(chr.pos, function(x) if(length(x) > 1){hclust(dist(x/1e6))})
+    #plot(dist.tree[[1]]);abline(h = 4)
     #split into multiple QTL based on our specified distance
-    eqtl.mem <- cutree(dist.tree, h = mb.buffer)
+    eqtl.mem <- lapply(dist.tree, 
+      function(x) if(length(x) > 0){cutree(x, h = mb.buffer)}else{return(1)})
 
-    num.eqtl <- length(unique(eqtl.mem))
+    num.eqtl <- sum(unlist(lapply(eqtl.mem, function(x) length(unique(x)))))
+    eqtl.idx <- vector(mode = "list", length = length(eqtl.mem))
+    start.idx <- 0
+    for(eq in 1:length(eqtl.mem)){
+      eqtl.idx[[eq]] <- eqtl.mem[[eq]] + start.idx
+      start.idx <- max(eqtl.idx[[eq]])
+    }
+    eqtl.idx <- unlist(eqtl.idx)
 
     eqtl.names <- sapply(1:num.eqtl, 
-        function(x) paste(eqtl.chr[which(eqtl.mem == x)[1]], 
-        round(mean(eqtl.pos[which(eqtl.mem == x)])[1]), sep = "_"))
+        function(x) paste(eqtl.chr[which(eqtl.idx == x)[1]], 
+        round(mean(eqtl.pos[which(eqtl.idx == x)])[1]), sep = "_"))
 
     #for the unique eQTL, tally which tissues each is in.
     shared.eqtl.mat <- matrix(0, nrow = num.eqtl, ncol = length(tissue.names))
@@ -571,9 +589,8 @@ assess_shared <- function(eqtl.list, mb.buffer = 4){
 
     shared.eqtl.coef <- vector(mode = "list", length = num.eqtl)
     names(shared.eqtl.coef) <- eqtl.names
-
     for(eq in 1:num.eqtl){
-        eqtl.markers <- sorted.qtl[which(eqtl.mem == eq),"marker.id"]
+        eqtl.markers <- sorted.qtl[which(eqtl.idx == eq),"marker.id"]
         eqtl.tissues <- unique(sorted.tissue[which(sorted.qtl[,"marker.id"] %in% eqtl.markers)])
         shared.eqtl.mat[eq,eqtl.tissues] <- 1
 
@@ -725,6 +742,7 @@ allele_effect_cor <- function(shared.coef, filename){
           pair.cor <- cor(t(u_mat[,LETTERS[1:8]]))
           #test.mat <- u_mat[,LETTERS[1:8]]
           #rownames(test.mat) <- u_mat[,1]
+          #barplot(as.matrix(test.mat), beside = TRUE);abline(h = 0)
           #pheatmap(test.mat, cluster_rows = FALSE, cluster_cols = FALSE)
           #pheatmap(cor(t(test.mat)), display_numbers = TRUE)
           tissue.pair.cor <- as.numeric(pair.cor[upper.tri(pair.cor, diag = FALSE)])
@@ -948,7 +966,7 @@ for(txp in 1:nrow(tissue.pairs)){
     "no.local_distal" = local.no.distal.yes.cor, 
     "local_no.distal" = local.yes.distal.no.cor, 
     "no.local_no.distal" = local.no.distal.no.cor,
-    "all" = all.cor),
+    "all" = all.cor), ylab = "Correlation",
     main = paste(tissue.names[tissue.pairs[txp,]], collapse = " vs. "),
     ylim = c(-1,1), las = 2)
     abline(h = 0)
@@ -1023,17 +1041,100 @@ linear model.
 The model looks for an interaction between genotype and
 tissue influencing expression.
 
+```{r get_effects_fun}
+get_transcript_effects <- function(transcript.id, return.data = FALSE){
+
+    tx.idx <- which(all.tx == transcript.id)
+    tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
+    has.expr <- which(sapply(tissue.idx, length) > 0)
+    
+    if(length(has.expr) < 2){return(NULL)}
+
+    tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+    colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
+    
+    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
+    tx.chr <- tx.info$chr
+    chr.idx <- which(names(K) == tx.chr)
+    gene.name <- tx.info$symbol
+
+    if(!(tx.chr %in% c(1:19, "X"))){return(NULL)}
+
+    nearest.marker <- tx.info$nearest.marker.id
+    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+
+    tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
+    names(tx.expr) <- tissue.names[has.expr]
+    long.expr <- unlist(tx.expr)
+    tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
+      function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
+    rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))      
+    rep.K <- K[[chr.idx]][rownames(rep.geno), rownames(rep.geno)]
+    rownames(rep.K) <- colnames(rep.K) <- names(long.expr)
+
+    if(use.kinship){
+      #use cape code to adjust variables
+      adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
+        phenoV = as.matrix(long.expr))
+      test <- lm(adj_data$corrected_pheno~tissue.factor*adj_data$corrected_geno)
+    }else{
+      test <- lm(long.expr~tissue.factor*rep.geno)
+      #anova(test)
+    }
+    test.summary <- anova(test)
+    component.p <- test.summary[,"Pr(>F)"][1:3]
+    names(component.p) <- rownames(anova(test))[1:3]
+    
+    tissue.effect <- test.summary[1,"Mean Sq"]
+    geno.effect <- test.summary[2,"Mean Sq"]
+    int.effect <- test.summary[3,"Mean Sq"]
+    resid.effect <- test.summary[4,"Mean Sq"]
+
+    relative.effects <- c("Tissue" = tissue.effect, 
+      "Genotype" = geno.effect, 
+      "Interaction" = int.effect,
+      "Residual" = resid.effect)
+
+    if(!return.data){
+      result = list("tissues.with.expr" = has.expr,
+        "p.values" = component.p, "rel.effects" = relative.effects)
+    }else{
+      result = list("tissues.with.expr" = has.expr,
+        "p.values" = component.p, "rel.effects" = relative.effects,
+        "genotypes" = nearest.geno, "expression" = tx.expr,
+        "chr" = chr.idx, "gene.name" = gene.name)
+    }
+
+
+    return(result)  
+}
+```
+
 ```{r tissue_specific}
+
 save.every = 100
 use.kinship = FALSE
 
 tissue.tx <- lapply(ind.matched.expr, function(x) colnames(x))
 all.tx <- Reduce("union", tissue.tx)
 
-if(use.kinship){
-  int.p.file <- file.path(results.dir, "Tissue-Specific_eQTL_p_values.RDS")
+#calculate all local LOD scores for future comparisons
+#and thresholding
+local.lod.file <- here("Results", "Transcriptomes", "Local_LOD.RDS")
+if(!file.exists(local.lod.file)){
+  local.lod <- sapply(local.coef, function(x) x$lod[match(all.tx, x$gene.id)])
+  rownames(local.lod) <- all.tx
+  saveRDS(local.lod, local.lod.file)
 }else{
-  int.p.file <- file.path(results.dir, "Tissue-Specific_eQTL_p_values_with_kin.RDS") 
+  local.lod <- readRDS(local.lod.file)
+}
+
+max.lod <- apply(local.lod, 1, function(x) if(!all(is.na(x))){max(x, na.rm = TRUE)}else{NA})
+
+if(use.kinship){
+  int.p.file <- file.path(results.dir, "Tissue-Specific_eQTL_p_values_with_kin.RDS")
+}else{
+  int.p.file <- file.path(results.dir, "Tissue-Specific_eQTL_p_values_no_kin.RDS") 
 }
 relative.effect.file <- file.path(results.dir, "Transcripts_Relative_Effects.RDS")
 tissue.grid.file <- file.path(results.dir, "Transcripts_by_Tissue.RDS")
@@ -1048,9 +1149,9 @@ if(file.exists(int.p.file)){
   rownames(p.mat) <- all.tx
   colnames(p.mat) <- c("Tissue", "Genotype", "Tissue_by_Genotype")
 
-  relative.effect <- matrix(NA, nrow = length(all.tx), ncol = 3)
+  relative.effect <- matrix(NA, nrow = length(all.tx), ncol = 4)
   rownames(relative.effect) <- all.tx
-  colnames(relative.effect) <- c("Tissue", "Genotype", "Interaction")
+  colnames(relative.effect) <- c("Tissue", "Genotype", "Interaction", "Residual")
 
   tissue.grid <- matrix(0, nrow = length(all.tx), ncol = length(tissue.names)) #keep track of which tissues each transcript is expressed in
   rownames(tissue.grid) <- all.tx
@@ -1064,55 +1165,12 @@ if(start.at < length(all.tx)){
   #for(tx.idx in 1:200){
     #tx.idx <- which(all.tx == transcript.id)
     print(tx.idx)
-    tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
-    has.expr <- which(sapply(tissue.idx, length) > 0)
-    tissue.grid[tx.idx,has.expr] <- 1
-    if(length(has.expr) > 1){
-      tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
-      colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
-      
-      tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
-      tx.chr <- tx.info$chr
-      chr.idx <- which(names(K) == tx.chr)
+    tx.effects <- get_transcript_effects(transcript.id = all.tx[tx.idx])
+    if(is.null(tx.effects)){next()}
 
-      if(!(tx.chr %in% c(1:19, "X"))){next()}
-
-      nearest.marker <- tx.info$nearest.marker.id
-      nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
-
-      tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
-      names(tx.expr) <- tissue.names[has.expr]
-      long.expr <- unlist(tx.expr)
-      tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
-        function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
-      rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))      
-      rep.K <- K[[chr.idx]][rownames(rep.geno), rownames(rep.geno)]
-      rownames(rep.K) <- colnames(rep.K) <- names(long.expr)
-
-      if(use.kinship){
-        #use cape code to adjust variables
-        adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
-          phenoV = as.matrix(long.expr))
-        test <- lm(adj_data$corrected_pheno~tissue.factor*adj_data$corrected_geno)
-      }else{
-        test <- lm(long.expr~tissue.factor*rep.geno)
-        #anova(test)
-      }
-
-      all.results <- coef(test)
-      tissue.results <- grep("tissue", names(all.results))
-      geno.results <- grep("geno", names(all.results))
-      just.tissue.results <- setdiff(tissue.results, geno.results)
-      just.geno.results <- setdiff(geno.results, tissue.results)
-      both.results <- intersect(geno.results, tissue.results)
-      #boxplot(list("tissue" = all.results[just.tissue.results], "genotype" = all.results[just.geno.results], "interaction" = all.results[both.results]))
-      tissue.effect <- sqrt(mean(all.results[just.tissue.results]^2, na.rm = TRUE))
-      geno.effect <- sqrt(mean(all.results[just.geno.results]^2, na.rm = TRUE))
-      int.effect <- sqrt(mean(all.results[both.results]^2, na.rm = TRUE))
-      relative.effect[tx.idx,] <- c(tissue.effect, geno.effect, int.effect)
-      #barplot(relative.effect[tx.idx,])
-
-      p.mat[tx.idx,] <- anova(test)[,"Pr(>F)"][1:3]
+    tissue.grid[tx.idx,tx.effects$tissues.with.expr] <- 1  
+    p.mat[tx.idx,] <- tx.effects$p.values
+    relative.effect[tx.idx,] <- tx.effects$rel.effects
 
       if(tx.idx %% save.every == 0){
         saveRDS(p.mat, int.p.file)
@@ -1121,9 +1179,9 @@ if(start.at < length(all.tx)){
       }
 
     }
-  }
   saveRDS(p.mat, int.p.file)
   saveRDS(tissue.grid, tissue.grid.file)
+  saveRDS(relative.effect, relative.effect.file)
   sink()
 }
 
@@ -1136,86 +1194,154 @@ num.tissues <- rowSums(tissue.grid)
 hist(num.tissues, main = "Number of Expressing Tissues")
 ```
 
-All but a handful of genes were differentially 
-expressed across tissues.
+The boxplot below shows the relative effect of tissue,
+local genotype, and the interaction between them on 
+gene expression across all transcripts.
+Tissue had the largest effect, as we would expect.
 
-```{r ptissue}
-fdr.mat <- apply(p.mat, 2, function(x) p.adjust(x, "holm"))
-hist(-log10(fdr.mat[,1]), breaks = 100, 
-  main = "Tissue Main Effect -log10(p value)",
-  xlab = "-log10(p value)")
+```{r effect_ratio}
 
+total.effect <- rowSums(relative.effect)
+prop.effect <- relative.effect/total.effect
+
+boxplot(prop.effect, ylab = "Relative Effect")
 ```
 
-The vast majority also had a significant effect of genotype.
-Is this right?
+The following plot shows the number of transcripts
+with significant effects from each term. 
 
-```{r pgeno}
-hist(-log10(fdr.mat[,2]), breaks = 100, 
-  main = "Genotype Main Effect -log10(p value)",
-  xlab = "-log10(p value)")
-#length(which(fdr.mat[,2] > 0.1))
+```{r sig_counts}
+fdr = 0.01
+alpha <- 0.05/nrow(p.mat)
+adj.mat <- apply(p.mat, 2, function(x) p.adjust(x, "holm"))
+sig.count <- apply(p.mat, 2, function(x) length(which(x <= alpha)))
+total.genes <- length(which(!is.na(p.mat[,1])))
+all.counts <- c(total.genes, sig.count)
+names(all.counts)[1] <- "Total"
+barplot_with_num(all.counts, 
+  ylab = "count", main = "Number of Significant Genes")
 ```
 
-The vast majority also had a significant 
-tissue by genotype effect. This seems like too much. 
-I think we'll have to fix our model using sumner,
-and add in the kinship correction, etc.
+We looked at the relative contribution of local
+genotype vs. an interaction getween genotype and
+tissue. The following histogram shows the difference
+between the contribution from the interaction and
+the contribution from the local genotype. 
 
-```{r pint}
-hist(-log10(fdr.mat[,3]), breaks = 100, 
-  main = "Tissue by Genotype Interaction -log10(p value)",
-  xlab = "-log10(p value)")
+Negative values indicate transcripts for which 
+the local genotype contributed more than the interaction
+to variation in gene expression. Positive values
+indicate transcripts for which the interaction 
+contributed more than the local genotype.
+
+The dot plot shows the maximum local LOD scores
+for these genes compared to the difference in 
+contributions from the local genotype and interaction.
+
+The transcripts with more contribution from the interaction
+tend to have lower LOD scores, but still have a range, particularly 
+for those transcripts for which the interaction and genotype
+contribute fairly evenly. 
+
+```{r rel_effect}
+int.diff <- prop.effect[,"Interaction"] - rel.effect.mat[,"Genotype"]
+par(mfrow = c(1,2))
+hist(int.diff, breaks = 100, xlab = "Difference", 
+  main = "Interaction - Genotype")
+abline(v = 0, col = "red")
+plot(int.diff, max.lod, xlab = "Difference", ylab = "Maximum LOD Score",
+  pch = 16)
+abline(v = 0, col = "red")
+```
+
+Tissue is the highest contributor to variation in 
+transcript level for the vast majority of genes.
+There are a handful of genes for which genotype 
+has the maximum influence, and even a few for 
+which the interaction has the largest effect.
+
+```{r contribution_coun}
+max.cont <- apply(prop.effect, 1, function(x) if(!all(is.na(x))){which.max(x)}else{NA})
+highest.count <- sapply(1:ncol(prop.effect), function(x) length(which(max.cont == x)))
+barplot_with_num(highest.count, main = "Which contributes most?",
+  names = colnames(prop.effect))
+
+#only LOD > 6
+lod.thresh = 6
+sig.lod.idx <- which(max.lod > lod.thresh)
+highest.count <- sapply(1:ncol(prop.effect), function(x) length(intersect(which(max.cont == x), sig.lod.idx)))
+barplot_with_num(highest.count, main = paste("Which contributes most?\nLOD >", lod.thresh),
+  names = colnames(prop.effect))
+```
+
+The following dot plot compares the contributions
+from local genotype and the interaction. The color
+of each point corresponds to the maximum LOD score
+for the transcript across all tissues. 
+
+For most transcripts, the majority of the variance is 
+explained by local genotype. For those with more variance 
+explained by the interaction between tissue and genotype, 
+the maximum LOD score across all tissues tends to be low.
+
+The counts for above and below the line y=x are
+also shown.
+
+```{r rel_cont}
+
+max.lod.col <- colors.from.values(max.lod, use.pheatmap.colors = TRUE)
+
+layout(matrix(c(1,2,1,3), ncol = 2, byrow = TRUE), widths = c(1, 0.3), heights = c(0.3, 1))
+par(mar = c(4,4,4,4))
+plot(prop.effect[,2], prop.effect[,3], col = max.lod.col, pch = 16,
+  xlab = "Genotype", ylab = "Interaction")
+abline(0,1)
+par(mar = c(0,0,0,0))
+plot.text("LOD", y = 0.2, font = 2)
+par(mar = c(4,4,0,4))
+imageWithTextColorbar(matrix(max.lod, ncol = 1), use.pheatmap.colors = TRUE,
+  cex = 1, bar.lwd = 2.5)
+
+par(mfrow = c(1,1))
+rel.cont <- apply(prop.effect[,2:3], 1, function(x) if(!all(is.na(x))){which.max(x)}else{NA})
+higher.count <- sapply(1:2, function(x) length(which(rel.cont == x)))
+barplot_with_num(higher.count, main = "Which contributes more?",
+  names = colnames(prop.effect)[2:3])
 ```
 
 ```{r plot_tissue_int}
 
-plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
-  tx.idx <- which(all.tx == transcript.id)
-  tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
-  has.expr <- which(sapply(tissue.idx, length) > 0)
-  if(length(has.expr) > 1){
+plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE,
+  text.gap = 0.1, text.shift = 0.05){
 
-    tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
-    colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
+    tx.effects <- get_transcript_effects(transcript.id, return.data = TRUE)
 
-    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
-    nearest.marker <- tx.info$nearest.marker.id
-    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
-    gene.name <- tx.info$symbol
-    chr.idx <- which(names(K) == tx.info$chr)
-
-    tx.expr <- lapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
-    names(tx.expr) <- tissue.names[has.expr]
-    long.expr <- unlist(tx.expr)
-    tissue.factor <- as.factor(unlist(lapply(1:length(tx.expr), 
-      function(x) rep(tissue.names[x], length(tx.expr[[x]])))))
-    rep.geno <- Reduce("rbind", lapply(1:length(has.expr), function(x) nearest.geno[rownames(ind.matched.expr[[1]]),]))
-    rep.K <- K[[chr.idx]][rownames(rep.geno), rownames(rep.geno)]
-    rownames(rep.K) <- colnames(rep.K) <- names(long.expr)
-
-    if(use.kinship){
-      adj_data <- kin_adjust(kin_obj = rep.K, geno = rep.geno, 
-        phenoV = as.matrix(long.expr))
-      test <- lm(adj_data$corrected_pheno~tissue.factor*adj_data$corrected_geno)
-    }else{
-      test <- lm(long.expr~tissue.factor*rep.geno)    
+    if(is.null(tx.effects)){
+      return("Not expressed in multiple tissues")
     }
 
-    int.p <- signif(anova(test)[3,"Pr(>F)"], 2)
-    #anova(test)  
+    has.expr <- tx.effects$tissues.with.expr
+    nearest.geno <- tx.effects$genotypes
+    chr.idx <- tx.effects$chr
+    expr.mat <- Reduce("cbind", tx.effects$expression)
+    colnames(expr.mat) <- names(has.expr)
+    relative.effects <- tx.effects$rel.effects
+    total.effect <- sum(relative.effects)
+    prop.effect <- relative.effects/total.effect
 
-    expr.mat <- Reduce("cbind", tx.expr)
-    colnames(expr.mat) <- tissue.names[has.expr]
     test <- apply(expr.mat, 2, function(x) fit1(nearest.geno, x, kinship = K[[chr.idx]]))
     tissue.lod <- sapply(test, function(x) x$lod)
 
-    layout(matrix(c(1,2,3,3), nrow = 2, byrow = TRUE))
+    layout(matrix(c(1,2,3,4,4,4), nrow = 2, byrow = TRUE))
     par(mar = c(4,4,4,4))
     boxplot(expr.mat, main = "Expression by tissue", col = tissue.cols[has.expr], 
-      las = 2)
+      las = 2, ylab = "TPM")
+    bar.y <- get_plot_bounds(0, round(max(tissue.lod)), scale.factor = 0.2)
     barplot_with_num(round(tissue.lod), main = "LOD score by tissue", 
-      col = tissue.cols[has.expr], las = 2)
+      col = tissue.cols[has.expr], las = 2, text.gap = text.gap, 
+      text.shift = text.shift)
+    barplot_with_num(signif(prop.effect, 2), main = "Relative Effects",
+      ylab = "Mean Effect")
     
     all.coef <- sapply(test, function(x) x$coef)
     #pheatmap(all.coef[1:8,], scale = "none")
@@ -1225,59 +1351,52 @@ plot_tissue_interaction <- function(transcript.id, use.kinship = FALSE){
     bar.range <- max(all.coef[1:8,]) - min(all.coef[1:8,])
     par(xpd = NA)
     text(x = colMeans(a), y = rep(min(all.coef[1:8,])-bar.range*0.05, 8), 
-      labels = names(CCcolors), col = CCcolors, font = 2)
+      labels = names(CCcolors), col = CCcolors, font = 2, cex = 2)
     par(xpd = FALSE)
 
     #I think this barplot is less useful
-    #barplot(all.coef[1:8,], beside = TRUE, col = CCcolors, 
-    #  ylab = "Allele Effects")
+    #barplot(all.coef[1:8,], beside = TRUE, col = CCcolors, ylab = "Allele Effects")
     
+    gene.name <- tx.effects$gene.name
+    int.p <- signif(tx.effects$p.values[3], 2)
     mtext(paste0(gene.name, " (p = ", int.p, ")"), 
       side = 3, outer = TRUE, line = -1.5, font = 4, cex = 1.5)
-
-    #all.se <- sapply(test, function(x) x$SE)
-    #pheatmap(cor(all.coef[1:8,]), display_numbers = TRUE)
-    #pheatmap(cor(t(all.coef[1:8,])), display_numbers = TRUE)
-    #allele.spec.decomp <- plot.decomp(all.coef[1:8,], label.points = TRUE)
-    #barplot(allele.spec.decomp$var.exp)
-    #tissue.spec.decomp <- plot.decomp(t(all.coef[1:8,]), label.points = TRUE)    
-    #barplot(tissue.spec.decomp$var.exp)
  
-  }else{ #end case for having expression in at least two tissues
-    plot.text("Not expressed in multiple tissues.")
-  }
 }
+
 
 
 #This function plots expression for all alleles
 #in a given tissue.
 expr_across_alleles <- function(transcript.id, tissue.name){
-
-  tx.idx <- which(all.tx == transcript.id)
-  tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
-  has.expr <- which(sapply(tissue.idx, length) > 0)
-  selected <- which(names(has.expr) == tissue.name)
   
-  if(length(selected) == 1){
+  tx.effects <- get_transcript_effects(transcript.id, return.data = TRUE)
 
-    tx.expr <- ind.matched.expr[[has.expr[selected]]][,tissue.idx[[has.expr[selected]]],drop=FALSE]
-    colnames(tx.expr) <- names(ind.matched.expr)[has.expr[selected]]
-
-    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
-    nearest.marker <- tx.info$nearest.marker.id
-    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
-    gene.name <- tx.info$symbol
-    chr.idx <- which(names(K) == tx.info$chr)
-
-    par(mfrow = c(2,4))
-    for(a in 1:ncol(nearest.geno)){
-      plot.with.model(nearest.geno[rownames(tx.expr),a], tx.expr, 
-        xlab = "Genotype", ylab = paste(gene.name, "expression"),
-        main = names(CCcolors[a]), col = CCcolors[a], report = "cor.test")
-    }  
-    mtext(tissue.name, side = 3, outer = TRUE, line = -1.5, font = 2)
+  if(is.null(tx.effects)){
+    plot.text("No comparable expression.")
+    return(NULL)
   }
+
+  nearest.geno <- tx.effects$genotypes
+  chr.idx <- tx.effects$chr
+  expr.list <- tx.effects$expression
+  tissue.idx <- which(names(expr.list) == tissue.name)
+  relative.effects <- tx.effects$rel.effects
+
+  par(mfrow = c(2,4))
+  for(a in 1:ncol(nearest.geno)){
+    rounded.geno <- bin.vector(nearest.geno[names(expr.list[[tissue.idx]]),a], c(0, 0.5, 1))
+    boxplot(expr.list[[tissue.idx]]~rounded.geno, 
+      xlab = "Genotype", ylab = paste(gene.name, "expression"),
+      main = names(CCcolors[a]), col = CCcolors[a])
+    #plot.with.model(nearest.geno[names(expr.list[[tissue.idx]]),a], 
+    #  expr.list[[tissue.idx]], 
+    #  xlab = "Genotype", ylab = paste(gene.name, "expression"),
+    #  main = names(CCcolors[a]), col = CCcolors[a], report = "cor.test")
+  }  
+  mtext(tissue.name, side = 3, outer = TRUE, line = -1.5, font = 2)
 }
+
 
 #This function plots expression across tissues for a 
 #given allele.
@@ -1286,154 +1405,94 @@ expr_across_tissues <- function(transcript.id, allele.name){
   allele.idx <- c(which(names(CCcolors) == allele.name), which(LETTERS[1:8] == allele.name))
   allele.label <- names(CCcolors)[allele.idx]
 
-  tx.idx <- which(all.tx == transcript.id)
-  tissue.idx <- lapply(tissue.tx, function(x) which(x == all.tx[tx.idx]))
-  has.expr <- which(sapply(tissue.idx, length) > 0)
+  tx.effects <- get_transcript_effects(transcript.id, return.data = TRUE)
   
-  if(length(tissue.idx) > 1){
-
-    tx.expr <- sapply(1:length(has.expr), function(x) ind.matched.expr[[has.expr[[x]]]][,tissue.idx[has.expr][[x]]])
-    colnames(tx.expr) <- names(ind.matched.expr)[has.expr]
-
-    tx.info  <- tissue.data[[has.expr[1]]]$annot.mrna[which(tissue.data[[has.expr[1]]]$annot.mrna$gene.id == all.tx[tx.idx]),]
-    nearest.marker <- tx.info$nearest.marker.id
-    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
-    gene.name <- tx.info$symbol
-    chr.idx <- which(names(K) == tx.info$chr)
-
-    layout(get.layout.mat(length(has.expr)))
-    for(tx in 1:ncol(tx.expr)){
-      plot.with.model(nearest.geno[rownames(tx.expr),allele.idx], tx.expr[,tx], 
-        xlab = "Genotype", ylab = paste(gene.name, "expression"),
-        main = tissue.names[has.expr[tx]], col = tissue.cols[has.expr[tx]],
-        report = "cor.test")
-    }  
-    mtext(allele.label, side = 3, outer = TRUE, line = -1.5, font = 2)
+  if(is.null(tx.effects)){
+    plot.text("No comparable expression.")
+    return(NULL)
   }
+
+  has.expr <- tx.effects$tissues.with.expr
+  nearest.geno <- tx.effects$genotypes
+  chr.idx <- tx.effects$chr
+  expr.list <- tx.effects$expression
+  relative.effects <- tx.effects$rel.effects  
+  gene.name <- tx.effects$gene.name
+
+  layout(get.layout.mat(length(expr.list)))
+  for(tx in 1:length(expr.list)){
+    rounded.geno <- bin.vector(nearest.geno[names(expr.list[[tx]]),allele.idx], c(0, 0.5, 1))
+    boxplot(expr.list[[tx]]~rounded.geno, col = tissue.cols[has.expr[tx]],
+      xlab = "Genotype", ylab = paste(gene.name, "expression"),
+      main = names(expr.list)[tx])
+      #plot.with.model(nearest.geno[names(expr.list[[tx]]),allele.idx], expr.list[[tx]], 
+      #xlab = "Genotype", ylab = paste(gene.name, "expression"),
+      #main = names(expr.list)[tx], col = tissue.cols[has.expr[tx]],
+      #report = "cor.test")
+  }  
+  mtext(allele.label, side = 3, outer = TRUE, line = -1.5, font = 2)
+
 }
-```
-
-
-The following plot shows an example of a transcript 
-with strongly tissue-specific eQTL. To identify the
-interaction look for different bar heights in each
-group of effects. Each group represents the effects
-of a single allele on transcript levels across all 
-tissues. If there is a tissue-specific effect, the
-bars in a single group will have very different 
-heights.
-
-In the following example, the PWK allele has 
-a strong positive effect on Mybl expression in
-liver, but neglible to modestly negative effects
-on Mybls expression in other tissues.
-
-
-```{r strong_int, fig.width = 7, fig.height = 7}
-strong.int <- rownames(p.mat)[which(p.mat[,"Tissue_by_Genotype"] == min(p.mat[,"Tissue_by_Genotype"], na.rm = TRUE))]
-plot_tissue_interaction(strong.int[3], FALSE)
-```
-
-We can see this when we plot the PWK effect across
-tissues. The positive effect in liver is in stark
-contrast to the effects in the other tissues.
-
-```{r pwk_int, fig.width = 7, fig.height = 5}
-expr_across_tissues(strong.int[3], "PWK")
-```
-
-There is a very positive correlation between LOD score and 
-interaction p value, which makes sense. We can't see 
-tissue-specific eQTL for transcripts with low local LOD 
-scores.
-
-```{r lod_v_int}
-local.lod <- sapply(local.coef, function(x) x$lod[match(all.tx, x$gene.id)])
-rownames(local.lod) <- all.tx
-max.lod <- apply(local.lod, 1, function(x) if(!all(is.na(x))){max(x, na.rm = TRUE)}else{NA})
-plot(max.lod, -log10(p.mat[,"Tissue_by_Genotype"]), xlab = "LOD", ylab = "-log Interaction p value")
 ```
 
 ## Examples
 
-Below we look through examples of genes with significant 
-and non-significant tissue-specific eQTL and high and low 
-LOD scores.
+### No tissue-specific effect
 
-### Strong eQTL, no interaction
+The following plot shows an example of a transcript
+with no tissue-specific effects. The allele 
+effects are very similar across all tissues.
 
-The plot below shows an example of a transcript with a high
-LOD score, but no tissue-specific eQTL. Rspl9 has a significant
-eQTL in all tissues, and all allele coefficients are the same
-across all tissues.
+```{r no_int, fig.width = 8, fig.height = 7}
+sorted.int.diff <- sort(int.diff)
+trans.id <- names(sorted.int.diff)[1] #small interaction
+plot_tissue_interaction(trans.id, FALSE, text.gap = 3, text.shift = 2)
 
-```{r high_lod_no_int, fig.height = 7, fig.width = 7}
-#examples of genes with high LOD scores but no interaction
-non.int.examples <- intersect(which(max.lod > 100), which(-log10(p.mat[,"Tissue_by_Genotype"]) < 3))
-plot_tissue_interaction(rownames(p.mat)[non.int.examples[1]], FALSE)
+#plot_tissue_interaction(names(tissue.lower)[2], FALSE)
 ```
 
+### Strong tissue-specific effect
 
-### Strong eQTL, strong interaction
+The following plot shows an example of a transcript 
+with strongly tissue-specific eQTL. The CAST allele
+has a large positive effect on expression, but only
+in islet.
 
-These don't all seem sound either. The following
-example shows data for a transcript with a strong
-eQTL, and a highly significant interaction score. 
-However, the allele effects all look pretty similar.
-Even though this interaction is highly significant,
-I'm not convinced that it's real.
 
-```{r high_lod_high_int, fig.height = 7, fig.width = 7}
-#examples of genes with high LOD scores but no interaction
-int.examples <- rownames(p.mat)[intersect(which(max.lod > 100), which(-log10(p.mat[,"Tissue_by_Genotype"]) > 50))]
-plot_tissue_interaction(int.examples[1], FALSE)
-expr_across_tissues(int.examples[1], "WSB")
+```{r strong_int, fig.width = 8, fig.height = 7}
+#pick a transcript with a large LOD score and a 
+#strong interaction effect
+high.int <- int.diff[which(max.lod > 50)]
+#boxplot(list(int.diff, high.int))
+sorted.high.int <- sort(high.int, decreasing = TRUE)
+trans.id <- names(sorted.high.int)[1] #large interaction
+plot_tissue_interaction(trans.id, FALSE)
 ```
 
-In contrast, the next example from this category, does 
-look as if it has a genuine interaction. The WSB allele
-has a strong positive effect on expression only in islet
-and liver.
+This can be clearly seen in the average 
+expression for each allele shown below.
 
-```{r good_example, fig.width = 7, fig.height = 7}
-plot_tissue_interaction(int.examples[2], FALSE)
+```{r expr_plot, fig.width = 8, fig.height = 8}
+expr_across_tissues(trans.id, "CAST")
 ```
 
-The expression plots across tissues convincingly
-support this interaction.
-
-```{r wsb_effect, fig.height = 6, fig.width = 9}
-expr_across_tissues(int.examples[2], "WSB")
+```{r int_stronger_examples, eval = FALSE}
+trans.id <- names(int.stronger)[4]
+plot_tissue_interaction(trans.id, FALSE)
+expr_across_alleles(trans.id, "Heart")
+expr_across_tissues(trans.id, "PWK")
 ```
-
-### No eQTL, strong interaction
-
-The plot below shows an example of a transcript with 
-a weak eQTL, but a strongly significant tissue interaction.
-
-PWK has a strong positive effect, but only in islet.
-
-```{r no_eqtl_strong_int, fig.height = 7, fig.width = 7}
-#examples of genes with low LOD scores and significant interactions
-#only the extremely significant values have clear effects.
-#many interaction effects are messy looking
-int.examples <- rownames(p.mat)[intersect(which(is.na(max.lod)), which(-log10(fdr.mat[,"Tissue_by_Genotype"]) > 3))]
-plot_tissue_interaction(int.examples[8], FALSE)
-```
-
-This is supported by individual expression plots.
-
-```{r cast_effect, fig.width = 9, fig.height = 6}
-expr_across_tissues(int.examples[8], "PWK")
-#expr_across_tissues(int.examples[8], "B6")
-```
-
-
-
 
 ```{r, eval = FALSE}
-#Wfdc21
-plot_tissue_interaction("ENSMUSG00000051748", FALSE)
-expr_across_tissues(transcript.id = "ENSMUSG00000051748", "WSB")
-expr_across_alleles(transcript.id = "ENSMUSG00000051748", "Liver")
+gene.name = "Wfdc21";tissue.name = "Adipose"
+gene.name <- "Myo19";tissue.name = "Adipose"
+gene.name = "Lep";tissue.name = "Adipose"
+
+tissue.idx <- which(names(tissue.data) == tissue.name)
+trans.id  <- tissue.data[[tissue.idx]]$annot.mrna$gene.id[which(tissue.data[[tissue.idx]]$annot.mrna$symbol == gene.name)]
+
+plot_tissue_interaction(trans.id, FALSE)
+expr_across_tissues(transcript.id = trans.id, "CAST")
+expr_across_alleles(transcript.id = trans.id, "Liver")
 ```
+

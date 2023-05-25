@@ -14,7 +14,7 @@ class.mat = NULL, grad.dir = c("high", "low", "middle", "ends"),
 color.fun = c("linear", "exponential"), exp.steepness = 1, color.spread = 50,
 global.color.scale = FALSE, global.min = NULL, global.max = NULL,
 axis.line = 0, use.pheatmap.colors = FALSE, ax.min = NULL, ax.max = NULL, 
-n.ax.ticks = NULL, hadj = NA, padj = NA, bounding.box = TRUE){
+n.ax.ticks = NULL, hadj = NA, padj = NA, bounding.box = TRUE, bar.lwd = 1){
 
 	
 		require(grid)
@@ -222,13 +222,13 @@ n.ax.ticks = NULL, hadj = NA, padj = NA, bounding.box = TRUE){
         num.mat <- as.matrix(as.numeric(col.key[,1]), ncol = 1)
         if(orientation == "h"){
 			plot(x = num.mat[,1], y = rep(1, nrow(num.mat)), col = col.key[,2], 
-			type = "h", axes = FALSE, xlab = "", ylab = "")
+			type = "h", axes = FALSE, xlab = "", ylab = "", lwd = bar.lwd)
             }else{
 	            # Original
 				plot.new()
 				plot.window(xlim = c(0,1), ylim = c(mat.min, mat.max))
 				segments(x0 = rep(0, nrow(num.mat)), x1 = rep(1, nrow(num.mat)),
-				y0 = num.mat[,1], col = col.key[,2])
+				y0 = num.mat[,1], col = col.key[,2], lwd = bar.lwd)
             }
         axis(axis.side, line = axis.line, cex.axis = cex, at = at, padj = padj, hadj = hadj)
 			

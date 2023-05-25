@@ -1,0 +1,92 @@
+---
+title: "Kinship, Expression, and Traits"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+bibliography: hdm.bib 
+---
+
+The purpose of this workflow is to examine the relationship
+between kinshp, gene expression, and traits. It uses output
+from 1a.Tissue_Expression.Rmd and 1b.Trait_Selection.Rmd.
+
+```{r here, message = FALSE, warning = FALSE}
+library(here)
+results.dir <- here("Results", "Transcriptomes")
+if(!file.exists(results.dir)){dir.create(results.dir)}
+```
+
+```{r load_code, message = FALSE, warning = FALSE}
+all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
+for(i in 1:length(all.fun)){source(all.fun[i])}
+
+all.packages <- c("pheatmap")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+```{r read_data}
+expr <- readRDS(here("Data", "DO", "Tissue_Expression_Adjusted.RDS")) #generated in 1a.Tissue_Expression.Rmd
+tissue.names <- names(expr)
+
+common.ind <- Reduce("intersect", lapply(expr, rownames))
+ind.matched.expr <- lapply(expr, function(x) x[common.ind,])
+local.lod <- readRDS(here("Results", "Transcriptomes", "Local_LOD.RDS")) #generated in 1a.Tissue_Expression.Rmd
+gene.tables <- readRDS(here("Data", "DO", "Gene_Tables.RDS")) #generated in 1a.Tissue_Expression.Rmd
+
+pheno <- readRDS(here("Data", "DO", "Clinical_Phenotypes_Adjusted.RDS")) #generated in 1b.Trait_Selection.Rmd
+pheno.names <- colnames(pheno)
+pheno.class <- c("1.phys", "1.phys", "4.glucose", "4.glucose", "5.insulin", "5.insulin",
+    "6.lipid", "6.lipid", "6.lipid", "6.lipid", "2.islet", "2.islet", "2.islet", "3.HOMA", 
+    "3.HOMA", "6.lipid", "6.lipid", "6.lipid", "6.lipid", "7.chem", "7.chem", "1.phys")
+
+load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata")) #ensembl.version, genoprobs, K, map, markers
+
+```
+
+## Trait Matrix Decomposition
+
+The trait matrix clusters into several clusters of related traits.
+
+```{r trait_clust, fig.width = 6, fig.height = 6}
+trait.cor <- cor(pheno, use = "pairwise.complete.obs")
+pheatmap(trait.cor)
+```
+
+Decomposition of the trait correlation matrix shows
+how traits cluster in PC space.
+
+```{r trait_cor, fig.width = 6, fig.height = 6}
+plot.decomp(trait.cor, label.points = TRUE, xlim = c(-0.4, 0.55))
+```
+
+```{r trait_decomp, warning = FALSE}
+trait.decomp <- plot.decomp(pheno, plot.results = FALSE, scale = TRUE, pc = ncol(pheno))
+```
+
+The loadings on the traits are shown below.
+
+```{r trait_loadings, fig.width = 7, fig.height = 7}
+#png("~/Desktop/test.png", width = 7, height = 7, units = "in", res = 300)
+var.exp <- round(trait.decomp$var.exp*100)
+
+layout(matrix(c(1,0,2,3), ncol = 2, byrow = TRUE), heights = c(0.5, 1), widths = c(1, 0.1 ))
+par(mar = c(0,5.7,2,3.7))
+barplot_with_num(var.exp, ylab = "% Var. Exp.")
+
+trait.loadings <- trait.decomp$v
+rownames(trait.loadings) <- colnames(pheno)
+colnames(trait.loadings) <- paste0("PC", 1:ncol(trait.loadings))
+
+row.order <- sort.by.then.by(cbind(pheno.class, trait.loadings[,1]), col.type = c("c", "n"))
+
+par(mar = c(4,6,0,4))
+imageWithText(trait.loadings[rownames(row.order),], use.pheatmap.colors = TRUE, show.text = FALSE,
+    row.text.shift = 0.05, col.text.shift = 0.05)
+par(mar = c(4,0,4,2))
+imageWithTextColorbar(trait.loadings, use.pheatmap.colors = TRUE, cex = 1, bar.lwd = 3)
+#dev.off()
+```
+
