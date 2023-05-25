@@ -42,6 +42,7 @@ For this workflow there are several parameters to set.
 
 ```{r get_args}
 #args <- commandArgs(trailingOnly=T)
+num.perm = 1000
 
 args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
 #args <- c(1,1,0,0,0) #merged tissues, local imputation, reactive model
@@ -343,7 +344,6 @@ if(merge.tissues){
 perm.file <- file.path(results.dir, "Permutations.RDS")
 
 if(!file.exists(perm.file) || delete_previous){
-    num.perm = 100
     all.perms <- vector(mode = "list", length = max.tx)
 
     for(tx in 1:max.tx){
