@@ -44,8 +44,9 @@ For this workflow there are several parameters to set.
 #args <- commandArgs(trailingOnly=T)
 num.perm = 1000
 
-args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
+#args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
 #args <- c(1,1,0,0,0) #merged tissues, local imputation, reactive model
+args <- c(1,0,0,1,0) #merged tissues, full imputation, mediation model
 #args <- c(0,0,0,1,0) #sep tissues, full imputation, mediation model
 #args <- c(0,0,0,0,0) #sep tissues, full imputation, reactive model
 
