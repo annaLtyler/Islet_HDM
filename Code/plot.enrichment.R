@@ -5,7 +5,8 @@
 
 plot.enrichment <- function(enrichment, num.terms = 10, text.size = 1, 
 order.by = c("gprofiler", "p_value", "overlap_size", "term_size"), 
-decreasing = FALSE, plot.label = "Enrichment", max.term.size = NULL){
+decreasing = FALSE, plot.label = "Enrichment", max.term.size = NULL,
+title.color = "black"){
 
 if(class(enrichment) == "list"){
 		enrichment <- enrichment[[1]]
@@ -15,7 +16,7 @@ if(class(enrichment) == "list"){
 		plot.new()
 		plot.window(xlim = c(0, 1), ylim = c(0, 1))
 		text(x = 0.5, y = 0.5, "No Significant Enrichment")
-		text(x = 0.5, y = 0.75, plot.label)
+		text(x = 0.5, y = 0.75, plot.label, col = title.color)
 		return()
 		}
 		
@@ -59,7 +60,7 @@ if(class(enrichment) == "list"){
 	plot.window(xlim = c(0, 1), ylim = c(0, 1))
 	#write the column and row names of the matrix
 	par(xpd = TRUE)
-	text(x = 0.5, y = 1.1, plot.label)
+	text(x = 0.5, y = 1.1, plot.label, col = title.color)
 	text(x = x.pts, y = rep(y.start, (length(x.pts)-1)), colnames(sub.table), adj = 1, cex = text.size)
 	# y.pt <- y.start - maj.gap
 	y.pt <- y.pts[1]

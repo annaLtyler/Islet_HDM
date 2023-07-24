@@ -16,10 +16,26 @@ genes with low MGE.
 
 ```{r setup}
 library(here)
-mge.results <- "tissue_together-local_imp-_-complete_mediation"
+mge.results <- "tissue_together-full_imp-_-complete_mediation"
 mge.results.dir <- here("Results", "High_Dim_Med", mge.results)
+
+if(length(grep("full_imp", mge.results)) > 0){
+    #were local effects included in MGE calculations?
+    #This can be TRUE or FALSE, if the full model imputation was used.
+    kinship.effect.only <- TRUE
+}else{
+    #if the local imputation was used, we can't remove kinship effects.
+    kinship.effect.only <- FALSE
+    if(kinship.effect.only){stop("Can only remove local effects if full genetic model was used.")}
+}
+
+kinship.options <- c("local_effects_included", "local_effects_removed")
+kinship.text <- kinship.options[as.numeric(kinship.effect.only)+1]
+
 ```
 
+This workflow used `r mge.results`.
+And `r kinship.text`.
 
 ```{r load_code, message = FALSE, warning = FALSE}
 all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
@@ -30,7 +46,7 @@ load_libraries(all.packages, personal.library = TRUE)
 ```
 
 ```{r read_previous_results}
-mge <- readRDS(here("Results", "High_Dim_Med", mge.results, "Population_MGE_Loadings.RDS"))
+mge <- readRDS(here("Results", "High_Dim_Med", mge.results, paste0("Population_MGE_Loadings_", kinship.text, ".RDS")))
 transcript.loadings <- readRDS(here("Results", "High_Dim_Med", mge.results, "Loadings_Transcripts.RDS"))
 gene.tables <- readRDS(here("Data", "DO", "Gene_Tables.RDS"))
 ```
@@ -44,11 +60,11 @@ gene.tables <- readRDS(here("Data", "DO", "Gene_Tables.RDS"))
 #across animals. Transcripts with high MGE
 #have some effect on phenotype, and have heritable
 #variation across individuals.
+par(mfrow = c(2,2))
 for(tx in 1:length(mge)){
     if(length(mge[[tx]]) > 0){
-        gene.names <- gene.tables[[tx]]$symbol[match(names(mge[[tx]]), gene.tables[[tx]]$gene.id)]
-        common.genes <- intersect(gene.names, rownames(transcript.loadings[[tx]]))
-        plot.with.model(abs(mge[[tx]][match(common.genes, gene.names)]), 
+        common.genes <- intersect(names(mge[[tx]]), rownames(transcript.loadings[[tx]]))
+        plot.with.model(abs(mge[[tx]][common.genes]), 
             abs(transcript.loadings[[tx]][common.genes,]), xlab = "MGE",
             ylab = "Loading", main = names(mge)[tx])
     }
@@ -156,11 +172,6 @@ hum.mus.ortho <- read.delim(here("Data", "general", "human.mouse.orthologs.txt")
 ortho.tables <- lapply(gene.sets, 
     function(x) hum.mus.ortho[match(x, hum.mus.ortho[,"Human.Gene.Name"]),])
 
-#make lists with ensembl IDs and one with gene names
-#because our loadings and MGE scores are differently named.
-gsea.names.list <- lapply(ortho.tables, 
-    function(x) x[which(!is.na(x[,"Mouse.Ortholog.Name"])),"Mouse.Ortholog.Name"])
-
 gsea.ensembl.list <- lapply(ortho.tables, 
     function(x) x[which(!is.na(x[,"Mouse.Ortholog.Ensembl"])),"Mouse.Ortholog.Ensembl"])
 
@@ -179,7 +190,7 @@ names(t2d.gene.loadings) <- names(gene.sets)
 
 for(i in 1:length(gsea.names.list)){
     t2d.gene.loadings[[i]] <- lapply(transcript.loadings, 
-        function(x) abs(x[which(rownames(x) %in% gsea.names.list[[i]])]))
+        function(x) abs(x[which(rownames(x) %in% gsea.ensembl.list[[i]])]))
 }
 plot.grouped.boxes(t2d.gene.loadings, 
     main = "|Loadings| of orthologs to T2D-associated genes in humans",
@@ -199,7 +210,7 @@ t2d.gene.mge <- vector(mode = "list", length = length(gene.sets))
 names(t2d.gene.mge) <- names(gene.sets)
 
 for(i in 1:length(gsea.ensembl.list)){
-    t2d.gene.mge[[i]] <- lapply(mge[c(1,3,4,5)], 
+    t2d.gene.mge[[i]] <- lapply(mge, 
         function(x) abs(x[which(names(x) %in% gsea.ensembl.list[[i]])]))
 }
 plot.grouped.boxes(t2d.gene.mge, 
@@ -225,21 +236,21 @@ for(tx in 1:length(transcript.loadings)){
     #cat(names(transcript.loadings)[tx], "\n")
     stats <- sort(abs(transcript.loadings[[tx]][,1]), decreasing = TRUE)
     #plot(stats)
-    loading.fgsea[[tx]] <- fgsea(gsea.names.list, stats, scoreType = "pos")    
-    #plotEnrichment(gsea.names.list[["Strong Association"]],stats) + ggplot2::labs(title="Strong Association")
-    #plotEnrichment(gsea.names.list[["Weak Association"]], stats) + ggplot2::labs(title="Weak Association")
-    #plotEnrichment(gsea.names.list[["No Association"]], stats) + ggplot2::labs(title="No Association")
+    loading.fgsea[[tx]] <- fgsea(gsea.ensembl.list, stats, scoreType = "pos")    
+    #plotEnrichment(gsea.ensembl.list[["Strong Association"]],stats) + ggplot2::labs(title="Strong Association")
+    #plotEnrichment(gsea.ensembl.list[["Weak Association"]], stats) + ggplot2::labs(title="Weak Association")
+    #plotEnrichment(gsea.ensembl.list[["No Association"]], stats) + ggplot2::labs(title="No Association")
     #all.p <- loading.fgsea[[tx]]$"padj"
-    #barplot_with_num(signif(-log10(loading.p), 2), names = names(gsea.names.list))
+    #barplot_with_num(signif(-log10(loading.p), 2), names = names(gsea.ensembl.list))
 }
 
 loading.p <- sapply(loading.fgsea, function(x) x$"padj")
 colnames(loading.p) <- names(transcript.loadings)
-rownames(loading.p) <- names(gsea.names.list)
+rownames(loading.p) <- names(gsea.ensembl.list)
 cat.cols <- c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3")[1:length(gene.sets)]
 barplot(-log10(loading.p), beside = TRUE, col = cat.cols,
     main = "-log10(Enrichment Loading p)")
-legend("topright", fill = cat.cols, legend = names(gsea.names.list))
+legend("topright", fill = cat.cols, legend = names(gsea.ensembl.list))
 ```
 
 ## GSEA sorted by MGE
@@ -264,8 +275,8 @@ for(tx in 1:length(mge)){
     }
 }
 
-mge.p <- sapply(mge.fgsea[c(1,3,4,5)], function(x) x$"padj")
-colnames(mge.p) <- names(transcript.loadings)[c(1,3,4,5)]
+mge.p <- sapply(mge.fgsea, function(x) x$"padj")
+colnames(mge.p) <- names(transcript.loadings)
 rownames(mge.p) <- names(gsea.names.list)
 barplot(-log10(mge.p), beside = TRUE, col = cat.cols,
     main = "-log10(Enrichment MGE p)")

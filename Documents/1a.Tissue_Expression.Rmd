@@ -364,7 +364,9 @@ each tissue. Local eQTLs are defined as being within
 
 ```{r eqtl_fun}
 #this function separates local and distal eQTL and returns
-#their coefficients
+#their coefficients. If there is more than one local eQTL
+#for a transcript, this function returns the one with the 
+#highest LOD score.
 get_local_distal_coef <- function(transcript.id, eqtl.table, gene.table, bp.buffer = 4e6){
     
     tr.idx <- which(gene.table[,1] == transcript.id)
@@ -394,11 +396,18 @@ get_local_distal_coef <- function(transcript.id, eqtl.table, gene.table, bp.buff
             nearby <- union(which(above.min), which(below.max))
 
             if(length(nearby) > 0){
-                cis.coef <- eqtl.table[eqtl.idx[on.chr[nearby]],,drop=FALSE]
+                if(length(nearby) == 1){
+                  cis.coef <- eqtl.table[eqtl.idx[on.chr[nearby]],,drop=FALSE]
+                }
+                #if there is more than one local eQTL, take the one with the 
+                #highest LOD score
+                if(length(nearby) > 1){
+                  max.lod.idx <- which.max(eqtl.table[eqtl.idx[on.chr[nearby]],]$lod)
+                  cis.coef <- eqtl.table[eqtl.idx[on.chr[nearby[max.lod.idx]]],,drop=FALSE]
+                }
             }else{
                 cis.coef <- rep(NA, ncol(eqtl.table))
                 names(cis.coef) <- colnames(eqtl.table)
-
             }
 
             trans.coef.idx <- setdiff(eqtl.idx, eqtl.idx[on.chr[nearby]])
@@ -610,6 +619,7 @@ assess_shared <- function(eqtl.list, mb.buffer = 4){
 
 ```{r shared_local, fig.width = 8, fig.height = 5}
 #get all unique transcripts across all tissues.
+
 u_transcripts <- unique(unlist(lapply(tissue.data, function(x) x$annot.mrna[,1])))
 
 #find all local eQTL associated with each transcript across all tissues
@@ -1222,37 +1232,6 @@ barplot_with_num(all.counts,
   ylab = "count", main = "Number of Significant Genes")
 ```
 
-We looked at the relative contribution of local
-genotype vs. an interaction getween genotype and
-tissue. The following histogram shows the difference
-between the contribution from the interaction and
-the contribution from the local genotype. 
-
-Negative values indicate transcripts for which 
-the local genotype contributed more than the interaction
-to variation in gene expression. Positive values
-indicate transcripts for which the interaction 
-contributed more than the local genotype.
-
-The dot plot shows the maximum local LOD scores
-for these genes compared to the difference in 
-contributions from the local genotype and interaction.
-
-The transcripts with more contribution from the interaction
-tend to have lower LOD scores, but still have a range, particularly 
-for those transcripts for which the interaction and genotype
-contribute fairly evenly. 
-
-```{r rel_effect}
-int.diff <- prop.effect[,"Interaction"] - rel.effect.mat[,"Genotype"]
-par(mfrow = c(1,2))
-hist(int.diff, breaks = 100, xlab = "Difference", 
-  main = "Interaction - Genotype")
-abline(v = 0, col = "red")
-plot(int.diff, max.lod, xlab = "Difference", ylab = "Maximum LOD Score",
-  pch = 16)
-abline(v = 0, col = "red")
-```
 
 Tissue is the highest contributor to variation in 
 transcript level for the vast majority of genes.
@@ -1260,7 +1239,7 @@ There are a handful of genes for which genotype
 has the maximum influence, and even a few for 
 which the interaction has the largest effect.
 
-```{r contribution_coun}
+```{r contribution_count}
 max.cont <- apply(prop.effect, 1, function(x) if(!all(is.na(x))){which.max(x)}else{NA})
 highest.count <- sapply(1:ncol(prop.effect), function(x) length(which(max.cont == x)))
 barplot_with_num(highest.count, main = "Which contributes most?",
@@ -1382,6 +1361,7 @@ expr_across_alleles <- function(transcript.id, tissue.name){
   expr.list <- tx.effects$expression
   tissue.idx <- which(names(expr.list) == tissue.name)
   relative.effects <- tx.effects$rel.effects
+  gene.name <- tx.effects$gene.name
 
   par(mfrow = c(2,4))
   for(a in 1:ncol(nearest.geno)){
@@ -1444,11 +1424,10 @@ with no tissue-specific effects. The allele
 effects are very similar across all tissues.
 
 ```{r no_int, fig.width = 8, fig.height = 7}
+int.diff <- relative.effect[,"Interaction"] - relative.effect[,"Genotype"]
 sorted.int.diff <- sort(int.diff)
-trans.id <- names(sorted.int.diff)[1] #small interaction
+trans.id <- names(sorted.int.diff)[2] #small interaction
 plot_tissue_interaction(trans.id, FALSE, text.gap = 3, text.shift = 2)
-
-#plot_tissue_interaction(names(tissue.lower)[2], FALSE)
 ```
 
 ### Strong tissue-specific effect
@@ -1465,7 +1444,7 @@ in islet.
 high.int <- int.diff[which(max.lod > 50)]
 #boxplot(list(int.diff, high.int))
 sorted.high.int <- sort(high.int, decreasing = TRUE)
-trans.id <- names(sorted.high.int)[1] #large interaction
+trans.id <- names(sorted.high.int)[2] #large interaction
 plot_tissue_interaction(trans.id, FALSE)
 ```
 
@@ -1477,10 +1456,15 @@ expr_across_tissues(trans.id, "CAST")
 ```
 
 ```{r int_stronger_examples, eval = FALSE}
-trans.id <- names(int.stronger)[4]
+trans.id <- names(sorted.high.int)[4]
 plot_tissue_interaction(trans.id, FALSE)
-expr_across_alleles(trans.id, "Heart")
 expr_across_tissues(trans.id, "PWK")
+
+pdf("~/Desktop/test.pdf", width = 12, height = 7)
+for(tx in 1:length(tissue.names)){
+  expr_across_alleles(trans.id, tissue.names[tx])
+}
+dev.off()
 ```
 
 ```{r, eval = FALSE}
@@ -1492,7 +1476,11 @@ tissue.idx <- which(names(tissue.data) == tissue.name)
 trans.id  <- tissue.data[[tissue.idx]]$annot.mrna$gene.id[which(tissue.data[[tissue.idx]]$annot.mrna$symbol == gene.name)]
 
 plot_tissue_interaction(trans.id, FALSE)
+
+
 expr_across_tissues(transcript.id = trans.id, "CAST")
+expr_across_tissues(transcript.id = trans.id, "NZO")
 expr_across_alleles(transcript.id = trans.id, "Liver")
+
 ```
 

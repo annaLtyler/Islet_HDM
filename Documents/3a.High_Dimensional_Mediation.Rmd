@@ -42,13 +42,11 @@ For this workflow there are several parameters to set.
 
 ```{r get_args}
 #args <- commandArgs(trailingOnly=T)
-num.perm = 1000
+num.perm = 100
 
 #args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
-#args <- c(1,1,0,0,0) #merged tissues, local imputation, reactive model
 args <- c(1,0,0,1,0) #merged tissues, full imputation, mediation model
 #args <- c(0,0,0,1,0) #sep tissues, full imputation, mediation model
-#args <- c(0,0,0,0,0) #sep tissues, full imputation, reactive model
 
 #args <- c(1,1,1,1,0) #merged tissues, local imputation, mediation mode, weight adjusted
 
@@ -56,21 +54,64 @@ merge.tissues <- as.logical(args[1]) #if TRUE tissue transcriptome kernels are a
 use.local.imputation <- as.logical(args[2]) #if TRUE, locally imputed transcripts are used to generate polytranscriptomic risk scores. Otherwise transcripts imputed with the full genetic model are used.
 weight.adjusted <- as.logical(args[3]) #if TRUE, body weight is adjusted out of the phenotypes and transcriptome before running mediation
 complete.mediation <- as.logical(args[4]) #if TRUE use a mediation network. If FALSE use a reactive network
-delete_previous <- as.logical(args[5])
+delete_previous <- as.logical(args[5]) #if TRUE, previous results are overwritten
+
+kinship.effect.only <- FALSE #if TRUE, locally imputed gene expression is 
+                            #subtracted from the full model imputation to 
+                            #give gene expression imputed only from kinship
+
+#kinship.type = c("germline", "functional") 
+kinship.type = "germline" #The germline kinship matrix is the 
+                            #standard kinship matrix generated from genotype data.
+                            #the functional kinsihp matrix is a kinship matrix 
+                            #generated from the locally imputed transcripts. This
+                            #captures the part of the genome that is locally 
+                            #controlling gene expression at the time of measurement.
 
 if(is.na(merge.tissues)){stop("Please set the parameters for this run.")}
+if(use.local.imputation){
+    kinship.effect.only <- FALSE
+}
 
+#hdm options
 merge.text.options <- c("tissue_sep", "tissue_together")
-imputation.options <- c("full_imp", "local_imp")
 weight.options <- c("_", "weight_adjusted")
 mediation.options <- c("reactive", "complete_mediation")
+
+#mge options
+imputation.options <- c("full_imp", "local_imp")
+kinship.options <- c("local_effects_included", "local_effects_removed")
 
 merge.text <- merge.text.options[(as.numeric(merge.tissues)+1)]
 imp.text <- imputation.options[(as.numeric(use.local.imputation)+1)]
 weight.text <- weight.options[(as.numeric(weight.adjusted)+1)]
 mediation.text <- mediation.options[(as.numeric(complete.mediation)+1)]
+kinship.text <- kinship.options[as.numeric(kinship.effect.only)+1]
+kinship.type.text <- kinship.type
 
-exp.name <- paste(merge.text, imp.text, weight.text, mediation.text, sep = "-")
+#the mediation results depend on whether tissues are merged,
+#whether we have adjusted for weight, and which type of mediation
+#we are doing. MGE stats vary based on the imputation model. 
+#MGE-related labels are affixed to results pdfs, and can all 
+#be generated from the same mediation results.
+exp.name <- paste(merge.text, weight.text, mediation.text, 
+    paste(kinship.type.text, "kinship", sep = "_"), sep = "-")
+
+if(use.local.imputation){
+    mge.name <- imp.text
+}else{
+    if(kinship.effect.only){
+        mge.name <- "kinship_effects_only"
+    }else{
+        mge.name <- "all_genetic_effects"
+    }
+}
+
+if(merge.tissues){
+    max.tx <- 1
+}else{
+    max.tx <- length(tissue.names)
+}
 
 ```
 
@@ -78,8 +119,11 @@ This run had the following settings:
 
 * Tissue treatment: `r merge.text`
 * Imutation used: `r imp.text`
+* Genetic effects used: `r kinship.text`
 * Weight adjustment: `r weight.text`
 * Mediation type: `r mediation.text`
+* Kinship type: `r kinship.type.text`
+
 
 ```{r load_code}
 is.interactive = FALSE
@@ -95,7 +139,7 @@ for(i in 1:length(all.fun)){source(all.fun[i])}
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
 all.packages <- c("pheatmap", "qtl2", "gprofiler2", "Matrix", "RGCCA", 
-    "bnstruct", "igraph", "corpcor", "cluster",
+    "bnstruct", "igraph", "corpcor", "cluster", "RColorBrewer",
     "grid", "wordcloud", "stringr")
 load_libraries(all.packages, personal.library = TRUE)
 ```
@@ -145,9 +189,8 @@ names(tissue.lod) <- tissue.names
 
 ```
 
-
 ```{r match_expr}
-#make transcript-matched and individual matched expression data sets
+#make transcript-matched and individual-matched expression data sets
 common.expr <- Reduce("intersect", lapply(adj.expr, colnames))
 tx.matched.expr <- lapply(adj.expr, function(x) x[,common.expr])
 
@@ -166,7 +209,8 @@ adj.pheno <- readRDS(here("Data", "DO", "Clinical_Phenotypes_Adjusted.RDS"))
 
 ## Scale transcriptome and phenotypes
 
-to mean 0 and std 1 by gene
+Before kernelizing mean center and standardize 
+transcriptome and phenotypes (to mean 0 and std 1 by gene).
 
 ```{r scale}
 scaled.expr <- lapply(adj.expr, function(x) apply(x, 2, scale))
@@ -196,13 +240,56 @@ if(merge.tissues){
 
 ## Kinship matrix
 
-```{r kin}
+```{r germline_kin}
+
+#calculate the germline regardless of which kinship 
+#type we have specified. If we have specified the 
+#functional kinship, we will compare it to the 
+#germline kinship.
+
 kin.file <- here("Data", "DO", "overall.kinship.RDS")
 if(!file.exists(kin.file)){
     Kg = calc_kinship(genoprobs, "overall")
     saveRDS(Kg, kin.file)
 }else{
     Kg <- readRDS(kin.file)
+}
+
+```
+
+```{r functional_kin}
+#here we experiment with using the locally imputed transcripts
+#to generate the kinship matrix. This will focus signal on what
+#is locally regulated at the time of measurement, whereas the 
+#full kinship matrix captures developmental processes as well. 
+#Current local measurement is more targetable than developmental
+#processes. 
+
+if(kinship.type == "functional"){
+    local.tx.imp <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
+
+    #scale imputed transcripts
+    #scaled.tx.imp <- lapply(local.tx.imp, function(x) apply(x, 2, scale))
+    #for(i in 1:length(scaled.tx.imp)){
+    #    rownames(scaled.tx.imp[[i]]) <- rownames(local.tx.imp[[i]])
+    #}
+
+    #do not scale imputed transcripts
+    scaled.tx.imp <- local.tx.imp 
+    Kg.tx <- lapply(scaled.tx.imp, function(x) x %*% t(x) / dim(x)[2])
+
+    common.ind <- Reduce("intersect", lapply(Kg.tx, rownames))
+    total.Kg <- Reduce("+", lapply(Kg.tx, function(x) x[common.ind, common.ind]))
+    Kg.tx <- total.Kg/length(tissue.names)
+
+    common.ind <- intersect(rownames(Kg), rownames(Kg.tx))
+    plot.with.model(as.vector(Kg[common.ind, common.ind]), 
+        as.vector(Kg.tx[common.ind, common.ind]), xlab = "Germline Kinship",
+        ylab = "Functional Kinship", 
+        main = "Comparison of Germline and Functional Kinship Matrices")
+
+    #use our Kg.tx as the Kg
+    Kg <- Kg.tx
 }
 ```
 
@@ -215,16 +302,19 @@ gen.col <- grep("Generation", colnames(covar))
 do_gen <- lapply(adj.expr, function(x) covar[rownames(x),gen.col])
 gen_cent = lapply(do_gen, function(x) x %*% Diagonal(dim(x)[2], 1 / colSums(x)) %*% t(x)) # Centering matrix
 
+common.ind <- lapply(1:length(gen_cent), function(x) intersect(rownames(gen_cent[[x]]), rownames(Kg)))
+
 #subset kinship matrix to match the individuals in each tissue.
 #remove DO generation from kinship matrix
-Kg_sub = lapply(1:length(gen_cent), function(x) Kg[rownames(gen_cent[[x]]), rownames(gen_cent[[x]])])
-Kg_cent = lapply(1:length(gen_cent), function(x) Kg_sub[[x]] - gen_cent[[x]] %*% Kg_sub[[x]] - Kg_sub[[x]] %*% gen_cent[[x]] + gen_cent[[x]] %*% Kg_sub[[x]] %*% gen_cent[[x]])
+Kg_sub = lapply(1:length(gen_cent), function(x) Kg[common.ind[[x]], common.ind[[x]]])
+cent_sub <- lapply(1:length(gen_cent), function(x) gen_cent[[x]][common.ind[[x]], common.ind[[x]]])
+Kg_cent = lapply(1:length(gen_cent), function(x) Kg_sub[[x]] - cent_sub[[x]] %*% Kg_sub[[x]] - Kg_sub[[x]] %*% cent_sub[[x]] + cent_sub[[x]] %*% Kg_sub[[x]] %*% cent_sub[[x]])
 ```
 
 ## Build phenotype kernel
 
 ```{r pheno_kernel}
-#select a subset of phenotypes
+#select a subset of phenotypes if desired
 #sub.pheno <- scaled.pheno[,c("num_islets", "Ins_per_islet", "WPIC")]
 #sub.pheno <- scaled.pheno[,c("TG_6wk", "TG_10wk", "TG_14wk")]
 sub.pheno <- scaled.pheno
@@ -235,7 +325,6 @@ Kp = sub.pheno %*% t(sub.pheno) / dim(sub.pheno)[2]
 ```
 
 ## Perform high-dimensional mediation
-
 
 ```{r mediation}
 transcript_loading_file <- file.path(results.dir, "Loadings_Transcripts.RDS")
@@ -276,22 +365,29 @@ if(!file.exists(transcript_loading_file) || delete_previous){
         flags[tx] <- fit.result[[2]]
         stopping.reasons[tx] <- fit.result[[3]]
 
+        #calculate the trait loadings. This is the 
+        #correlation between the scaled phenotype
+        #and the phenotype score found by the model
+        trait_cor <- calc_loadings(model_scores[[tx]][,trait.col,drop = FALSE], 
+            sub.pheno)
+
+        #if the traits are mostly negatively correlated with 
+        #the scores, multiply the model scores by -1
+        #and recalculate
+        if(mean(trait_cor) < 0){
+            model_scores[[tx]] <- model_scores[[tx]] * -1
+            trait_cor <- calc_loadings(model_scores[[tx]][,trait.col,drop = FALSE], 
+                sub.pheno)
+        }
+        trait_loadings[[tx]] <- trait_cor
+    
         #calculate transcript loadings
         #This is the correlation between the scaled expression
         #and the transcript score found by the model
         expr_cor <- calc_loadings(model_scores[[tx]][,transcript.col,drop = FALSE], 
             scaled.expr[[tx]])
-        
-        #convert ensembl Ids to gene names and save loadings
-        transcript.names = gene.tables[[tx]]$symbol[match(rownames(expr_cor), gene.tables[[tx]]$gene.id)]
-        rownames(expr_cor) = transcript.names
         transcript_loadings[[tx]] <- expr_cor
-
-        #do the same for phenotype loadings
-        trait_cor <- calc_loadings(model_scores[[tx]][,trait.col,drop = FALSE], 
-            sub.pheno)
-        trait_loadings[[tx]] <- trait_cor
-    }
+        }
 
     saveRDS(transcript_loadings, transcript_loading_file)
     saveRDS(trait_loadings, trait_loading_file)
@@ -306,46 +402,53 @@ if(!file.exists(transcript_loading_file) || delete_previous){
 
 ## Causal Networks {.tabset .tabset-fade .tabset-pills}
 
-The following plots show the partial correlations between
+The following plot shows the partial correlations between
 the causal factor, the mediator, and the outcome. Line
 width corresponds to partial correlation, and line color
 corresponds with the sign of the partial correlation. Orange
 is negative and green is positive.
 
+If the tissues were run separately, there will be one plot
+per tissue. Otherwise, there will be just one plot for all tissues.
+
 ```{r plot_nets, results = "asis"}
-for(tx in 1:length(tissue.names)){
-    cat("###", tissue.names[tx], "\n")
+for(tx in 1:max.tx){
+ if(max.tx == 1){
+        cat("### All Tissues\n")
+    }else{
+        cat("###", tissue.names[tx], "\n")
+    }    
     tx.pcor <- pcor.shrink(model_scores[[tx]], verbose = FALSE)
     tx.pcor[lower.tri(tx.pcor, diag = TRUE)] <- 0
     net <- graph_from_adjacency_matrix(tx.pcor, weighted = TRUE, mode = "directed")
     e.weight <- E(net)$weight
     plot(net, edge.width = abs(e.weight*10), edge.color = sign(e.weight)+2, 
-        main = tissue.names[tx], layout = layout_on_grid, edge.label = signif(e.weight, 2),
+        layout = layout_on_grid, edge.label = signif(e.weight, 2),
         edge.label.cex = 1.5, vertex.size = 30)
-    cat("\n\n")
+    if(max.tx > 1){
+        cat("\n\n")
+    }
 }
 ```
 
 ## Permutations {.tabset .tabset-fade .tabset-pills}
 
 Run permutations to calulate a null distribution for the path
-coefficient. This is the correlation between the causal matrix
-and the outcome matrix. To do this, we shuffle the names of the
-mediator kernel. This decorrelates the 
+coefficient. This is the correlation between the causal matrix 
+and the outcome matrix. To do this, we shuffle the names of the 
+mediator kernel. 
+
+This decorrelates the 
 
 
 ```{r perm}
-
-if(merge.tissues){
-    max.tx <- 1
-}else{
-    max.tx <- length(tissue.names)
-}
-
-perm.file <- file.path(results.dir, "Permutations.RDS")
+perm.file <- file.path(results.dir, "Permuted_Stats.RDS") #holds permuted path coefficients and partial correlations between components
+null.mediator.file <- file.path(results.dir, "Permuted_Mediator_Scores.RDS") #holds permuted mediator scores, which can be used to calculate null transcript loadings and MGE
 
 if(!file.exists(perm.file) || delete_previous){
+
     all.perms <- vector(mode = "list", length = max.tx)
+    null.mediator.scores <- vector(mode = "list", length = max.tx)
 
     for(tx in 1:max.tx){
 
@@ -361,44 +464,69 @@ if(!file.exists(perm.file) || delete_previous){
         
         perm_stats <- matrix(NA, nrow = num.perm, ncol = 4)
         colnames(perm_stats) <- c("path_coef", "X-M", "M-Y", "X-Y")
-        
+        null.med.mat <- matrix(NA, nrow = nrow(mediator.kernel), ncol = num.perm)        
+        rownames(null.med.mat) <- rownames(mediator.kernel)
+
         for(p in 1:num.perm){
 
             if(is.interactive){report.progress(p, num.perm)}
             
-            #permute the mediator
-            perm_names <- sample(rownames(mediator.kernel))
-            perm_mediator <- mediator.kernel
-            rownames(perm_mediator) <- colnames(perm_mediator) <- perm_names
+            perm.mat <- "mediator"
 
-            perm_scores <- high_dim_med(causal.matrix = Kg_cent[[tx]], 
-                mediating.matrix = perm_mediator, outcome.matrix = outcome.kernel, 
-                min.weight.diff = 1e-5, max.iter = 15, scheme = "centroid", 
-                verbose = FALSE, kernel.c = TRUE, kernel.m = TRUE, 
-                kernel.o = TRUE)
+            if(perm.mat == "mediator"){
+                #permute the mediator
+                perm_names <- sample(rownames(mediator.kernel))
+                perm_mediator <- mediator.kernel
+                rownames(perm_mediator) <- colnames(perm_mediator) <- perm_names
+           
+                perm_scores <- high_dim_med(causal.matrix = Kg_cent[[tx]], 
+                    mediating.matrix = perm_mediator, outcome.matrix = outcome.kernel, 
+                    min.weight.diff = 1e-5, max.iter = 15, scheme = "centroid", 
+                    verbose = FALSE, kernel.c = TRUE, kernel.m = TRUE, 
+                    kernel.o = TRUE)
+            }
+            if(perm.mat == "kin"){
+                #permute the mediator
+                perm_names <- sample(rownames(Kg_cent[[tx]]))
+                perm_kin <- Kg_cent[[tx]][perm_names, perm_names]
+                rownames(perm_kin) <- colnames(perm_kin) <- rownames(Kg_cent[[tx]])
+
+                perm_scores <- high_dim_med(causal.matrix = perm_kin, 
+                    mediating.matrix = mediator.kernel, outcome.matrix = outcome.kernel, 
+                    min.weight.diff = 1e-5, max.iter = 15, scheme = "centroid", 
+                    verbose = FALSE, kernel.c = TRUE, kernel.m = TRUE, 
+                    kernel.o = TRUE)
+            }
         
+            #keep mediator model scores
+            null.med.mat[,p] <- perm_scores[[1]][,"Mediator"]
+            #keep stats
             perm_stats[p,] <- path_coef(perm_scores[[1]])
         }
 
     all.perms[[tx]] <- perm_stats
+    null.mediator.scores[[tx]] <- null.med.mat
     }
 
     saveRDS(all.perms, perm.file)
+    saveRDS(null.mediator.scores, null.mediator.file)
 
 }else{
     all.perms <- readRDS(perm.file)
+    null.mediator.scores <- readRDS(null.mediator.file)
 }
+
 ```
 
-The following plots show null distributions for each 
-tissue, unless tissues were merged, and then only one
-set of null distribution is shown. 
+The following plots show null distributions of the path 
+coefficient for each tissue, unless tissues were merged, 
+and then only one set of null distribution is shown. 
 
-The dot plot shows the 
-relationship between the X-M correlation and the M-Y
-correlation. The permutations show that you can make
-one of them quite high, but getting both high is very
-difficult and can only be done with the true data.
+The dot plot shows the relationship between the X-M 
+correlation and the M-Y correlation. The permutations 
+show that you can make one of them quite high, but 
+getting both high is very difficult and can only be 
+done with the true data.
 
 The histogram shows the null distribution of the path
 coefficient along with the observed path coeffient.
@@ -417,8 +545,8 @@ for(tx in 1:max.tx){
     tissue.path.stats <- path_coef(model_scores[[tx]])
     tissue.path.coef <- tissue.path.stats[1]
 
-    axis.max <- max(c(all.perms[[tx]][,c("X-M", "M-Y")], tissue.path.stats[c("X-M", "M-Y")]))
-    axis.min <- min(c(all.perms[[tx]][,c("X-M", "M-Y")], tissue.path.stats[c("X-M", "M-Y")]))
+    axis.max <- max(c(all.perms[[tx]][,c("X-M", "M-Y")], tissue.path.stats[c("X-M", "M-Y")]), na.rm = TRUE)
+    axis.min <- min(c(all.perms[[tx]][,c("X-M", "M-Y")], tissue.path.stats[c("X-M", "M-Y")]), na.rm = TRUE)
 
     plot(all.perms[[tx]][,"X-M"], all.perms[[tx]][,"M-Y"], xlim = c(axis.min, axis.max), 
         ylim = c(axis.min, axis.max), xlab = "X-M correlation", ylab = "M-Y correlation")
@@ -426,15 +554,130 @@ for(tx in 1:max.tx){
         col = "red", pch = 16)
     abline(0,1)
 
-    path.min <- min(c(all.perms[[tx]][,"path_coef"], tissue.path.coef))
-    path.max <- max(c(all.perms[[tx]][,"path_coef"], tissue.path.coef))
+    path.min <- min(c(all.perms[[tx]][,"path_coef"], tissue.path.coef), na.rm = TRUE)
+    path.max <- max(c(all.perms[[tx]][,"path_coef"], tissue.path.coef), na.rm = TRUE)
     hist(all.perms[[tx]][,"path_coef"], xlim = c(path.min, path.max), 
-        main = "Path Coef. Permutations", xlab = "")
+        main = "Path Coef. Permutations", xlab = "", breaks = 100)
     abline(v = tissue.path.coef, col = "red")
 
     cat("\n\n")
 }
 ```
+
+We also looked at the null distributions of transcript
+loadings. It would be interesting to be able to select
+transcripts with "significant" loadings in each tissue.
+However, the following plots show that most observed 
+transcript loadings are well outside the null distribution,
+so there is no cutoff that gives us a few transcripts to 
+analyze.
+
+
+```{r calc_null_loadings_mge}
+
+#read in imputed transcripts so we can calculate null population MGE
+if(use.local.imputation){
+    tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
+}else{
+    tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_genetic.RDS")))
+}
+
+#calculate null transcript loadings
+
+#also get a population-level MGE for each transcript and a null pop MGE
+#these are transcripts that are affecting the trait through their 
+#transcription AND have some population-level variation in transcription
+#these are the not necessarily the genes that are central to the disease
+#but ones that can vary enough to affect variation in outcome across 
+#individuals.
+
+null_loadings  <- null_MGE<- vector(mode = "list", length = length(transcript_loadings))
+names(null_loadings) <- names(null_MGE) <- names(transcript_loadings)
+pop.MGE <- vector(mode = "list", length = length(tissue.names))
+
+for(tx in 1:length(transcript_loadings)){
+    
+    tx.r2 <- apply(tissue.imp.gen[[tx]], 2, var)
+    common.transcripts <- intersect(names(tx.r2), rownames(transcript_loadings[[tx]]))
+
+    #calculate null loadings and MGE
+    if(merge.tissues){
+        null_loadings[[tx]] <- sapply(1:ncol(null.mediator.scores[[1]]), 
+            function(x) calc_loadings(null.mediator.scores[[1]][,x,drop=FALSE], 
+            scaled.expr[[tx]]))
+        rownames(null_loadings[[tx]]) <- rownames(transcript_loadings[[tx]])
+    }else{
+        null_loadings[[tx]] <- sapply(1:ncol(null.mediator.scores[[tx]]), 
+            function(x) calc_loadings(null.mediator.scores[[tx]][,x,drop=FALSE], 
+            scaled.expr[[tx]]))
+        rownames(null_loadings[[tx]]) <- rownames(transcript_loadings[[tx]])
+    }
+
+    null_MGE[[tx]] <- sapply(1:ncol(null_loadings[[tx]]), 
+        function(x) tx.r2[common.transcripts]*null_loadings[[tx]][common.transcripts,x,drop=FALSE])
+    rownames(null_MGE[[tx]]) <- common.transcripts    
+
+    pop.MGE[[tx]] <- tx.r2[common.transcripts]*transcript_loadings[[tx]][common.transcripts,1]
+}
+
+saveRDS(pop.MGE, file.path(results.dir, paste0("Population_MGE_Loadings_", mge.name, ".RDS")))
+
+```
+
+
+```{r load_dist, fig.width = 8, fig.height = 8}
+all.dens <- c(lapply(transcript_loadings, density), lapply(null_loadings, density))
+xmin <- min(sapply(all.dens, function(x) min(x$x)))
+xmax <- max(sapply(all.dens, function(x) max(x$x)))
+ymax <- max(sapply(all.dens, function(x) max(x$y)))
+
+par(mfrow = c(2,2))
+for(tx in 1:length(transcript_loadings)){
+    plot(density(null_loadings[[tx]]), type = "l", col = "gray", lwd = 3,
+        xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
+        main = names(transcript_loadings[tx]))
+    points(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3)
+    legend("topleft", col = c(tissue.cols[tx], "gray"), legend = c("observed", "null"), 
+        lty = 1, lwd = 3)
+}
+```
+
+
+## MGE 
+
+Mediated genetic effect (MGE) takes into account the
+effect of the transcript on the trait AND the strength
+of the eQTL for that transcript. If a transcript is very
+highly correlated with the trait, but doesn't have a large
+local eQTL, it will have a small MGE. Conversely, if a transcript
+has a large local eQTL, but isn't important for the trait, 
+it will also have a small MGE. Transcripts with high MGE
+have a combination of importance to the trait and a local 
+eQTL.
+
+The figure below shows the distribution of population MGE 
+for each tissue compared to null distributions. Again, the
+observed MGE values are mostly well outside the null 
+distribution. Basically, everything is significant.
+
+```{r mge_dist, fig.width = 8, fig.height = 8}
+
+all.dens <- c(lapply(pop.MGE, density), lapply(null_MGE, density))
+xmin <- min(sapply(all.dens, function(x) min(x$x)))
+xmax <- max(sapply(all.dens, function(x) max(x$x)))
+ymax <- max(sapply(all.dens, function(x) max(x$y)))
+
+par(mfrow = c(2,2))
+for(tx in 1:length(pop.MGE)){
+    plot(density(null_MGE[[tx]]), type = "l", col = "gray", lwd = 3,
+        xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
+        main = names(transcript_loadings[tx]))
+    points(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3)
+    legend("topleft", col = c(tissue.cols[tx], "gray"), legend = c("observed", "null"), 
+        lty = 1, lwd = 3)
+}
+```
+
 
 ## Correlation Plots {.tabset .tabset-fade .tabset-pills}
 
@@ -444,7 +687,7 @@ mediation of X -> M -> Y, the partial correlation between
 X and Y should be 0. We get pretty close here.
 
 ```{r plot_cor, results = "asis", fig.height = 6, fig.width = 6}
-
+#pdf("~/Desktop/test.pdf")
 for(tx in 1:length(tissue.names)){
     cat("###", tissue.names[tx], "\n")
     #find the correlations between the scores
@@ -478,13 +721,14 @@ for(tx in 1:length(tissue.names)){
     #pairs(curr_scores, main = paste(tissue.names[tx], "\nPath  Coef:", round(path.coef, 3)))
     cat("\n\n")
 }
-
+#dev.off()
 ```
 
-## Enrichment Plots {.tabset .tabset-fade .tabset-pills}
+## Enrichment of genes with high loadings {.tabset .tabset-fade .tabset-pills}
 
-The following plots show the functional enrichment for transcripts
-at the top and bottom of each list for each tissue.
+The following plots show the functional enrichment for 
+transcripts at the top and bottom of each list for each 
+tissue.
 
 This section also writes out the top and bottom transcripts
 for analysis in CMAP.
@@ -503,14 +747,12 @@ if(!file.exists(enrich.file) || delete_previous){
         top.genes <- sort(transcript_loadings[[tx]][,1], decreasing = TRUE)[1:top.n]
         top.enrich <- gost(names(top.genes), organism = "mmusculus")
         
-        top.id <- gene.tables[[tx]]$gene.id[match(names(top.genes), gene.tables[[tx]]$symbol)]
-        top.hum.id <- mouse_to_human_ensembl(mouse_ensembl = top.id, 
+        top.hum.id <- mouse_to_human_ensembl(mouse_ensembl = names(top.genes), 
             hum.mus.ortho = hum.mus.ortho)
 
         bottom.genes <- sort(transcript_loadings[[tx]][,1], decreasing = FALSE)[1:top.n]
         bottom.enrich <- gost(names(bottom.genes), organism = "mmusculus")
-        bottom.id <- gene.tables[[tx]]$gene.id[match(names(bottom.genes), gene.tables[[tx]]$symbol)]
-        bottom.hum.id <- mouse_to_human_ensembl(mouse_ensembl = bottom.id, 
+        bottom.hum.id <- mouse_to_human_ensembl(mouse_ensembl = names(bottom.genes), 
             hum.mus.ortho = hum.mus.ortho)
         
         cmap.table <- cbind(top.hum.id[,"Human.Entrez"], bottom.hum.id[,"Human.Entrez"])
@@ -525,10 +767,10 @@ if(!file.exists(enrich.file) || delete_previous){
 }else{
     all.enrich <- readRDS(enrich.file)
 }
-
 ```
 
 ```{r plot_enrichment, results = "asis", fig.width = 10, fig.height = 5, warning = FALSE, message = FALSE}
+#pdf("~/Desktop/test.pdf", width = 10, height = 5)
 for(tx in 1:length(tissue.names)){
     cat("###", tissue.names[tx], "{.tabset .tabset-fade .tabset-pills}\n")
 
@@ -539,7 +781,7 @@ for(tx in 1:length(tissue.names)){
         plot.label = paste(tissue.names[tx], "Positive Loadings"), 
         num.terms = 25, max.term.size = 5000)
 
-    cat("\n#### Negative Loadings\n")
+    cat("#### Negative Loadings\n")
     par(mfrow = c(1,2))
     plot.enrichment.wordcloud(all.enrich[[tx]]$bottom, 
         plot.label = paste(tissue.names[tx], "Negative Loadings"), 
@@ -547,12 +789,15 @@ for(tx in 1:length(tissue.names)){
 
     cat("\n\n")
 }
+#dev.off()
 ```
 
 ## Trait loadings
 
-The following plots show the loadings on traits for 
-each tissue.
+The following plot shows the loadings on traits.
+If the tissues were merged there will be one
+barplot showing the loadings. If tissues were
+run separately, the loadings are shown in a heatmap.
 
 This shows either 
 
@@ -605,28 +850,39 @@ the genome on the phenome, multiple plots will be created in
 the appropriate results folder. They are too diverse to put into
 the html. Filenames and descriptions are the following:
 
-1. Population_MGE_Enrichments_tissue_name
+1. Transcript_Loadings_tissue_name
+    We calculated transcript loadings for all transripts in 
+    all tissues. If the loading on body weight is positive then: 
+    positive transcript loadings indicate increased
+    expression is correlated with an increase in phenotype score 
+    (more diabetes). And negative transcripts loadings indicate 
+    that increased expression is correlated with a decrease in 
+    phenotype score (less diabetes). That relationship is reversed
+    if loading on body weight is negative.
+
+2. Population_MGE_Enrichments_tissue_name
     We calculated population-level MGE for each
     transcript in each tissue. These plots show the enrichments of the
     top and bottom of each list
 
-2. Individual_Level_MGE_tissue_name
+3. Individual_Level_MGE_tissue_name
     A histogram of the MGE across the transcriptome
     for a single animal. The animal chosen is the one with the lowest
     predicted phenotype based on MGE.
 
-3. MGE_Distribution_tissue_name
+4. MGE_Distribution_tissue_name
     The MGE distributions across all animals
     shown with their phenotypic prediction based on the mean of the
     transcriptomic score. When we do the tissues separately, there 
     is visible difference between the top and bottom animals. It
     is not really visible when the tissues are merged.
 
-4. MGE_v_Trait_PC_tissue_name
-    This figure plots the predicted phenotype based on MGE 
+5. PtRS_v_Trait_PC_tissue_name
+    This figure plots the predicted phenotype based on MGE
+    also known as the polytranscriptomic risk score (PtRS)
     vs. the first PC of the trait matrix.
 
-5. Clustered_Enrichment_tissue_name
+6. Clustered_Enrichment_tissue_name
     We calculated functional enrichments for strongest effect genes
     in each individual. There are too many enrichments to show, so
     we clustered them based on GO term similarity and show the results
@@ -637,7 +893,7 @@ the html. Filenames and descriptions are the following:
     each two times. Once sorted by predicted phenotype score, and once sorted
     by enrichments.
 
-6. Large_Effect_Transcript_Decomp_tissue_name
+7. Large_Effect_Transcript_Decomp_tissue_name
     These plots show the first two PCs of the actual expression of the 
     transcripts with the largest population level MGE
     scores. We show the decomposition both by individuals and by transcripts.
@@ -705,29 +961,41 @@ if(mediation.text == "complete_mediation"){
         tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_genetic.RDS")))
     }
 
+    if(kinship.effect.only){
+        #subtract the local effect off the full effect
+        local.effect <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
+        distal.imp.gen <- lapply(1:length(local.effect), function(x) tissue.imp.gen[[x]] - local.effect[[x]])
+        tissue.imp.gen <- distal.imp.gen
+        names(tissue.imp.gen) <- names(local.effect)
+    }
+
     #Get the first principle componenet of the phenotype matrix
     trait.decomp <- plot.decomp(sub.pheno, plot.results = FALSE, pc = 3)
     trait.pc <- trait.decomp$u
     rownames(trait.pc) <- rownames(sub.pheno)
 
-    large.effect.size = 0.5 #minimum effect size that is considered large
+    #large.effect.size = 0.5 #minimum effect size that is considered large
     enrichment.num <- 250 #number of transcripts to use to look for enrichments of top and bottom of lists
     enrich.sig.thresh = 1e-3 #maximum p value for significant enrichments.
     num.common.genes <- 150
 
     #For each tissue, calculate the MGE
     #exerted by each transcript on the phenotype
-    common.large.effect.genes <- pop.MGE <- vector(mode = "list", length = length(tissue.names))
+    common.large.effect.genes <- vector(mode = "list", length = length(tissue.names))
     names(common.large.effect.genes) <- names(pop.MGE) <- tissue.names
     for(tx in 1:length(tissue.names)){
 
         tx.idx <- which(names(tissue.imp.gen) == tissue.names[tx])
         if(length(tx.idx) == 0){next()} #we don't have all the tissues imputed yet.
 
+        pdf(file.path(results.dir, paste0("Transcript_Loadings_", tissue.names[tx], ".pdf")), width = 5, height = 5)
         trans.load <- transcript_loadings[[tx]]
-        transcript.id <- gene.tables[[tx]]$gene.id[match(rownames(trans.load), gene.tables[[tx]]$symbol)]
-        rownames(trans.load) <- transcript.id
-        
+        transcript.id <- rownames(trans.load)
+        hist(trans.load, breaks = 100, xlab = "Loading", 
+            main = paste(tissue.names[tx], "Transcript Loading distribution"))
+        abline(v = 0, col = "red")
+        dev.off()
+
         common.transcripts <- intersect(transcript.id, colnames(tissue.imp.gen[[tx.idx]]))
         transcript.MGE <- apply(tissue.imp.gen[[tx.idx]][,common.transcripts], 1, function(x) x*trans.load[common.transcripts,])
         expr.names <- gene.tables[[tx]]$symbol[match(rownames(transcript.MGE), gene.tables[[tx]]$gene.id)]
@@ -735,21 +1003,12 @@ if(mediation.text == "complete_mediation"){
         ind.score <- colMeans(transcript.MGE)
         mean.order <- order(ind.score)
 
-        #Do the effect sizes follow a power law?
+        #Do the effect sizes follow a power law? No.
         #a <- hist(as.vector(abs(transcript.MGE)), plot = FALSE, breaks = 25)
         #plot(log10(a$mids), log10(a$counts+1e-6), xlab = "log Effect Size", 
         #    ylab = "log Frequency", main = paste(tissue.names[tx], "\nlog-log plot of effect size vs. frequency"))
 
-        #also get a population-level MGE for each transcript
-        #these are transcripts that are affecting the trait through their 
-        #transcription AND have some population-level variation in transcription
-        #these are the not necessarily the genes that are central to the disease
-        #but ones that can vary enough to affect variation in outcome across 
-        #individuals.
-        #get imputed R2 
-        tx.r2 <- apply(tissue.imp.gen[[tx.idx]], 2, var)
-        pop.MGE[[tx]] <- tx.r2[common.transcripts]*trans.load[common.transcripts,1]
-        
+    
         #write out cmap tables for these too
         top.MGE <- sort(pop.MGE[[tx]], decreasing = TRUE)[1:200]
         top.hum.id <- mouse_to_human_ensembl(mouse_ensembl = names(top.MGE), 
@@ -761,17 +1020,16 @@ if(mediation.text == "complete_mediation"){
         MGE.cmap.table <- cbind(top.hum.id[,"Human.Entrez"], bottom.hum.id[,"Human.Entrez"])
         colnames(MGE.cmap.table) <- c("Positive", "Negative")
         write.table(MGE.cmap.table, 
-            file.path(results.dir, paste0("CMAP_Pop_MGE_", tissue.names[tx], ".txt")),
+            file.path(results.dir, paste0("CMAP_Pop_MGE_", tissue.names[tx], "_", mge.name, ".txt")),
             quote = FALSE, row.names = FALSE, sep = "\t")
 
-
-        #hist(pop.MGE, breaks = 100)
+        #hist(pop.MGE[[tx]], breaks = 100)
         pop.neg.MGE <- gost(names(sort(pop.MGE[[tx]]))[1:enrichment.num], 
             organism = "mmusculus", sources = c("GO", "KEGG", "REACTOME"))
         pop.pos.MGE <- gost(names(sort(pop.MGE[[tx]], decreasing = TRUE))[1:enrichment.num], 
             organism = "mmusculus", sources = c("GO", "KEGG", "REACTOME"))
 
-        pdf(file.path(results.dir, paste0("Population_MGE_Enrichments_", tissue.names[tx], ".pdf")), width = 10, height = 5)
+        pdf(file.path(results.dir, paste0("Population_MGE_Enrichments_", tissue.names[tx], "_", mge.name, ".pdf")), width = 10, height = 5)
        
          plot.enrichment(pop.pos.MGE, max.term.size = 5000,
             plot.label = "Transcripts with population-level positive MGE",
@@ -793,7 +1051,7 @@ if(mediation.text == "complete_mediation"){
         dev.off()
 
         #par(mfrow = c(1,2))
-        png(file.path(results.dir, paste0("Individual_Level_MGE_", tissue.names[tx], ".png")), width = 5, height = 5, units = "in", res = 200)
+        png(file.path(results.dir, paste0("Individual_Level_MGE_", tissue.names[tx], "_", mge.name, ".png")), width = 5, height = 5, units = "in", res = 200)
         hist_with_points(transcript.MGE[,mean.order[[1]]], breaks = 100, 
             col = "gray",
             main = "Polygenic MGE\non Phenotype Space\nFor Lowest Individual",
@@ -801,7 +1059,7 @@ if(mediation.text == "complete_mediation"){
         abline(v = mean(transcript.MGE[,mean.order[1]]), col = "red")
         dev.off()
          
-        png(file.path(results.dir, paste0("MGE_Distribution_", tissue.names[tx], ".png")), width = 10, height = 5, units = "in", res = 200)
+        png(file.path(results.dir, paste0("MGE_Distribution_", tissue.names[tx], "_", mge.name, ".png")), width = 10, height = 5, units = "in", res = 200)
         #make a boxplot of the top and bottom extremes of the distribution
         top.ind <- 10
         top.names <- names(sort(ind.score, decreasing = TRUE))[1:top.ind]
@@ -828,7 +1086,7 @@ if(mediation.text == "complete_mediation"){
         dev.off()
 
 
-        pdf(file.path(results.dir, paste0("MGE_v_Trait_PC", tissue.names[tx], ".pdf")), width = 5, height = 5)
+        pdf(file.path(results.dir, paste0("PtRS_v_Trait_PC", tissue.names[tx], "_", mge.name, ".pdf")), width = 5, height = 5)
         common.ind <- intersect(rownames(sub.pheno), colnames(transcript.MGE))
         plot.with.model(ind.score[common.ind], trait.pc[common.ind,1], 
             xlab = "Transcriptionally Predicted Phenotype", 
@@ -840,7 +1098,7 @@ if(mediation.text == "complete_mediation"){
         calc_ind_enrich = FALSE
         if(calc_ind_enrich){
             ind.down.enrichment.file <- file.path(results.dir, 
-                paste0("Individual_Enrichment_Down_", tissue.names[[tx]], ".RDS"))
+                paste0("Individual_Enrichment_Down_", tissue.names[[tx]], "_", mge.name, ".RDS"))
             if(!file.exists(ind.down.enrichment.file)){
                 ind.down.enrich <- apply(transcript.MGE, 2, 
                     function(x) gost(rownames(transcript.MGE)[order(x)[1:enrichment.num]], 
@@ -851,7 +1109,7 @@ if(mediation.text == "complete_mediation"){
             }
 
             ind.up.enrichment.file <- file.path(results.dir, 
-                paste0("Individual_Enrichment_Up_", tissue.names[tx], ".RDS"))
+                paste0("Individual_Enrichment_Up_", tissue.names[tx], "_", mge.name, ".RDS"))
             if(!file.exists(ind.up.enrichment.file)){
                 ind.up.enrich <- apply(transcript.MGE, 2, 
                     function(x) gost(rownames(transcript.MGE)[order(x, decreasing = TRUE)[1:enrichment.num]], 
@@ -871,7 +1129,7 @@ if(mediation.text == "complete_mediation"){
             all_enrich <- rbind(clustered_up_enrich, clustered_down_enrich)
 
             pdf(file.path(results.dir, paste0("Clustered_Enrichment_", 
-                tissue.names[tx], ".pdf")), width = 18, height = 10)
+                tissue.names[tx], "_", mge.name, ".pdf")), width = 18, height = 10)
                 
                 left.mar = 20
                 ordered.names <- colnames(transcript.MGE)[mean.order]
@@ -948,6 +1206,8 @@ if(mediation.text == "complete_mediation"){
         #dev.off()
 
         #looking at large-effect transcripts
+        #take top scores
+        large.effect.size <- sort(as.vector(abs(transcript.MGE)))[round(length(transcript.MGE)*0.99)]
         large.effect <- apply(transcript.MGE, 2, function(x) which(abs(x) > large.effect.size))
         all.large <- unlist(large.effect)
         u_large <- unique(all.large)
@@ -971,7 +1231,7 @@ if(mediation.text == "complete_mediation"){
         #abline(h = 0)
         
 
-        pdf(file.path(results.dir, paste0("Large_Effect_Transcript_Decomp", tissue.names[tx], ".pdf")), width = 10, height = 5)
+        pdf(file.path(results.dir, paste0("Large_Effect_Transcript_Decomp", tissue.names[tx], "_", mge.name, ".pdf")), width = 10, height = 5)
         large.mat <- scaled.expr[[tx]][,u_large]
         par(mfrow = c(1,2))
         pop.MGE.transcript.col <- colors.from.values(pop.MGE[[tx]], 
@@ -989,7 +1249,171 @@ if(mediation.text == "complete_mediation"){
     #cat(names(common.large.effect.genes[[1]]), sep = "\n")
 }
 
-saveRDS(pop.MGE, file.path(results.dir, "Population_MGE_Loadings.RDS"))
+```
+
+## Tissue of Action
+
+How are transcript loadings distributed across tissues?
+High loadings in one tissue tells us the tissue of action 
+for individual genes. Are there commonalities across tissues?
+
+The following code generates a clustered heatmap of transcript
+loadings across tissues for which each transcript has a z score
+of at least 2.5 in at least one of the tissues. It looks for 
+functional enrichments in each of the clusters and plots the
+results both with quick labels for each cluster, as well as 
+more detailed information about the enrichments of each cluster.
+
+The plots are printed to a pdf with the title TOA_Transcript_Loadings.pdf
+
+```{r get_max_enrich}
+#This function gets the most significant term out of an
+#enrichment table returned from gost.
+
+get_max_enrich <- function(enrichment){
+    if(is.null(enrichment)){
+        return("no enrichment")
+    }
+    min.p.idx <- which.min(enrichment[[1]][,"p_value"])
+    sig.term <- enrichment[[1]][min.p.idx,"term_name"]
+    return(sig.term)
+}
+
+#This function takes in a list of loadings or MGE values.
+#The list should consist of named vectors, where the names
+#are the transcript names.
+#filters them for high values based on the given threshold,
+#and clusters into groups. It picks the number of clusters
+#that give the best cluster separation in k-means clustering
+#It looks for functional enrichments of each cluster, and then
+#plots a heatmap of the clusters along with more detailed 
+#reports of the enrichment of each.
+#z.thresh is the z.score threshold to use for selecting
+#transcripts.
+cluster_values <- function(value.list, z.thresh = 3, k.seq = 3:20,
+    pdf.filename = "TOA_Transcript_Loadings.pdf"){
+
+    #threshold values above Z score threshold
+    scaled.values <- lapply(value.list, rankZ)
+    high.values <- lapply(scaled.values, function(x) which(abs(x) > z.thresh))
+    all.high <- unique(unlist(lapply(1:length(high.values), function(x) names(value.list[[x]])[high.values[[x]]])))
+    all.high.idx <- sapply(value.list, function(x) match(all.high, names(x)))
+
+    #combine into a matrix that contains all unique transcripts
+    #above the threshold
+    value.mat <- sapply(1:length(value.list), 
+        function(x) value.list[[x]][all.high.idx[,x]])
+    rownames(value.mat) <- all.high
+    colnames(value.mat) <- tissue.names
+    #set NAs to 0
+    value.mat[which(is.na(value.mat))] <- 0
+
+    #use k-means clustering to figure out how many clusters
+    #there are in this matrix. Set the number of clusters to
+    #test with k.seq
+    test.k <- test.pam.k(value.mat, plot.results = FALSE, kseq = k.seq)
+    mean.cl.width <- sapply(test.k$cl.width, mean)
+    #barplot(mean.cl.width)
+    #select the number of clusters with the best separation among clusters.
+    k = as.numeric(names(mean.cl.width)[which.max(mean.cl.width)])
+
+    #cluster the rows of the value matrix
+    gene.clust <- hclust(dist(value.mat))
+
+    #cut the dendrogram based on the best number of clusters selected above.
+    gene.groups <- cutree(gene.clust, k = k)
+
+    #look for functional enrichment of the gene clusters
+    group.gene.names <- lapply(1:k, 
+        function(x) names(gene.groups)[which(gene.groups == x)])
+    group.enrich <- lapply(group.gene.names, 
+        function(x) gost(x, organism = "mmusculus", 
+        source = c("GO", "REACTOME", "KEGG", "WP", "CORUM", "HP")))
+    names(group.enrich) <- paste("Group", 1:k)
+
+    #select the term with the smallest p value to represent 
+    #each group
+    group.labels <- sapply(group.enrich, get_max_enrich)
+    enrich.labels <- lapply(1:length(group.enrich), 
+        function(x) rep(group.labels[x], length(group.gene.names[[x]])))
+
+    #create a data frame so we can annotate the groups in pheatmap
+    enrich.df <- data.frame(as.factor(unlist(enrich.labels)))
+    rownames(enrich.df) <- unlist(group.gene.names)
+    colnames(enrich.df) <- "Enrichment"
+    class_cols <- c(brewer.pal(12, "Paired"), "gray", "black")
+    names(class_cols) <- group.labels
+    ann_cols <- list("Enrichment" = class_cols[1:length(group.labels)])
+
+    pdf(file.path(results.dir, pdf.filename), width = 7, height = 15)
+    pheatmap(value.mat, annotation_row = enrich.df, 
+        show_rownames = FALSE, cluster_cols = FALSE, annotation_colors = ann_cols)
+
+    #further descriptions of enrichments for groups
+    par(mfrow = c(5,1), mar = c(2,4,2,4))
+    group.labels <- levels(enrich.df[,1])
+    for(g in 1:length(group.enrich)){
+        group.enrich.name = get_max_enrich(group.enrich[[g]])
+        group.col <- ann_cols[[1]][which(names(ann_cols[[1]]) == group.enrich.name)]
+        plot.enrichment(group.enrich[[g]], 
+            plot.label = paste("Group:", group.enrich.name),
+            num.terms = 20, title.color = group.col, order.by = "p_value")
+    }
+    dev.off()
+
+    invisible(value.mat)
+
+}
+```
+
+There are lots of very strong loadings among the transcripts. 
+These are transcripts that are highly related to the traits,
+but do not necessarily have local eQTL in the population.
+
+Transcripts without local eQTL are those that are highly
+constrained in this population and not allowed to vary 
+based on genetics. But they can still have a large effect
+on the trait when they do vary. We would expect genes in this
+list to have a large impact if manipulated artificially, say
+with a KO.
+
+The loading patterns are quite tissue-specific. Clusters
+of genes tend to be active in individual tissues. There are some
+shared clusters:
+    Adipose and liver share negative loadings in the macromolecule
+        biosynthesis cluster
+    Adipose and skeletal muscle share positive loadings in the 
+        transmembrane activity cluster
+
+```{r toa_load}
+
+transcript.loading.list <- lapply(transcript_loadings, function(x) x[,1])
+
+toa.loading.mat <- cluster_values(transcript.loading.list, z.thresh = 3, 
+    k.seq = 3:20, pdf.filename = "TOA_Transcript_Loadings.pdf")
+
+#pdf("~/Desktop/high_loadings.pdf", width = 5, height = 20)
+#pheatmap(toa.loading.mat, annotation_row = enrich.df, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE, annotation_color = ann_cols)
+#pheatmap(toa.loading.mat, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE)
+#dev.off()
+```
+
+How is population-level MGE distributed across tissues?
+High MGE in one tissue tells us the tissue of action for
+QTLs. Are there commonalities across tissues?
+
+Transcripts with high MGE are both important to the 
+traits and have local eQTL in the population. These 
+
+```{r toa_mge}
+
+toa.mge.mat <- cluster_values(pop.MGE, z.thresh = 3, k.seq = 3:20, 
+    pdf.filename = "TOA_MGE.pdf")
+
+#pdf("~/Desktop/test.pdf", width = 5, height = 15)
+#pheatmap(toa.mat, annotation_row = enrich.df, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE)
+#pheatmap(toa.mat, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE)
+#dev.off()
 ```
 
 ## Loadings vs. LOD {.tabset .tabset-fade .tabset-pills}
@@ -1014,13 +1438,14 @@ so that the gene names are searchable and highlightable.
 ```{r lod_v_loading}
 if(mediation.text == "complete_mediation"){
     for(tx in 1:length(tissue.names)){
-        cat("###", tissue.names[tx], "\n")
+        #cat("###", tissue.names[tx], "\n")
 
         if(length(pop.MGE[[tx]]) == 0){next()}
 
         eqtl.table <- tissue.lod[[tx]]
 
-        gene.id <- gene.tables[[tx]]$gene.id[match(rownames(transcript_loadings[[tx]]), gene.tables[[tx]]$symbol)]
+        gene.id <- rownames(transcript_loadings[[tx]])
+        gene.name <- gene.tables[[tx]]$symbol[match(gene.id, gene.tables[[tx]]$gene.id)]
         gene.lod <- lapply(gene.id, function(x) eqtl.table$lod[which(eqtl.table$gene.id == x)])
         max.lod <- sapply(gene.lod, function(x) if(length(x) > 0){max(x)}else{3})
         MGE.col <- colors.from.values(pop.MGE[[tx]][gene.id], use.pheatmap.colors = TRUE)
@@ -1030,17 +1455,18 @@ if(mediation.text == "complete_mediation"){
         MGE.order <- order(abs(pop.MGE[[tx]][gene.id]), decreasing = FALSE, na.last = FALSE)
         xV <- max.lod[MGE.order] 
         yV <- transcript_loadings[[tx]][,1][MGE.order]
+
         
-        pdf(file.path(results.dir, paste("LOD_vs_Loading_", tissue.names[tx], ".pdf")), width = 10, height = 8)
+        pdf(file.path(results.dir, paste("LOD_vs_Loading_", tissue.names[tx], "_", mge.name, ".pdf")), width = 10, height = 8)
         layout(matrix(c(1,1,2,3), ncol = 2, byrow = FALSE), widths = c(1, 0.5))
         par(mar = c(4,4,4,0))
         plot(xV, yV, xlab = "Maximum LOD", ylab = "Loading", 
             main = tissue.names[tx], col = MGE.col[MGE.order], 
             pch = 16, cex = 0.5)
         text(tail(xV, num.label), tail(yV, num.label), 
-            labels = names(tail(yV, num.label)), pos = 4, cex = 0.7)
+            labels = tail(gene.name[MGE.order], num.label), pos = 4, cex = 0.7)
         abline(h = 0)  
-        top.genes <- names(tail(yV, num.label))
+        top.genes <- tail(gene.name[MGE.order], num.label)
         gene.MGE <- tail(pop.MGE[[tx]][gene.id][MGE.order], num.label)
         pos.idx <- which(gene.MGE > 0)
         pos.order <- order(gene.MGE[pos.idx], decreasing = TRUE)

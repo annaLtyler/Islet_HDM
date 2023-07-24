@@ -1,0 +1,143 @@
+---
+title: "MGE Comparison"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+
+The purpose of this workflow is to make sense of the
+mediated genetic effect (MGE) statistics derived from 
+different genomic components.
+
+MGE is a number that is calculated for each transcript.
+It can be calculated for each individual, in which case
+it is the transcript loading times the genetic effect on 
+that transcript in that individual. Or it can be calculated
+for the overall population, in which it is the transcript
+loading times the genetic variance component for the transcript
+across the population. 
+
+In the first case, a transcript with a positive loading and
+a high imputed value gets a high MGE for the individual. 
+That individual is predicted to have high expression based
+on their genotype (local or distal), and the transcript has
+a positive effect on trait. 
+
+In the second case, a transcript with a positive loading
+and high variance across the population will have a high
+MGE. This means that the transcript has a lot of genetically
+controlled variation across the population, and that 
+this variation affects the phenotype. 
+
+We will focus here on the individual-level MGE. The mean 
+MGE across all transcripts for a given individual it is
+polytranscriptomic risk score (PtRS). 
+
+PtRS values are a prediction of where the individual will
+land in phenotype space given its genome. 
+
+PtRS values are highly correlated with the first principal
+component of the trait matrix, indicating that PtRS does
+a good job predicting phenotype. This is the case for all
+tissues, although the correlation is tighter in some tissues
+compared to others. 
+
+The confusing thing is that PtRS is correlated with phenotype
+regardless of which genetic component is used to calculate MGE.
+
+The local genetic component, the full genetic component, and the
+kinship-only genetic component all lead to good PtRS values, even
+though they use different, uncorrelated estimates of gene expression.
+
+```{r param}
+library(here)
+exp.name <- "tissue_together-_-complete_mediation"
+results.dir <- here("Results", "High_Dim_Med", exp.name)
+```
+
+
+```{r load_code}
+
+results.dir <- here("Results", "High_Dim_Med", exp.name)
+if(!file.exists(results.dir)){dir.create(results.dir, recursive = TRUE)}
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+```
+
+```{r read_data}
+#read in imputed genetic effects
+local.imp <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
+full.imp <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_genetic.RDS")))
+distal.imp <- lapply(1:length(local.imp), function(x) full.imp[[x]] - local.imp[[x]])
+tissue.names <- names(local.imp)
+names(distal.imp) <- tissue.names
+
+#read in transcript loadings
+transcript.loadings <- readRDS(file.path(results.dir, "Loadings_Transcripts.RDS"))
+```
+
+We first looked at the correlation between the locally imputed
+transcripts and the distally imputed transcripts. The box plots
+below show that the local and distally computed transcripts are
+positively correlated with each other. We'll need to go back
+to the imputation to figure out why this is.
+
+```{r cor, fig.height = 8, fig.width = 8}
+local.distal.cor <- vector(mode = "list", length = length(tissue.names))
+names(local.distal.cor) <- tissue.names
+for(tx in 1:length(local.imp)){
+    local.distal.cor[[tx]] <- sapply(1:ncol(local.imp[[tx]]), function(x) cor(local.imp[[tx]][,x], distal.imp[[tx]][,x]))
+}
+ylim <- get_plot_bounds(min(unlist(local.distal.cor)), 
+    max(unlist(local.distal.cor)), scale.factor = 100, 
+    return.even = TRUE, center = TRUE)
+
+boxplot(local.distal.cor, ylim = ylim, ylab = "Local-Distal Transcript Correlation")
+abline(h = 0)
+```
+
+```{r calc_mge}
+calc_mge <- function(trans.loadings, imputed.genetic.effect, 
+    type = c("individual", "population")){
+
+    type = type[1]
+    common.transcripts <- intersect(rownames(trans.loadings), colnames(imputed.genetic.effect))
+
+    if(type == "individual"){
+        MGE <- apply(imputed.genetic.effect[,common.transcripts], 1, function(x) x*trans.loadings[common.transcripts,])
+    }else{
+        tx.r2 <- apply(imputed.genetic.effect, 2, var)
+        MGE <- tx.r2[common.transcripts]*trans.loadings[common.transcripts,1]
+
+    }
+    return(MGE)
+}
+```
+
+The following plots show that the PtRS values calculated
+from the locally imputed transcripts and the PrTS values
+calculated from the distally imputed transcripts are highly
+correlated. The weak correlations from above result in very
+highly correlated PtRS values.
+
+
+```{r comp_MGE, fig.height = 8, fig.width = 8}
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    local.mge <- calc_mge(transcript.loadings[[tx]], local.imp[[tx]], type = "individual")
+    distal.mge <- calc_mge(transcript.loadings[[tx]], distal.imp[[tx]], type = "individual")
+
+    local.ptrs <- colMeans(local.mge)
+    distal.ptrs <- colMeans(distal.mge)
+    plot.with.model(local.ptrs, distal.ptrs, xlab = "local PtRS", 
+        ylab = "distal PtRS", report = "cor.test", main = tissue.names[tx])
+}
+```

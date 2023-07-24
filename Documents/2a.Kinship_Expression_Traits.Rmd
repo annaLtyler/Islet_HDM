@@ -90,3 +90,62 @@ imageWithTextColorbar(trait.loadings, use.pheatmap.colors = TRUE, cex = 1, bar.l
 #dev.off()
 ```
 
+## Transcripts, Traits, and eQTL
+
+The figures below show correlations between eQTL LOD
+scores and trait correlations.
+
+```{r max_lod}
+#calculate the maximum LOD score for each transcript
+tissue.data <- lapply(tissue.names, 
+    function(x) readRDS(here("Data", "DO", paste0(x, ".RDS"))))
+
+get_max_lod <- function(eqtl.data){
+    all.tx <- unique(eqtl.data$gene.id)
+    max.lod <- sapply(all.tx, function(x) max(eqtl.data[which(eqtl.data$gene.id == x),"lod"]))
+    return(max.lod)
+}
+
+max.lod.file <- file.path(results.dir, "Maximum_LOD.RDS")
+if(!file.exists(max.lod.file)){
+    tx.max.lod <- lapply(tissue.data, function(x) get_max_lod(x$lod.peaks$additive))
+    saveRDS(tx.max.lod, max.lod.file)
+}else{
+    tx.max.lod <- readRDS(tx.max.lod.file)
+}
+
+
+```
+
+```{r trait_trans_cor, fig.width = 8, fig.height = 8}
+
+#calculate correlations for each transcript
+#in each tissue with all traits in the trait matrix.
+#keep the maximum correlation.
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    tx.expr <- expr[[tx]]
+    common.ind <- intersect(rownames(tx.expr), rownames(pheno))
+
+    max.trait.cor.file <- file.path(results.dir, paste0("Maximum_Trait_Correlation_", tissue.names[tx], ".RDS"))
+    if(!file.exists(max.trait.cor.file)){
+        max.trait.cor <- rep(NA, ncol(tx.expr))
+        names(max.trait.cor) <- colnames(tx.expr)
+        for(trans in 1:ncol(tx.expr)){
+            cat("\n")
+            report.progress(trans, ncol(tx.expr))
+            max.trait.cor[trans] <- max(apply(pheno[common.ind,], 2, 
+                function(x) cor(x, tx.expr[,trans], use = "pairwise.complete.obs", 
+                method = "spearman")), na.rm = TRUE)
+        }
+    saveRDS(max.trait.cor, max.trait.cor.file)
+    }else{
+    max.trait.cor <- readRDS(max.trait.cor.file)
+    }
+
+    common.tx <- intersect(colnames(tx.expr), names(tx.max.lod[[tx]]))
+    plot.with.model(tx.max.lod[[tx]][common.tx], abs(max.trait.cor[common.tx]),
+        main = tissue.names[tx], report = "cor.test", xlab = "Local LOD",
+        ylab = "Maximum Trait Correlation")
+}
+```

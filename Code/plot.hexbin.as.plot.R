@@ -4,7 +4,7 @@
 
 plot.hexbin.as.plot <- function(x, y, xlab, ylab, main, 
     min.cex = 1, max.cex = 3, n.bins = 10, count.scale.fun = NULL,
-    legend.pos = "topright", round.legend = 1000, use.pheatmap.colors = TRUE, 
+    legend.pos = "topright", round.legend = NULL, use.pheatmap.colors = TRUE, 
     col.scale = "blue", grad.dir = "high", col.fun = c("linear", "exponential"), 
     exp.steepness = 1){
 
@@ -35,8 +35,12 @@ plot.hexbin.as.plot <- function(x, y, xlab, ylab, main,
         cex = pt.cex)
     
     bins <- sort(unique(hb@count))
+    if(is.null(round.legend)){
+        round.legend <- max(bins)/3
+    }
     binned.bins <- round(segment.region(min(bins), max(bins), n.bins, "ends"))
     rounded.bins <- unique(round(binned.bins/round.legend) * round.legend)
+    if(length(rounded.bins) == 1){stop("I'm having trouble with the legend. Try reducing round.legend")}
     rounded.bins[which(rounded.bins == 0)] <- 1
 
     bin.cols <- colors.from.values(rounded.bins, use.pheatmap.colors = use.pheatmap.colors,
