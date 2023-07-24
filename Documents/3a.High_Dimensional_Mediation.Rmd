@@ -42,7 +42,7 @@ For this workflow there are several parameters to set.
 
 ```{r get_args}
 #args <- commandArgs(trailingOnly=T)
-num.perm = 100
+num.perm = 1000
 
 #args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
 args <- c(1,0,0,1,0) #merged tissues, full imputation, mediation model
