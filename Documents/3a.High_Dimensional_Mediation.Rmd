@@ -449,8 +449,10 @@ This decorrelates the
 
 
 ```{r perm}
-perm.file <- file.path(results.dir, "Permuted_Stats.RDS") #holds permuted path coefficients and partial correlations between components
-null.mediator.file <- file.path(results.dir, "Permuted_Mediator_Scores.RDS") #holds permuted mediator scores, which can be used to calculate null transcript loadings and MGE
+perm.file <- file.path(results.dir, 
+    paste0("Permuted_Stats_", perm.mat, "_permuted.RDS")) #holds permuted path coefficients and partial correlations between components
+null.mediator.file <- file.path(results.dir, 
+    paste0("Permuted_Mediator_Scores_", perm.mat, "_permuted.RDS")) #holds permuted mediator scores, which can be used to calculate null transcript loadings and MGE
 
 if(!file.exists(perm.file) || delete_previous){
 
