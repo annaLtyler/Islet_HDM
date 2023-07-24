@@ -82,6 +82,12 @@ mediation.options <- c("reactive", "complete_mediation")
 imputation.options <- c("full_imp", "local_imp")
 kinship.options <- c("local_effects_included", "local_effects_removed")
 
+#permutation options
+perm.mat <- "mediator" #either permute the mediator matrix,
+#perm.mat <- "kin"      #or the kinshp matrix
+if(perm.mat == "mediator"){perm.text = "Permuting the mediator matrix."}
+if(perm.mat == "kin"){perm.text = "Permuting the kinshp matrix."}
+
 merge.text <- merge.text.options[(as.numeric(merge.tissues)+1)]
 imp.text <- imputation.options[(as.numeric(use.local.imputation)+1)]
 weight.text <- weight.options[(as.numeric(weight.adjusted)+1)]
@@ -123,6 +129,7 @@ This run had the following settings:
 * Weight adjustment: `r weight.text`
 * Mediation type: `r mediation.text`
 * Kinship type: `r kinship.type.text`
+* Permutation type: `r perm.text`
 
 
 ```{r load_code}
@@ -471,8 +478,6 @@ if(!file.exists(perm.file) || delete_previous){
 
             if(is.interactive){report.progress(p, num.perm)}
             
-            perm.mat <- "mediator"
-
             if(perm.mat == "mediator"){
                 #permute the mediator
                 perm_names <- sample(rownames(mediator.kernel))
