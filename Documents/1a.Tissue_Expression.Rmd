@@ -330,6 +330,7 @@ There are also multiple distal eQTL hotspots in each tissue,
 defined as an eQTL with at least `r hotspot.min` distal targets.
 
 ```{r hotspots, fig.width = 14, fig.height = 3, results = "asis"}
+#pdf("~/Desktop/eqtl_hotspots.pdf", width = 10, height = 2.5)
 local.target.list <- distal.target.list <- vector(mode = "list", length = length(tissue.names))
 names(local.target.list) <- names(distal.target.list) <- tissue.names
 for(tx in 1:length(tissue.data)){
@@ -353,7 +354,8 @@ for(tx in 1:length(tissue.data)){
   distal.target.list[[tx]] <- gene.lists$distal_targets
   cat("\n\n")
 }
-```
+#dev.off()
+ ```
 
 
 ## eQTL composition

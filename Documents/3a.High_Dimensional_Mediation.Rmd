@@ -83,8 +83,8 @@ imputation.options <- c("full_imp", "local_imp")
 kinship.options <- c("local_effects_included", "local_effects_removed")
 
 #permutation options
-perm.mat <- "mediator" #either permute the mediator matrix,
-#perm.mat <- "kin"      #or the kinshp matrix
+#perm.mat <- "mediator" #either permute the mediator matrix,
+perm.mat <- "kin"      #or the kinshp matrix
 if(perm.mat == "mediator"){perm.text = "Permuting the mediator matrix."}
 if(perm.mat == "kin"){perm.text = "Permuting the kinshp matrix."}
 

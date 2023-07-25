@@ -20,7 +20,7 @@
 
 cistrans.hotspots <- function(eqtl.table, transcript.pos.table, map, 
     mb.buffer = 4, window.mb = 4, window.gap.mb = 2, col = NULL, 
-    plot.results = TRUE, hotspot.min = 20){
+    plot.results = TRUE, hotspot.min = 20, ymax = NULL){
 
     if(class(eqtl.table)[1] != "matrix"){stop("It looks as if eqtl.table might be a data.frame or a tibble. Please convert to a matrix.")}
 	if(class(transcript.pos.table)[1] != "matrix"){stop("It looks as if transcript.pos.table might be a data.frame or a tibble. Please convert to a matrix.")}
@@ -71,7 +71,11 @@ cistrans.hotspots <- function(eqtl.table, transcript.pos.table, map,
 
         plot_counts <- function(eqtl.counts, plot.label = "eQTL Counts", line.height = NA){
             layout(matrix(1:(length(map)+1), nrow = 1), widths = c(0.9, rep(1, length(map))))
-            ylim = c(0, max(unlist(eqtl.counts)))
+            if(is.null(ymax)){
+                ylim = c(0, max(unlist(eqtl.counts)))
+            }else{
+                ylim = c(0, ymax)
+            }
             par(mar = c(4,0,4,0))
             plot.new()
             plot.window(xlim = c(0,1), ylim = ylim)
