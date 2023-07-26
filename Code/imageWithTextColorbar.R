@@ -13,8 +13,9 @@ col.scale = c("green", "purple", "orange", "blue", "gray"), light.dark = "f",
 class.mat = NULL, grad.dir = c("high", "low", "middle", "ends"), 
 color.fun = c("linear", "exponential"), exp.steepness = 1, color.spread = 50,
 global.color.scale = FALSE, global.min = NULL, global.max = NULL,
-axis.line = 0, use.pheatmap.colors = FALSE, ax.min = NULL, ax.max = NULL, 
-n.ax.ticks = NULL, hadj = NA, padj = NA, bounding.box = TRUE, bar.lwd = 1){
+axis.line = 0, use.pheatmap.colors = FALSE, round.nearest = 1, 
+ax.min = NULL, ax.max = NULL, n.ax.ticks = NULL, hadj = NA, padj = NA, 
+bounding.box = TRUE, bar.lwd = 1){
 
 	
 		require(grid)
@@ -35,8 +36,8 @@ n.ax.ticks = NULL, hadj = NA, padj = NA, bounding.box = TRUE, bar.lwd = 1){
             mat.max <- global.max
             mat.min <- global.min
         }else{
-            mat.max <- ceiling(max(mat, na.rm = TRUE))
-            mat.min <- floor(min(mat, na.rm = TRUE))
+            mat.max <- ceiling(max(mat, na.rm = TRUE)/round.nearest)*round.nearest
+            mat.min <- floor(min(mat, na.rm = TRUE)/round.nearest)*round.nearest
         }
 		
         if(orientation == "h"){
@@ -210,9 +211,9 @@ n.ax.ticks = NULL, hadj = NA, padj = NA, bounding.box = TRUE, bar.lwd = 1){
 	# par(mfrow = c(1,2))
 		# plot(x = as.numeric(col.key[,1]), y = rep(1, dim(col.key)[1]), col = col.key[,2], pch = "|", cex = 1, xlab = "", ylab = "")
 		# abline(v = split.points)
+		if(is.null(ax.min)){ax.min <- mat.min}
+		if(is.null(ax.max)){ax.max <- mat.max}
 		if(!is.null(n.ax.ticks)){ #if a number of tick marks is specified
-			if(is.null(ax.min)){ax.min <- mat.min}
-			if(is.null(ax.max)){ax.max <- mat.max}
 			at <- signif(segment.region(ax.min, ax.max, n.ax.ticks, alignment = "ends"), 2)
 			}else{
 			at = NULL #otherwise use the default axis

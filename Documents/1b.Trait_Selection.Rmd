@@ -163,7 +163,7 @@ final weight.
 
 ```{r weight_v_food}
 plot.with.model(food.mat[,"food_ave"], ordered.bw[,"weight_final"],
-  xlab = "Avg. Food Consumption", ylab = "Final Weight")
+  xlab = "Avg. Food Consumption", ylab = "Weight (g)")
 ```
 
 Some of the animals are crumblers, which means they store
@@ -216,6 +216,31 @@ plot.with.model(glu.mat[,"glu_final"], glu.diff, report = "cor.test",
 
 ```
 
+```{r ins_hist, eval = FALSE}
+sex.order <- order(as.numeric(as.factor(covar[,1])))
+glu <- num.pheno[sex.order, "glu_final"]
+weight <- num.pheno[sex.order, "weight_final"]
+sex <- as.numeric(as.factor(covar[sex.order,1]))
+not.outlier <- which(glu < 800)
+
+pdf("~/Desktop/glucose_weight.pdf", height = 4, width = 4)
+hist_with_points(glu[not.outlier], 
+  col = sex[not.outlier]+2, xlab = "Fasting Glucose (mg/dL)",
+  main = "", xaxis.at = seq(0, 400, 100), ylab = "Count")
+  legend("topright", legend = c("Female", "Male"), pch = 16, col = unique(sex+2))
+glucose.ranges <- c(99, 125) #from https://www.healthline.com/health/diabetes/fasting-glucose-normal-range#nondiabetic-levels
+#abline(v = glucose.ranges)
+
+plot.with.model(weight[not.outlier], glu[not.outlier], xlab = "Weight (g)",
+  ylab = "Fasting Glucose (mg/dL)")
+
+hist_with_points(num.pheno[sex.order,"weight_final"], col = sex+2,
+  xlab = "Weight (g)", ylab = "Count", main = "")
+  legend("topright", legend = c("Female", "Male"), pch = 16, col = unique(sex+2))
+dev.off()
+```
+
+
 ```{r add_final_glucose}
 final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"glu_final",drop=FALSE])
 ```
@@ -259,6 +284,7 @@ plot.with.model(ins.mat[,"ins_6"], ins.diff, xlab = "Initial Insulin",
 plot.with.model(ins.mat[,"ins_final"], ins.diff, xlab = "Final Insulin",
   ylab = "Insulin Change", report = "cor.test")
 ```
+
 
 ```{r add_ins_final}
 final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"ins_final",drop=FALSE])
@@ -470,7 +496,12 @@ keep.traits <- setdiff(colnames(final.trait.mat), remove.traits)
 pared.traits <- final.trait.mat[,keep.traits]
 
 norm.traits <- apply(pared.traits, 2, rankZ)
-pheatmap(cor(norm.traits, use = "pairwise.complete.obs"))
+norm.cor <- cor(norm.traits, use = "pairwise.complete.obs")
+pheatmap(norm.cor, cellwidth = 12, cellheight = 12)
+
+imageWithTextColorbar(norm.cor, use.pheatmap.colors = TRUE,
+  orientation = "h", cex = 1, bar.lwd = 2, round.nearest = 0.1)
+
 
 norm.decomp <- plot.decomp(norm.traits, pc = ncol(norm.traits), plot.results = FALSE)
 #barplot_with_num(round(norm.decomp$var.exp, 2))

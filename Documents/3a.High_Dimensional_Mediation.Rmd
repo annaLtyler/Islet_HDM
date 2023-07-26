@@ -83,8 +83,8 @@ imputation.options <- c("full_imp", "local_imp")
 kinship.options <- c("local_effects_included", "local_effects_removed")
 
 #permutation options
-#perm.mat <- "mediator" #either permute the mediator matrix,
-perm.mat <- "kin"      #or the kinshp matrix
+perm.mat <- "mediator" #either permute the mediator matrix,
+#perm.mat <- "kin"      #or the kinshp matrix
 if(perm.mat == "mediator"){perm.text = "Permuting the mediator matrix."}
 if(perm.mat == "kin"){perm.text = "Permuting the kinshp matrix."}
 
@@ -598,10 +598,10 @@ if(use.local.imputation){
 #individuals.
 
 pop.mge.file <- file.path(results.dir, paste0("Population_MGE_Loadings_", mge.name, ".RDS"))
-null.loading.file <- file.path(results.dir, paste0("Null_Loadings_", mge.name, ".RDS"))
+null.loading.file <- file.path(results.dir, paste0("Null_Loadings_", mge.name, "_", perm.mat, "_permuted", ".RDS"))
+null.mge.file <- file.path(results.dir, paste0("Null_MGE_", mge.name, "_", perm.mat, "_permuted", ".RDS"))
 
-
-if(!file.exists(pop.mge.file)){
+if(!file.exists(pop.mge.file) || !file.exists(null.loading.file)){
     null_loadings  <- null_MGE<- vector(mode = "list", length = length(transcript_loadings))
     names(null_loadings) <- names(null_MGE) <- names(transcript_loadings)
     pop.MGE <- vector(mode = "list", length = length(tissue.names))
@@ -633,9 +633,11 @@ if(!file.exists(pop.mge.file)){
 
     saveRDS(pop.MGE, pop.mge.file)
     saveRDS(null_loadings, null.loading.file)
+    saveRDS(null_MGE, null.mge.file)
 }else{
     pop.MGE <- readRDS(pop.mge.file)
     null_loadings <- readRDS(null.loading.file)
+    null_MGE <- readRDS(null.mge.file)
 }
 ```
 
@@ -684,10 +686,10 @@ ymax <- max(sapply(all.dens, function(x) max(x$y)))
 
 par(mfrow = c(2,2))
 for(tx in 1:length(pop.MGE)){
-    plot(density(null_MGE[[tx]]), type = "l", col = "gray", lwd = 3,
+    plot(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3,
         xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
         main = names(transcript_loadings[tx]))
-    points(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3)
+    points(density(null_MGE[[tx]]), type = "l", col = "gray", lwd = 3)
     legend("topleft", col = c(tissue.cols[tx], "gray"), legend = c("observed", "null"), 
         lty = 1, lwd = 3)
 }
@@ -1408,7 +1410,6 @@ toa.loading.mat <- cluster_values(transcript.loading.list, z.thresh = 3,
     k.seq = 3:20, pdf.filename = "TOA_Transcript_Loadings.pdf")
 
 #pdf("~/Desktop/high_loadings.pdf", width = 5, height = 20)
-#pheatmap(toa.loading.mat, annotation_row = enrich.df, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE, annotation_color = ann_cols)
 #pheatmap(toa.loading.mat, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE)
 #dev.off()
 ```
@@ -1425,9 +1426,8 @@ traits and have local eQTL in the population. These
 toa.mge.mat <- cluster_values(pop.MGE, z.thresh = 3, k.seq = 3:20, 
     pdf.filename = "TOA_MGE.pdf")
 
-#pdf("~/Desktop/test.pdf", width = 5, height = 15)
-#pheatmap(toa.mat, annotation_row = enrich.df, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE)
-#pheatmap(toa.mat, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE)
+#pdf("~/Desktop/high_MGE.pdf", width = 5, height = 15)
+#pheatmap(toa.mge.mat, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE)
 #dev.off()
 ```
 

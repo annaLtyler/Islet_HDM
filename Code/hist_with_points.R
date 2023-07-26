@@ -8,7 +8,8 @@
 
 
 hist_with_points <- function(V, breaks = 100, col = "black",
- main, xlab, ylab, ylim, add = FALSE){
+ main, xlab, ylab, ylim, xaxis.at = NULL, yaxis.at = NULL, 
+ add = FALSE){
     
 	if(missing(main)){main = deparse(substitute(V))}
 	if(missing(xlab)){xlab = deparse(substitute(V))}
@@ -39,7 +40,17 @@ hist_with_points <- function(V, breaks = 100, col = "black",
         }
         plot.new()
         plot.window(xlim = c(min.val, max.val), ylim = ylim)
-        axis(1);axis(2)
+        if(!is.null(xaxis.at)){
+            axis(1, at = xaxis.at)
+        }else{
+            axis(1)
+        }
+        if(!is.null(yaxis.at)){
+            axis(2, at = xaxis.at)
+        }else{
+            axis(2)
+        }
+
         mtext(xlab, side = 1, line = 2.5)
         mtext(ylab, side = 2, line = 2.5)
         mtext(main, side = 3, line = 1)
