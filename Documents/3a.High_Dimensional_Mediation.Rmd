@@ -100,7 +100,8 @@ kinship.type.text <- kinship.type
 #we are doing. MGE stats vary based on the imputation model. 
 #MGE-related labels are affixed to results pdfs, and can all 
 #be generated from the same mediation results.
-exp.name <- paste(merge.text, weight.text, mediation.text, imp.text, sep = "-")
+exp.name <- paste(merge.text, weight.text, mediation.text, 
+    paste(kinship.type.text, "kinship", sep = "_"), sep = "-")
 
 if(use.local.imputation){
     mge.name <- imp.text
