@@ -52,6 +52,9 @@ pval.thresh = 0.05, return.empty.columns = FALSE){
 				}
 			}
 			names(trimmed.list) <- trimmed.names
+			
+			#revise has results to those that passed the filter
+			has.results <- trimmed.names
 		}else{
 			trimmed.list <- enrich.list
 		}
@@ -112,10 +115,10 @@ pval.thresh = 0.05, return.empty.columns = FALSE){
 		#add columns for entries with no enrichments
 		#this can be helpful in indexing sometimes
 		if(return.empty.columns){
-			full.term.mat <- matrix(0, nrow = nrow(term.mat), ncol = length(list.len))
-			full.term.mat[,has.results] <- term.mat
-			rownames(full.term.mat) <- rownames(term.mat)
+			full.term.mat <- matrix(0, nrow = nrow(term.mat), ncol = length(enrichment.list))
 			colnames(full.term.mat) <- group.names
+			rownames(full.term.mat) <- rownames(term.mat)
+			full.term.mat[,has.results] <- term.mat[,has.results]			
 			term.mat <- full.term.mat
 		}
 

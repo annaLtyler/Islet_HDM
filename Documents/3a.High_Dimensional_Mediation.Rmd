@@ -633,11 +633,11 @@ if(!file.exists(pop.mge.file) || !file.exists(null.loading.file)){
 
     saveRDS(pop.MGE, pop.mge.file)
     saveRDS(null_loadings, null.loading.file)
-    saveRDS(null_MGE, null.mge.file)
+    #saveRDS(null_MGE, null.mge.file)
 }else{
     pop.MGE <- readRDS(pop.mge.file)
     null_loadings <- readRDS(null.loading.file)
-    null_MGE <- readRDS(null.mge.file)
+    #null_MGE <- readRDS(null.mge.file)
 }
 ```
 
@@ -677,7 +677,7 @@ for each tissue compared to null distributions. Again, the
 observed MGE values are mostly well outside the null 
 distribution. Basically, everything is significant.
 
-```{r mge_dist, fig.width = 8, fig.height = 8}
+```{r mge_dist, fig.width = 8, fig.height = 8, eval = FALSE}
 
 all.dens <- c(lapply(pop.MGE, density), lapply(null_MGE, density))
 xmin <- min(sapply(all.dens, function(x) min(x$x)))
@@ -1414,6 +1414,18 @@ toa.loading.mat <- cluster_values(transcript.loading.list, z.thresh = 3,
 #dev.off()
 ```
 
+```{r loading_motifs}
+big.thresh = 0.2
+thresh.loading <- toa.loading.mat
+thresh.loading[which(abs(thresh.loading) < big.thresh)] <- 0
+#pheatmap(thresh.loading)
+
+num.tissues <- apply(thresh.loading, 1, function(x) length(which(x != 0)))
+sign.tally <- t(apply(thresh.loading, 1, function(x) c(length(which(x < 0)), length(which(x > 0)))))
+coherent <- sort(unique(c(which(sign.tally[,1] == 0), which(sign.tally[,2] == 0))))
+incoherent <- setdiff(1:nrow(sign.tally), coherent)
+```
+
 How is population-level MGE distributed across tissues?
 High MGE in one tissue tells us the tissue of action for
 QTLs. Are there commonalities across tissues?
@@ -1429,6 +1441,25 @@ toa.mge.mat <- cluster_values(pop.MGE, z.thresh = 3, k.seq = 3:20,
 #pdf("~/Desktop/high_MGE.pdf", width = 5, height = 15)
 #pheatmap(toa.mge.mat, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE)
 #dev.off()
+```
+
+```{r mge_coherence}
+hist(as.vector(toa.mge.mat))
+abline(v = c(-0.05, 0.05), col = "red")
+
+big.thresh = 0.05
+thresh.loading <- toa.mge.mat
+thresh.loading[which(abs(thresh.loading) < big.thresh)] <- 0
+#pheatmap(thresh.loading)
+
+num.tissues <- apply(thresh.loading, 1, function(x) length(which(x != 0)))
+sign.tally <- t(apply(thresh.loading, 1, function(x) c(length(which(x < 0)), length(which(x > 0)))))
+coherent <- sort(unique(c(which(sign.tally[,1] == 0), which(sign.tally[,2] == 0))))
+incoherent <- setdiff(1:nrow(sign.tally), coherent)
+length(coherent)/nrow(thresh.loading)
+length(incoherent)/nrow(thresh.loading)
+
+
 ```
 
 ## Loadings vs. LOD {.tabset .tabset-fade .tabset-pills}
@@ -1496,5 +1527,278 @@ if(mediation.text == "complete_mediation"){
         plot.text(paste("Negative MGE Genes", neg.par, sep = "\n\n"))
         dev.off()
     }
+}
+```
+
+## Founders {.tabset .tabset-fade .tabset-pills}
+
+If we use local effects in the DO, we can compare them
+to predicted MGE in the founders. These sections are run
+only if we are using complete mediation and locally imputed
+transcripts.
+
+Here we create pseudo-MGE scores for each of the founder
+mouse lines. We do this by multiplying the allele effects 
+for each transcripts by the transcript loading from the 
+high-dimensional mediation. We used all eQTL with LOD score > 6.
+
+Now for each transcript, we have a predicted MGE in each 
+tissue based on its founder allele effects and loading
+in that tissue.
+
+
+```{r inbred_prediction}
+
+if(mediation.text == "complete_mediation" && use.local.imputation){
+    inbred.effects.file <- file.path(results.dir, "Inbred_Effects.RDS")
+
+    if(!file.exists(inbred.effects.file) || delete_previous){
+        tissue.inbred.effects <- vector(mode = "list", length = length(tissue.names))
+        names(tissue.inbred.effects) <- tissue.names
+        for(tx in 1:length(tissue.names)){
+            t.loadings <- transcript_loadings[[tx]]
+            eqtl.table <- tissue.lod[[tx]]
+            u_transcripts <- unique(eqtl.table$gene.id)
+            inbred.effects <- matrix(NA, nrow = length(u_transcripts), ncol = 8)
+            colnames(inbred.effects) <- names(CCcolors)
+            rownames(inbred.effects) <- u_transcripts
+            for(tr in 1:length(u_transcripts)){
+                if(is.interactive){report.progress(tr, length(u_transcripts))}
+                tr.idx <- which(eqtl.table$gene.id == u_transcripts[tr])
+                tr.alleles <- eqtl.table[tr.idx,LETTERS[1:8]]
+                tr.loading <- t.loadings[which(rownames(t.loadings) == u_transcripts[tr])]
+                tr.effects <- colMeans(tr.alleles*tr.loading)
+                inbred.effects[tr,] <- tr.effects
+            }
+            tissue.inbred.effects[[tx]] <- inbred.effects
+        }
+        saveRDS(tissue.inbred.effects, inbred.effects.file)
+    }else{
+        tissue.inbred.effects <- readRDS(inbred.effects.file)
+    }
+}
+```
+
+The following plots show the distribution of risk and protective
+alleles for each inbred strain.
+
+```{r inbred_mge_dist, results = "asis"}
+if(mediation.text == "complete_mediation" && use.local.imputation){
+    for(tx in 1:length(tissue.names)){
+        cat("###", tissue.names[tx], "\n")
+        pred.order <- order(colMeans(tissue.inbred.effects[[tx]], na.rm = TRUE))
+        boxplot(tissue.inbred.effects[[tx]][,pred.order], col = CCcolors[pred.order],
+            main = paste("Founder MGE distribution", tissue.names[tx]))
+        abline(h = 0)
+        cat("\n\n")
+    }
+
+    #show the overall MGE distribution
+    all.mge <- Reduce("rbind", tissue.inbred.effects)
+    pred.order <- order(colMeans(all.mge, na.rm = TRUE))
+    boxplot(all.mge[,pred.order], col = CCcolors[pred.order],
+        main = "Founder MGE distribution overall")
+    abline(h = 0)
+}
+```
+
+## Predicted inbred phenotypes {.tabset .tabset-fade .tabset-pills}
+
+The following plots show the predicted phenotype for each inbred
+strain based on their collective MGE.
+
+```{r plot_predictions, results = "asis"}
+if(mediation.text == "complete_mediation" && use.local.imputation){
+    for(tx in 1:length(tissue.names)){
+        cat("###", tissue.names[tx], "\n")
+        inbred.means <- colMeans(tissue.inbred.effects[[tx]], na.rm = TRUE)
+        mean.order <- order(inbred.means)
+        barplot(inbred.means[mean.order], col = CCcolors[mean.order], main = tissue.names[tx])
+        cat("\n\n")
+    }
+}
+```
+
+## Overall Effects
+
+The following plot shows that we predict the order of the 
+strains using this method. This shows the overall
+phenotype merged across all tissues.
+
+```{r overall_effects}
+if(mediation.text == "complete_mediation" && use.local.imputation){
+    tissue.strain.effect <- sapply(tissue.inbred.effects, 
+        function(x) colMeans(x, na.rm = TRUE))
+    overall.strain.effect <- rowMeans(tissue.strain.effect)
+    strain.order <- order(overall.strain.effect)
+    barplot(overall.strain.effect[strain.order], 
+        col = CCcolors[strain.order], ylab = "Phenotype")
+    abline(h = 0)
+}
+```
+
+NZO is predicted to be the outlier on the high end. 
+PWK is predicted to be the outlier on the low end, but 
+I'm not sure this is right. I think CAST is the most
+resistant to these diet-induced traits. We have to 
+remember, though, that our trait is a composite
+trait, not any individual trait. 
+[Mitok et al. (2017)](https://doi.org/10.1074/jbc.RA117.001102).
+showed that CAST, PWK, and WSB had the least weight gain
+on an HF diet, while NZO had the greatest gain, followed
+by NOD and then B6. Glucose levels were not distinguishable
+by strain. CAST had the lowest insulin levels across both 
+sexes, while NZO levels were highest only in females. 
+A/J had the second lowest insulin levels, and NOD had the
+second highest. NZO males really lost their islets, but 
+the NZO females retained theirs. The picture is complex
+and depends on sex and other factors. 
+
+Mitok et al. found that PWK and CAST mice have elevated
+levels of tyrosine hydroxylase (Th) in their islets, 
+which causes a blunted insulin response. Th is used in
+the first step in catecholamine synthesis. Increased
+Th leads to increased dopamine production and blunted
+insulin secretion.
+
+
+```{r all_strains, fig.width = 5, fig.height = 5}
+if(mediation.text == "complete_mediation" && use.local.imputation){
+    pheatmap(tissue.strain.effect[rev(strain.order),], cluster_rows = FALSE,
+        cluster_cols = FALSE)
+}
+```
+
+## Enrichments {.tabset .tabset-fade .tabset-pills}
+
+Which transcripts/pathways contribute to risk and 
+protection in each strain and in each tissue?
+
+```{r risk_protection_enrich}
+if(mediation.text == "complete_mediation" && use.local.imputation){
+
+    inbred.top.enrichment.file <- file.path(results.dir, "Inbred_High_MGE_Enrichments.RDS")
+    inbred.bottom.enrichment.file <- file.path(results.dir, "Inbred_Low_MGE_Enrichments.RDS")
+    num.top.tx <- 150
+    if(!file.exists(inbred.top.enrichment.file)){
+        founder.top.enrichments <- vector(mode = "list", length = length(tissue.names))
+        names(founder.top.enrichments) <- tissue.names
+        founder.bottom.enrichments <- vector(mode = "list", length = length(tissue.names))
+        names(founder.bottom.enrichments) <- tissue.names
+        for(tx in 1:length(tissue.inbred.effects)){
+            transcript.mat <- tissue.inbred.effects[[tx]]
+            top.transcripts <- lapply(1:ncol(transcript.mat), 
+                function(x) rownames(transcript.mat)[order(transcript.mat[,x], 
+                    decreasing = TRUE)][1:num.top.tx])
+            bottom.transcripts <- lapply(1:ncol(transcript.mat), 
+                function(x) rownames(transcript.mat)[order(transcript.mat[,x], 
+                decreasing = FALSE)][1:num.top.tx])
+
+            top.enrichment <- lapply(top.transcripts, 
+                function(x) gost(x, organism = "mmusculus", 
+                source = c("GO", "REACTOME", "KEGG", "WP", "CORUM", "HP")))
+            names(top.enrichment) <- colnames(transcript.mat)
+            #plot.enrichment.group(top.enrichment, sort.by = "p_value")
+            founder.top.enrichments[[tx]] <- top.enrichment
+
+            bottom.enrichment <- lapply(bottom.transcripts, 
+                function(x) gost(x, organism = "mmusculus", 
+                source = c("GO", "REACTOME", "KEGG", "WP", "CORUM", "HP")))
+            names(bottom.enrichment) <- colnames(transcript.mat)
+            #plot.enrichment.group(bottom.enrichment, sort.by = "p_value")
+            founder.bottom.enrichments[[tx]] <- bottom.enrichment
+        }
+        saveRDS(founder.top.enrichments, inbred.top.enrichment.file)
+        saveRDS(founder.bottom.enrichments, inbred.bottom.enrichment.file)
+    }else{
+        founder.top.enrichments <- readRDS(inbred.top.enrichment.file)
+        founder.bottom.enrichments <- readRDS(inbred.bottom.enrichment.file)
+    }
+}
+```
+
+The following plots show the top enrichments for each strain 
+in each tissue with the highest and lowest MGE transcripts.
+
+```{r plot_founder_enrichments, results = "asis", fig.width = 7, fig.height = 9}
+if(mediation.text == "complete_mediation" && use.local.imputation){
+
+    #pdf("~/Desktop/test_500.pdf", width = 7, height = 10)
+    for(tx in 1:length(tissue.names)){
+        cat("###", tissue.names[tx], "{.tabset .tabset-fade .tabset-pills}\n")
+        cat("#### Top MGE", "\n")
+
+        transcript.mat <- tissue.inbred.effects[[tx]]
+        inbred.means <- colMeans(transcript.mat, na.rm = TRUE)
+        mean.order <- order(inbred.means)
+
+        plot.enrichment.group(founder.top.enrichments[[tx]][mean.order],
+            plot.label = paste("Risk Alleles", tissue.names[tx]), 
+            cluster_cols = FALSE, max.term.size = 3000, return.empty.columns = TRUE,
+            max.char = 50)
+        
+        cat("#### Bottome MGE", "\n")
+        plot.enrichment.group(founder.bottom.enrichments[[tx]][mean.order], 
+            plot.label = paste("Protective Alleles", tissue.names[tx]), 
+            cluster_cols = FALSE, max.term.size = 3000, return.empty.columns = TRUE,
+            max.char = 50)
+        cat("\n\n")
+    }
+    #dev.off()
+}
+```
+
+
+## Founders in the context of the DO
+
+Here we show where the founders are predicted to land among 
+the DO based on their PtRS.
+
+```{r do_plus_founder, fig.width = 10, fig.height = 4}
+if(mediation.text == "complete_mediation" && use.local.imputation){
+
+    tissue.mge <- vector(mode = "list", length = length(tissue.names))
+    names(tissue.mge) <- tissue.names
+    for(tx in 1:length(tissue.names)){
+        trans.load <- transcript_loadings[[tx]]
+        transcript.id <- rownames(trans.load)
+
+        #find the transcripts common to the loadings and the imputed transcripts
+        common.transcripts <- intersect(transcript.id, colnames(tissue.imp.gen[[tx]]))
+        #multiply the imputed transcripts by their loadings to get MGE
+        #for each transcript in each individual
+        tissue.mge[[tx]] <- apply(tissue.imp.gen[[tx]][,common.transcripts], 1, function(x) x*trans.load[common.transcripts,])
+        #calculate PtRS scores for the DO
+        do_scores <- colMeans(tissue.mge[[tx]], na.rm = TRUE)
+        inbred_scores <- colMeans(tissue.inbred.effects[[tx]], na.rm = TRUE)
+        all_scores <- c(do_scores, inbred_scores)
+        score_cols <- c(rep("gray", length(do_scores)), CCcolors)
+        score_order <- order(all_scores, decreasing = FALSE)
+        
+        do.idx <- which(score_cols[score_order] == "gray")
+        founder.idx <- which(score_cols[score_order] != "gray")
+        plot(x = do.idx, y = all_scores[score_order[do.idx]], col = "gray", type = "h", 
+            lwd = 3, main = tissue.names[tx])
+        points(x = founder.idx, y = all_scores[score_order[founder.idx]], 
+                col = score_cols[score_order[founder.idx]], 
+            type = "h", lwd = 3)
+    }
+
+    common.ind <- Reduce("intersect", lapply(tissue.mge, colnames))
+    all.tissue.do <- sapply(tissue.mge, function(x) colMeans(x[,common.ind]))
+    all.overall <- rbind(all.tissue.do, overall.strain.effect)
+    all.col <- c(rep("gray", nrow(all.tissue.do)), CCcolors)
+
+    overall.do <- rowMeans(all.tissue.do)
+    do.order <- order(overall.do)
+    overall.all <- rowMeans(all.overall)
+    all.order <- order(overall.all)
+
+    do.idx <- which(all.col[all.order] == "gray")
+    founder.idx <- which(all.col[all.order] != "gray")
+    plot(x = do.idx, y = overall.all[all.order[do.idx]], col = "gray", type = "h", 
+        lwd = 3, main = "Overall")
+    points(x = founder.idx, y = overall.all[all.order[founder.idx]], 
+            col = all.col[all.order[founder.idx]], type = "h", lwd = 3)
 }
 ```

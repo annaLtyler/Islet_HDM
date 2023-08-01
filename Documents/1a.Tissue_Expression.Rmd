@@ -355,7 +355,7 @@ for(tx in 1:length(tissue.data)){
   cat("\n\n")
 }
 #dev.off()
- ```
+```
 
 
 ## eQTL composition
@@ -1470,19 +1470,108 @@ dev.off()
 ```
 
 ```{r, eval = FALSE}
+clin.pheno <- readRDS(here("Data", "DO", "Clinical_Phenotypes_Adjusted.RDS"))
+clin.decomp <- plot.decomp(clin.pheno, plot.results = FALSE)
+clin.pc <- clin.decomp$u[,1,drop=FALSE]
+rownames(clin.pc) <- rownames(clin.pheno)[clin.decomp$rows.used]
+
 gene.name = "Wfdc21";tissue.name = "Adipose"
 gene.name <- "Myo19";tissue.name = "Adipose"
 gene.name = "Lep";tissue.name = "Adipose"
+gene.name = "Alox12"; tissue.name = "Islet"
 
 tissue.idx <- which(names(tissue.data) == tissue.name)
 trans.id  <- tissue.data[[tissue.idx]]$annot.mrna$gene.id[which(tissue.data[[tissue.idx]]$annot.mrna$symbol == gene.name)]
 
 plot_tissue_interaction(trans.id, FALSE)
 
+#expr_across_tissues(transcript.id = trans.id, "CAST")
+#expr_across_tissues(transcript.id = trans.id, "NZO")
+#expr_across_alleles(transcript.id = trans.id, "Islet")
 
-expr_across_tissues(transcript.id = trans.id, "CAST")
-expr_across_tissues(transcript.id = trans.id, "NZO")
-expr_across_alleles(transcript.id = trans.id, "Liver")
+gene.expr.data <- get_transcript_effects(trans.id, return.data = TRUE)
+gene.geno <- gene.expr.data$genotypes
 
+#does this locus have an effect on clinical PC1?
+up.allele <- which(names(CCcolors) == "PWK")
+down.allele <- which(names(CCcolors) == "WSB")
+
+common.ind <- intersect(rownames(clin.pc), rownames(gene.geno))
+
+dev.off()
+par(mfrow = c(1,2))
+up.test <- aov(clin.pc[common.ind,1]~as.factor(bin.vector(gene.geno[common.ind,up.allele])))
+up.p <- anova(up.test)$"Pr(>F)"[1]
+boxplot(clin.pc[common.ind,1]~as.factor(bin.vector(gene.geno[common.ind, up.allele])),
+  xlab = paste(gene.name, "genotype"), ylab = "Clin PC1",
+  main = paste("Up Allele\np = ", signif(up.p, 2)))
+
+down.test <- aov(clin.pc[common.ind,1]~as.factor(bin.vector(gene.geno[common.ind,down.allele])))
+down.p <- anova(down.test)$"Pr(>F)"[1]
+boxplot(clin.pc[common.ind,1]~as.factor(bin.vector(gene.geno[common.ind, down.allele])),
+  xlab = paste(gene.name, "genotype"), ylab = "Clin PC1",
+  main = paste("Down Allele\np = ", signif(down.p, 2)))
+
+dev.off()
+#check for associations with individual phenotypes
+common.ind <- intersect(rownames(clin.pc), rownames(gene.geno))
+pdf("~/Desktop/gene_test.pdf", width = 12, height = 12)
+par(mfrow = c(4,4))
+for(i in 1:ncol(clin.pheno)){
+  boxplot(rankZ(clin.pheno[common.ind,i])~as.factor(bin.vector(gene.geno[common.ind,up.allele])),
+    main = paste(colnames(clin.pheno)[i], "Up Allele"), 
+    xlab = gene.name, ylab = colnames(clin.pheno)[i])
+  boxplot(rankZ(clin.pheno[common.ind,i])~as.factor(bin.vector(gene.geno[common.ind,down.allele])),
+    main = paste(colnames(clin.pheno)[i], "Down Allele"), 
+    xlab = gene.name, ylab = colnames(clin.pheno)[i])
+
+}
+dev.off()
+
+#Does the locus have an effect on the clinical PC
+#that could be mediated by transcription?
+genotype_effect <- lm(clin.pc[common.ind,1]~gene.geno[common.ind,])
+summary(genotype_effect)
+
+
+plot_module_expr_v_clin_pc <- function(gene.list){
+
+  module.info <- lapply(gene.list, function(x) get_transcript_effects(x, return.data = TRUE))
+  module.info <- module.info[which(sapply(module.info, length) > 0)]
+  module.expr <- lapply(module.info, function(x) x$expression)
+  clin.cols <- colors.from.values(clin.pc, use.pheatmap.colors = TRUE)
+
+  par(mfrow = c(2,2))
+  for(tx in 1:length(tissue.names)){
+    has.tx <- which(sapply(module.expr, function(x) length(which(names(x) == tissue.names[tx])) > 0))
+    tx.expr <- sapply(has.tx, function(x) module.expr[[x]][[which(names(module.expr[[x]]) == tissue.names[tx])]])
+    common.ind <- intersect(rownames(clin.pc), rownames(tx.expr))
+    tx.expr[,which(trait.cor < 0)] <- tx.expr[,which(trait.cor < 0)] * -1
+    tx.decomp <- plot.decomp(tx.expr, plot.results = FALSE)
+    tx.pc <- tx.decomp$u
+    rownames(tx.pc) <- rownames(tx.expr)[tx.decomp$rows.used]
+    plot.with.model(tx.pc[common.ind,1], clin.pc[common.ind,1], 
+      main = tissue.names[tx], xlab = "Expr PC1", ylab = "Expr PC2", 
+      report = "cor.test")
+  }
+}
+
+alox.net <- read.csv("~/Downloads/network_weights.csv")
+u_gene <- unique(c(alox.net[,1], alox.net[,2]))
+gene.idx <- match(u_gene, tissue.data[[2]]$annot.mrna$symbol)
+gene.idx <- gene.idx[which(!is.na(gene.idx))]
+gene.id <- tissue.data[[2]]$annot.mrna$gene.id[gene.idx]
+plot_module_expr_v_clin_pc(gene.id)
+
+
+eic.genes <- read.delim("~/Downloads/AA_metabolism.txt")
+eic.idx <- lapply(tissue.data, function(x) match(eic.genes[,"Symbol"], x$annot.mrna$symbol))
+eic.id <- vector(mode = "list", length = length(eic.idx))
+names(eic.id) <- tissue.names
+for(i in 1:length(eic.idx)){
+  eic.idx[[i]] <- eic.idx[[i]][which(!is.na(eic.idx[[i]]))]
+  eic.id[[i]] <- tissue.data[[i]]$annot.mrna$gene.id[eic.idx[[i]]]
+}
+plot_module_expr_v_clin_pc(eic.id[[4]])
 ```
 
