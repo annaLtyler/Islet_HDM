@@ -1602,13 +1602,13 @@ the heritability of the residuals. We multiply this number by
 the transcript loading to get the distal MGE.
 
 ```{r distal_variance_explained}
-distal.herit.file <- here("Results", "Transcriptome", "Distal_Heritability.RDS")
 
-if(!file.exists(distal.herit.file)){
-  distal.herit <- vector(mode = "list", length = length(tissue.names))
-  names(distal.herit) <- tissue.names
 
-  for(tx in 1:length(tissue.names)){
+for(tx in 1:length(tissue.names)){
+  distal.herit.file <- here("Results", "Transcriptome", 
+    paste0("Distal_Heritability_", tissue.names[tx], ".RDS"))
+
+  if(!file.exists(distal.herit.file)){
     transcript.id <- colnames(adj.expr[[tx]])
     herit.resid <- rep(NA, length = length(transcript.id))
     names(herit.resid) <- transcript.id
@@ -1619,8 +1619,7 @@ if(!file.exists(distal.herit.file)){
       model <- fit1(marker.geno, rankZ(adj.expr[[tx]][,tr]))
       herit.resid[tr] <- est_herit(model$resid, Kg)
     }
-    distal.herit[[tx]] <- herit.resid
+    saveRDS(distal.herit, distal.herit.file)
   }
-  saveRDS(distal.herit, distal.herit.file)
 }
 ```
