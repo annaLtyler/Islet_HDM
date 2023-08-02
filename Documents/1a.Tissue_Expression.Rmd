@@ -514,6 +514,23 @@ is the eQTL that are shared across all tissues. For the distal
 eQTL, the largest groups are those that are specific to a single 
 tissue.
 
+
+```{r kinship_mat}
+
+#calculate the germline regardless of which kinship 
+#type we have specified. If we have specified the 
+#functional kinship, we will compare it to the 
+#germline kinship.
+
+kin.file <- here("Data", "DO", "overall.kinship.RDS")
+if(!file.exists(kin.file)){
+    Kg = calc_kinship(genoprobs, "overall")
+    saveRDS(Kg, kin.file)
+}else{
+    Kg <- readRDS(kin.file)
+}
+```
+
 ```{r eQTL_fun}
 #functions for listing and comparing eQTL
 
@@ -1575,3 +1592,35 @@ for(i in 1:length(eic.idx)){
 plot_module_expr_v_clin_pc(eic.id[[4]])
 ```
 
+## Distal variance explained
+
+We would like to look at the local vs. the distal components 
+of MGE for the population. We can't do this for individuals,
+but we can do it for the population. For each transcript, we
+fit the local marker to the transcript levels. Then we calculate
+the heritability of the residuals. We multiply this number by 
+the transcript loading to get the distal MGE.
+
+```{r distal_variance_explained}
+distal.herit.file <- here("Results", "Transcriptome", "Distal_Heritability.RDS")
+
+if(!file.exists(distal.herit.file)){
+  distal.herit <- vector(mode = "list", length = length(tissue.names))
+  names(distal.herit) <- tissue.names
+
+  for(tx in 1:length(tissue.names)){
+    transcript.id <- colnames(adj.expr[[tx]])
+    herit.resid <- rep(NA, length = length(transcript.id))
+    names(herit.resid) <- transcript.id
+    transcript.idx <- match(transcript.id, tissue.data[[tx]]$annot.mrna$gene.id) 
+    nearest.marker <- tissue.data[[tx]]$annot.mrna$nearest.marker.id
+    for(tr in 1:length(transcript.id)){
+      marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker[tr])
+      model <- fit1(marker.geno, rankZ(adj.expr[[tx]][,tr]))
+      herit.resid[tr] <- est_herit(model$resid, Kg)
+    }
+    distal.herit[[tx]] <- herit.resid
+  }
+  saveRDS(distal.herit, distal.herit.file)
+}
+```

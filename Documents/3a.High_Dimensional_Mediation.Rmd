@@ -578,8 +578,16 @@ transcript loadings are well outside the null distribution,
 so there is no cutoff that gives us a few transcripts to 
 analyze.
 
+This code takes a long time to run, the null files are
+huge, and I've seen enough examples, that I don't need
+to keep running this. I am shutting off the code with 
+a flag that can be turned back on to calculate the 
+null loadings and null MGE. If the flag is set to FALSE,
+only population MGE is calculated.
 
-```{r calc_null_loadings_mge}
+```{r prep_pop_mge}
+calc_null <- FALSE #set to TRUE to calculate null loading and
+                   #null MGE distributions.
 
 #read in imputed transcripts so we can calculate null population MGE
 if(use.local.imputation){
@@ -587,75 +595,82 @@ if(use.local.imputation){
 }else{
     tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_genetic.RDS")))
 }
+```
 
-#calculate null transcript loadings
-
-#also get a population-level MGE for each transcript and a null pop MGE
-#these are transcripts that are affecting the trait through their 
-#transcription AND have some population-level variation in transcription
-#these are the not necessarily the genes that are central to the disease
-#but ones that can vary enough to affect variation in outcome across 
-#individuals.
+```{r calc_pop_mge}
 
 pop.mge.file <- file.path(results.dir, paste0("Population_MGE_Loadings_", mge.name, ".RDS"))
-null.loading.file <- file.path(results.dir, paste0("Null_Loadings_", mge.name, "_", perm.mat, "_permuted", ".RDS"))
-null.mge.file <- file.path(results.dir, paste0("Null_MGE_", mge.name, "_", perm.mat, "_permuted", ".RDS"))
 
-if(!file.exists(pop.mge.file) || !file.exists(null.loading.file)){
-    null_loadings  <- null_MGE<- vector(mode = "list", length = length(transcript_loadings))
-    names(null_loadings) <- names(null_MGE) <- names(transcript_loadings)
+if(!file.exists(pop.mge.file)){
     pop.MGE <- vector(mode = "list", length = length(tissue.names))
-
     for(tx in 1:length(transcript_loadings)){
-        
         tx.r2 <- apply(tissue.imp.gen[[tx]], 2, var)
         common.transcripts <- intersect(names(tx.r2), rownames(transcript_loadings[[tx]]))
-
-        #calculate null loadings and MGE
-        if(merge.tissues){
-            null_loadings[[tx]] <- sapply(1:ncol(null.mediator.scores[[1]]), 
-                function(x) calc_loadings(null.mediator.scores[[1]][,x,drop=FALSE], 
-                scaled.expr[[tx]]))
-            rownames(null_loadings[[tx]]) <- rownames(transcript_loadings[[tx]])
-        }else{
-            null_loadings[[tx]] <- sapply(1:ncol(null.mediator.scores[[tx]]), 
-                function(x) calc_loadings(null.mediator.scores[[tx]][,x,drop=FALSE], 
-                scaled.expr[[tx]]))
-            rownames(null_loadings[[tx]]) <- rownames(transcript_loadings[[tx]])
-        }
-
-        null_MGE[[tx]] <- sapply(1:ncol(null_loadings[[tx]]), 
-            function(x) tx.r2[common.transcripts]*null_loadings[[tx]][common.transcripts,x,drop=FALSE])
-        rownames(null_MGE[[tx]]) <- common.transcripts    
-
         pop.MGE[[tx]] <- tx.r2[common.transcripts]*transcript_loadings[[tx]][common.transcripts,1]
     }
-
     saveRDS(pop.MGE, pop.mge.file)
-    saveRDS(null_loadings, null.loading.file)
-    #saveRDS(null_MGE, null.mge.file)
 }else{
     pop.MGE <- readRDS(pop.mge.file)
-    null_loadings <- readRDS(null.loading.file)
-    #null_MGE <- readRDS(null.mge.file)
 }
 ```
 
+```{r calc_null_dist}
+if(calc_null){
+    null.loading.file <- file.path(results.dir, paste0("Null_Loadings_", mge.name, "_", perm.mat, "_permuted", ".RDS"))
+    null.mge.file <- file.path(results.dir, paste0("Null_MGE_", mge.name, "_", perm.mat, "_permuted", ".RDS"))
+
+    if(!file.exists(null.loading.file) || !file.exists(null.mge.file)){
+        null_loadings  <- null_MGE<- vector(mode = "list", length = length(transcript_loadings))
+        names(null_loadings) <- names(null_MGE) <- names(transcript_loadings)
+
+        for(tx in 1:length(transcript_loadings)){
+            
+            tx.r2 <- apply(tissue.imp.gen[[tx]], 2, var)
+            common.transcripts <- intersect(names(tx.r2), rownames(transcript_loadings[[tx]]))
+
+            #calculate null loadings and MGE
+            if(merge.tissues){
+                null_loadings[[tx]] <- sapply(1:ncol(null.mediator.scores[[1]]), 
+                    function(x) calc_loadings(null.mediator.scores[[1]][,x,drop=FALSE], 
+                    scaled.expr[[tx]]))
+                rownames(null_loadings[[tx]]) <- rownames(transcript_loadings[[tx]])
+            }else{
+                null_loadings[[tx]] <- sapply(1:ncol(null.mediator.scores[[tx]]), 
+                    function(x) calc_loadings(null.mediator.scores[[tx]][,x,drop=FALSE], 
+                    scaled.expr[[tx]]))
+                rownames(null_loadings[[tx]]) <- rownames(transcript_loadings[[tx]])
+            }
+
+            null_MGE[[tx]] <- sapply(1:ncol(null_loadings[[tx]]), 
+                function(x) tx.r2[common.transcripts]*null_loadings[[tx]][common.transcripts,x,drop=FALSE])
+            rownames(null_MGE[[tx]]) <- common.transcripts    
+        }
+        saveRDS(null_loadings, null.loading.file)
+        saveRDS(null_MGE, null.mge.file)
+    }else{
+        null_loadings <- readRDS(null.loading.file)
+        null_MGE <- readRDS(null.mge.file)
+    }
+}
+```
 
 ```{r load_dist, fig.width = 8, fig.height = 8}
-all.dens <- c(lapply(transcript_loadings, density), lapply(null_loadings, density))
-xmin <- min(sapply(all.dens, function(x) min(x$x)))
-xmax <- max(sapply(all.dens, function(x) max(x$x)))
-ymax <- max(sapply(all.dens, function(x) max(x$y)))
 
-par(mfrow = c(2,2))
-for(tx in 1:length(transcript_loadings)){
-    plot(density(null_loadings[[tx]]), type = "l", col = "gray", lwd = 3,
-        xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
-        main = names(transcript_loadings[tx]))
-    points(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3)
-    legend("topleft", col = c(tissue.cols[tx], "gray"), legend = c("observed", "null"), 
-        lty = 1, lwd = 3)
+if(calc_null){
+    all.dens <- c(lapply(transcript_loadings, density), lapply(null_loadings, density))
+    xmin <- min(sapply(all.dens, function(x) min(x$x)))
+    xmax <- max(sapply(all.dens, function(x) max(x$x)))
+    ymax <- max(sapply(all.dens, function(x) max(x$y)))
+
+    par(mfrow = c(2,2))
+    for(tx in 1:length(transcript_loadings)){
+        plot(density(null_loadings[[tx]]), type = "l", col = "gray", lwd = 3,
+            xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
+            main = names(transcript_loadings[tx]))
+        points(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3)
+        legend("topleft", col = c(tissue.cols[tx], "gray"), legend = c("observed", "null"), 
+            lty = 1, lwd = 3)
+    }
 }
 ```
 
@@ -677,21 +692,22 @@ for each tissue compared to null distributions. Again, the
 observed MGE values are mostly well outside the null 
 distribution. Basically, everything is significant.
 
-```{r mge_dist, fig.width = 8, fig.height = 8, eval = FALSE}
+```{r mge_dist, fig.width = 8, fig.height = 8}
+if(calc_null){
+    all.dens <- c(lapply(pop.MGE, density), lapply(null_MGE, density))
+    xmin <- min(sapply(all.dens, function(x) min(x$x)))
+    xmax <- max(sapply(all.dens, function(x) max(x$x)))
+    ymax <- max(sapply(all.dens, function(x) max(x$y)))
 
-all.dens <- c(lapply(pop.MGE, density), lapply(null_MGE, density))
-xmin <- min(sapply(all.dens, function(x) min(x$x)))
-xmax <- max(sapply(all.dens, function(x) max(x$x)))
-ymax <- max(sapply(all.dens, function(x) max(x$y)))
-
-par(mfrow = c(2,2))
-for(tx in 1:length(pop.MGE)){
-    plot(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3,
-        xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
-        main = names(transcript_loadings[tx]))
-    points(density(null_MGE[[tx]]), type = "l", col = "gray", lwd = 3)
-    legend("topleft", col = c(tissue.cols[tx], "gray"), legend = c("observed", "null"), 
-        lty = 1, lwd = 3)
+    par(mfrow = c(2,2))
+    for(tx in 1:length(pop.MGE)){
+        plot(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3,
+            xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
+            main = names(transcript_loadings[tx]))
+        points(density(null_MGE[[tx]]), type = "l", col = "gray", lwd = 3)
+        legend("topleft", col = c(tissue.cols[tx], "gray"), legend = c("observed", "null"), 
+            lty = 1, lwd = 3)
+    }
 }
 ```
 
@@ -1594,11 +1610,13 @@ if(mediation.text == "complete_mediation" && use.local.imputation){
     }
 
     #show the overall MGE distribution
+    cat("### Overall\n")
     all.mge <- Reduce("rbind", tissue.inbred.effects)
     pred.order <- order(colMeans(all.mge, na.rm = TRUE))
     boxplot(all.mge[,pred.order], col = CCcolors[pred.order],
         main = "Founder MGE distribution overall")
     abline(h = 0)
+    cat("\n\n")
 }
 ```
 
@@ -1726,7 +1744,7 @@ if(mediation.text == "complete_mediation" && use.local.imputation){
     #pdf("~/Desktop/test_500.pdf", width = 7, height = 10)
     for(tx in 1:length(tissue.names)){
         cat("###", tissue.names[tx], "{.tabset .tabset-fade .tabset-pills}\n")
-        cat("#### Top MGE", "\n")
+        cat("#### Top MGE", "\n\n")
 
         transcript.mat <- tissue.inbred.effects[[tx]]
         inbred.means <- colMeans(transcript.mat, na.rm = TRUE)
@@ -1737,7 +1755,7 @@ if(mediation.text == "complete_mediation" && use.local.imputation){
             cluster_cols = FALSE, max.term.size = 3000, return.empty.columns = TRUE,
             max.char = 50)
         
-        cat("#### Bottome MGE", "\n")
+        cat("#### Bottom MGE", "\n")
         plot.enrichment.group(founder.bottom.enrichments[[tx]][mean.order], 
             plot.label = paste("Protective Alleles", tissue.names[tx]), 
             cluster_cols = FALSE, max.term.size = 3000, return.empty.columns = TRUE,
@@ -1786,7 +1804,8 @@ if(mediation.text == "complete_mediation" && use.local.imputation){
 
     common.ind <- Reduce("intersect", lapply(tissue.mge, colnames))
     all.tissue.do <- sapply(tissue.mge, function(x) colMeans(x[,common.ind]))
-    all.overall <- rbind(all.tissue.do, overall.strain.effect)
+    all.inbred <- sapply(tissue.inbred.effects, function(x) colMeans(x, na.rm = TRUE))
+    all.overall <- rbind(all.tissue.do, all.inbred)
     all.col <- c(rep("gray", nrow(all.tissue.do)), CCcolors)
 
     overall.do <- rowMeans(all.tissue.do)
@@ -1800,5 +1819,101 @@ if(mediation.text == "complete_mediation" && use.local.imputation){
         lwd = 3, main = "Overall")
     points(x = founder.idx, y = overall.all[all.order[founder.idx]], 
             col = all.col[all.order[founder.idx]], type = "h", lwd = 3)
+}
+```
+
+
+## Distal hotspots
+We want to see if high MGE genes are at all related to 
+distal eQTL hotspots identified in 1a.Tissue_Expression.Rmd.
+To examine this, we will look at MGE of genes based on their
+position in the genome.
+
+```{r hotspot}
+
+distal.coef.file <- here("Results", "Transcriptomes", "eQTL_coef_distal.RDS")
+distal.coef <- readRDS(distal.coef.file)
+
+local.coef.file <- here("Results", "Transcriptomes", "eQTL_coef_local.RDS")
+local.coef <- readRDS(local.coef.file)
+
+for(tx in 1:length(tissue.names)){
+
+    #collect MGE data for this tissue
+    transcript.id <- names(pop.MGE[[tx]])
+    transcript.idx <- match(transcript.id, gene.tables[[tx]]$gene.id)
+    transcript.position <- gene.tables[[tx]][transcript.idx,]
+
+    #collect distal eQTL data for this tissue
+    distal.eqtl.markers <- distal.coef[[tx]]$marker.id
+    distal.split.markers <- strsplit(distal.eqtl.markers, "_")
+    distal.marker.chr <- sapply(distal.split.markers, function(x) x[1])
+    distal.marker.pos <- as.numeric(sapply(distal.split.markers, function(x) x[2]))/1e6 #convert to Mb
+
+    #collect local eQTL data for this tissue
+    local.eqtl.markers <- local.coef[[tx]]$marker.id
+    local.split.markers <- strsplit(local.eqtl.markers, "_")
+    local.marker.chr <- sapply(local.split.markers, function(x) x[1])
+    local.marker.pos <- as.numeric(sapply(local.split.markers, function(x) x[2]))/1e6 #convert to Mb
+
+    all.marker.mge <- vector(mode = "list", length = 20)
+    names(all.marker.mge) <- c(1:19, "X")
+
+    for(ch in c(1:19, "X")){
+
+        #get gene positions and MGE for all transcripts on the chromosome
+        chr.idx <- which(transcript.position$chr == ch)
+        chr.pos <- transcript.position$middle[chr.idx]
+        pos.order <- order(chr.pos, decreasing = FALSE)
+        all.marker.mge[[ch]] <- cbind(chr.pos[pos.order], pop.MGE[[tx]][chr.pos[pos.order]])
+
+        #get marker positions for local eQTL
+        local.marker.chr.idx <- which(local.marker.chr == ch)
+        local.marker.chr.pos <- local.marker.pos[local.marker.chr.idx]
+        local.marker.order <- order(local.marker.chr.pos, decreasing = FALSE)
+
+        #get marker positions for distal eQTL
+        distal.marker.chr.idx <- which(distal.marker.chr == ch)
+        distal.marker.chr.pos <- distal.marker.pos[distal.marker.chr.idx]
+        distal.marker.order <- order(distal.marker.chr.pos, decreasing = FALSE)
+
+        max.chr.mb <- max(c(chr.pos, local.marker.chr.pos, distal.marker.chr.pos))
+        max.x <- ceiling(max.chr.mb/50)*50
+        xlim <- c(0, max.x)
+
+        #plot MGE for each transcript at the position that it is
+        #encoded on the genome
+        par(mfrow = c(3,1), mar = c(0, 4, 4, 4))
+        plot(chr.pos[pos.order], abs(pop.MGE[[tx]][chr.pos[pos.order]]), type = "h",
+            ylab = "population MGE", main = paste(tissue.names[tx], "Chr", ch),
+            xlim = xlim, axes = FALSE)
+        axis(2)
+        abline(h = 0)
+
+        #plot local eQTL LOD scores for each marker along the chromosome
+        par(mar = c(1, 4, 1, 4))
+        max.lod <- max(local.coef[[tx]]$lod[local.marker.chr.idx[local.marker.order]])
+        max.y <- ceiling(max.lod/10)*10
+        plot(local.marker.chr.pos[local.marker.order], 
+            local.coef[[tx]]$lod[local.marker.chr.idx[local.marker.order]], 
+            type = "h", col = "#e34a33", xlim = xlim, 
+            xlab = paste("Chromosome", ch, "Position (Mb)"),
+            ylab = "Local LOD", axes = FALSE, ylim = c(0, max.y))
+        axis(2)
+        abline(h = 0)
+
+        #plot distal eQTL LOD scores for each marker along the chromosome
+        par(mar = c(4, 4, 1, 4))
+        plot(distal.marker.chr.pos[distal.marker.order], 
+            distal.coef[[tx]]$lod[distal.marker.chr.pos[distal.marker.order]], 
+            type = "h", col = "#2b8cbe", xlim = xlim, 
+            xlab = paste("Chromosome", ch, "Position (Mb)"),
+            ylab = "Distal LOD", axes = FALSE)
+        axis(1);axis(2)
+
+
+    }
+
+
 }
 ```
