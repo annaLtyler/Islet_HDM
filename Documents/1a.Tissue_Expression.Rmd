@@ -18,6 +18,7 @@ tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not relat
 #tissue.names <- c("Adipose", "Heart", "Islet", "Liver", "SkeletalMuscle")
 #tissue.cols <- c("orange", "brown", "#8dd3c7", "tan", "pink") #colors that are not related to the DO/CC colors
 
+overwrite.results <- FALSE
 ```
 
 ## Introduction
@@ -120,7 +121,7 @@ if(remove.pseudogenes){
   }
 
   for(tx in 1:length(tissue.data)){
-    if(!file.exists(description.files[tx])){
+    if(!file.exists(description.files[tx]) || overwrite.results){
       one.gene.info <- getBM(attributes = c("ensembl_gene_id", "description"), 
         filters = "ensembl_gene_id", values = tissue.data[[tx]]$annot.mrna$gene.id,
         mart = mus)
@@ -150,9 +151,14 @@ if(remove.pseudogenes){
 ```
 
 ```{r adjust}
-#regress out covariates, and normalize residuals
-adj.expr <- lapply(tissue.data, function(x) adjust(x$data$norm, x$covar.matrix))
-saveRDS(adj.expr, here("Data", "DO", "Tissue_Expression_Adjusted.RDS"))
+adj.expr.file <- here("Data", "DO", "Tissue_Expression_Adjusted.RDS")
+if(!file.exists(adj.expr.file) || overwrite.results){
+  #regress out covariates, and normalize residuals
+  adj.expr <- lapply(tissue.data, function(x) adjust(x$data$norm, x$covar.matrix))
+  saveRDS(adj.expr, adj.expr.file)
+}else{
+  adj.expr <- readRDS(adj.expr.file)
+}
 ```
 
 ```{r match_expr}
@@ -173,7 +179,7 @@ sample.sex <- unlist(lapply(tissue.data, function(x) x$covar.matrix[,1]))
 
 #plot decomposition
 decomp.file <- file.path(results.dir, "Tissue.Decomposition.RDS")
-if(!file.exists(decomp.file)){
+if(!file.exists(decomp.file) || overwrite.results){
   all.expr <- Reduce("rbind", tx.matched.expr)
   expr.decomp <- plot.decomp(all.expr, plot.results = FALSE)
   saveRDS(expr.decomp, decomp.file)
@@ -434,7 +440,7 @@ get_local_distal_coef <- function(transcript.id, eqtl.table, gene.table, bp.buff
 local.coef.file <- file.path(results.dir, "eQTL_coef_local.RDS")
 distal.coef.file <- file.path(results.dir, "eQTL_coef_distal.RDS")
 
-if(!file.exists(local.coef.file)){
+if(!file.exists(local.coef.file) || overwrite.results){
     local.coef <- distal.coef <- vector(mode = "list", length = length(tissue.names))
     names(local.coef) <- names(distal.coef) <- tissue.names
     for(tx in 1:length(tissue.names)){
@@ -523,7 +529,7 @@ tissue.
 #germline kinship.
 
 kin.file <- here("Data", "DO", "overall.kinship.RDS")
-if(!file.exists(kin.file)){
+if(!file.exists(kin.file) || overwrite.results){
     Kg = calc_kinship(genoprobs, "overall")
     saveRDS(Kg, kin.file)
 }else{
@@ -648,7 +654,7 @@ names(local.eQTL.pos) <- u_transcripts
 #identify unique local eQTLs that are shared across tissues
 local.eqtl.binary.file <- file.path(results.dir, "Shared_eQTL_Local_Binary.RDS")
 local.eqtl.coef.file <- file.path(results.dir, "Shared_eQTL_Local_Coef.RDS")
-if(!file.exists(local.eqtl.binary.file)){
+if(!file.exists(local.eqtl.binary.file) || overwrite.results){
   shared.local.list <- lapply(local.eQTL.pos, function(x) assess_shared(x, mb.buffer = 4))
   local.shared.binary <- Reduce("rbind", lapply(shared.local.list, function(x) if(length(x) > 0){x$eqtl.tissues}))
   local.shared.coef <- lapply(shared.local.list, function(x) if(length(x) > 0){x$eqtl.coef})
@@ -691,7 +697,7 @@ names(distal.eQTL.pos) <- u_transcripts
 #identify unique local eQTLs that are shared across tissues
 distal.eqtl.binary.file <- file.path(results.dir, "Shared_eQTL_Distal_Binary.RDS")
 distal.eqtl.coef.file <- file.path(results.dir, "Shared_eQTL_Distal_Coef.RDS")
-if(!file.exists(distal.eqtl.binary.file)){
+if(!file.exists(distal.eqtl.binary.file) || overwrite.results){
   shared.distal.list <- lapply(distal.eQTL.pos, function(x) assess_shared(x, mb.buffer = 4))
   distal.shared.binary <- Reduce("rbind", lapply(shared.distal.list, function(x) if(length(x) > 0){x$eqtl.tissues}))
   distal.shared.coef <- lapply(shared.distal.list, function(x) if(length(x) > 0){x$eqtl.coef})
@@ -745,7 +751,7 @@ for local eQTL.
 
 allele_effect_cor <- function(shared.coef, filename){
   
-  if(file.exists(filename)){
+  if(file.exists(filename) && !overwrite.results){
     coef.cor <- readRDS(filename)
     return(coef.cor)
   }
@@ -855,7 +861,7 @@ some of these, and they do seem right...
 
 expr_cor <- function(shared.coef, expr.mat, filename){
 
-  if(!file.exists(filename)){
+  if(!file.exists(filename) || overwrite.results){
 
     total.eqtl <- sum(sapply(shared.coef, length))
     expr.cor <- matrix(NA, ncol = nrow(tissue.pairs), nrow = total.eqtl)
@@ -949,6 +955,7 @@ correlations across tissues than genes with local eQTL or genes with
 no eQTL.
 
 ```{r all_four, fig.width = 8, fig.height = 8}
+
 num.local <- t(sapply(local.eQTL.pos, function(x) sapply(x, nrow)))
 num.distal <- t(sapply(distal.eQTL.pos, function(x) sapply(x, nrow)))
 colnames(num.local) <- colnames(num.distal) <- tissue.names
@@ -1150,7 +1157,7 @@ all.tx <- Reduce("union", tissue.tx)
 #calculate all local LOD scores for future comparisons
 #and thresholding
 local.lod.file <- here("Results", "Transcriptomes", "Local_LOD.RDS")
-if(!file.exists(local.lod.file)){
+if(!file.exists(local.lod.file) || overwrite.results){
   local.lod <- sapply(local.coef, function(x) x$lod[match(all.tx, x$gene.id)])
   rownames(local.lod) <- all.tx
   saveRDS(local.lod, local.lod.file)
@@ -1168,7 +1175,7 @@ if(use.kinship){
 relative.effect.file <- file.path(results.dir, "Transcripts_Relative_Effects.RDS")
 tissue.grid.file <- file.path(results.dir, "Transcripts_by_Tissue.RDS")
 
-if(file.exists(int.p.file)){
+if(file.exists(int.p.file) && !overwrite.results){
   p.mat <- readRDS(int.p.file)
   tissue.grid <- readRDS(tissue.grid.file)
   relative.effect <- readRDS(relative.effect.file)
@@ -1608,7 +1615,7 @@ for(tx in 1:length(tissue.names)){
   distal.herit.file <- here("Results", "Transcriptome", 
     paste0("Distal_Heritability_", tissue.names[tx], ".RDS"))
 
-  if(!file.exists(distal.herit.file)){
+  if(!file.exists(distal.herit.file) || overwrite.results){
     transcript.id <- colnames(adj.expr[[tx]])
     herit.resid <- rep(NA, length = length(transcript.id))
     names(herit.resid) <- transcript.id
