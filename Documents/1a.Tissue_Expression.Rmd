@@ -1610,23 +1610,29 @@ the transcript loading to get the distal MGE.
 
 ```{r distal_variance_explained}
 
+save.every = 100
 
 for(tx in 1:length(tissue.names)){
-  distal.herit.file <- here("Results", "Transcriptome", 
+    distal.herit.file <- here("Results", "Transcriptome", 
     paste0("Distal_Heritability_", tissue.names[tx], ".RDS"))
-
   if(!file.exists(distal.herit.file) || overwrite.results){
+    sink(here("Results", "Transcriptome", paste0("progress_", tissue.names[tx], ".txt")))
     transcript.id <- colnames(adj.expr[[tx]])
     herit.resid <- rep(NA, length = length(transcript.id))
     names(herit.resid) <- transcript.id
     transcript.idx <- match(transcript.id, tissue.data[[tx]]$annot.mrna$gene.id) 
     nearest.marker <- tissue.data[[tx]]$annot.mrna$nearest.marker.id
     for(tr in 1:length(transcript.id)){
+      print(tr)
       marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker[tr])
       model <- fit1(marker.geno, rankZ(adj.expr[[tx]][,tr]))
       herit.resid[tr] <- est_herit(model$resid, Kg)
+      if(tr %% save.every == 0){
+        saveRDS(distal.herit, distal.herit.file)
+      }
     }
     saveRDS(distal.herit, distal.herit.file)
+    sink()
   }
 }
 ```
