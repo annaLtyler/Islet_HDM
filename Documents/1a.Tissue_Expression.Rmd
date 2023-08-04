@@ -1609,19 +1609,31 @@ the heritability of the residuals. We multiply this number by
 the transcript loading to get the distal MGE.
 
 ```{r distal_variance_explained}
-
 save.every = 100
+start.idx <- 1
+
 for(tx in 1:length(tissue.names)){
     distal.herit.file <- here("Results", "Transcriptomes", 
       paste0("Distal_Heritability_", tissue.names[tx], ".RDS"))
-  if(!file.exists(distal.herit.file) || overwrite.results){
-    sink(here("Results", "Transcriptomes", paste0("progress_", tissue.names[tx], ".txt")))
     transcript.id <- colnames(adj.expr[[tx]])
+    
+    #check to see if we've already saved some results that we can use
+    if(file.exists(distal.herit.file) && !overwrite.results){
+      herit.resid <- readRDS(distal.herit.file)
+      start.idx <- max(which(!is.na(herit.resid))) + 1
+    }
+  
+  #start where we left off, or at the beginning if there are no data
+  #or we are overwriting previous data.
+  if(start.idx < length(transcript.id)){
+    sink(here("Results", "Transcriptomes", paste0("progress_", tissue.names[tx], ".txt")))
     herit.resid <- rep(NA, length = length(transcript.id))
     names(herit.resid) <- transcript.id
     transcript.idx <- match(transcript.id, tissue.data[[tx]]$annot.mrna$gene.id) 
     nearest.marker <- tissue.data[[tx]]$annot.mrna$nearest.marker.id
-    for(tr in 1:length(transcript.id)){
+
+    #start where we left off, or at the beginning, if that is warranted
+    for(tr in start.idx:length(transcript.id)){
       print(tr)
       marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker[tr])
       model <- fit1(marker.geno, rankZ(adj.expr[[tx]][,tr]))
