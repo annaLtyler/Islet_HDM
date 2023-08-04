@@ -1608,7 +1608,13 @@ fit the local marker to the transcript levels. Then we calculate
 the heritability of the residuals. We multiply this number by 
 the transcript loading to get the distal MGE.
 
+We can compare: 
+  * the magnituge of MGE across local and distal components
+  * enrichments of the the top and bottom scoring genes in both
+  * Do genes with high distal MGE localize in distal eQTL hotspots?
+
 ```{r distal_variance_explained}
+
 save.every = 100
 start.idx <- 1
 
@@ -1635,6 +1641,7 @@ for(tx in 1:length(tissue.names)){
     #start where we left off, or at the beginning, if that is warranted
     for(tr in start.idx:length(transcript.id)){
       print(tr)
+      if(nearest.marker[tr] == ""){next()}
       marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker[tr])
       model <- fit1(marker.geno, rankZ(adj.expr[[tx]][,tr]))
       herit.resid[tr] <- est_herit(model$resid, Kg)
