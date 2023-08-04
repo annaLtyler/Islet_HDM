@@ -1616,9 +1616,9 @@ We can compare:
 ```{r distal_variance_explained}
 
 save.every = 100
-start.idx <- 1
 
 for(tx in 1:length(tissue.names)){
+    start.idx <- 1
     distal.herit.file <- here("Results", "Transcriptomes", 
       paste0("Distal_Heritability_", tissue.names[tx], ".RDS"))
     transcript.id <- colnames(adj.expr[[tx]])
