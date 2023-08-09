@@ -1822,6 +1822,141 @@ if(mediation.text == "complete_mediation" && use.local.imputation){
 ```
 
 
+## Distal contributions to MGE
+
+We are interested in analyzing the relative contributions of 
+local and distal regulation to trait variation. We can't estimate
+individual-level distal vaiance, but we can estimate 
+population-level distal variance.
+
+The variance of the measured transcript is the sum of the 
+variance contributions from covariates, local genotype, 
+distal genotype, and error. We already removed the variance
+from the covariates, so we are left with all the other 
+variance components. 
+
+We scaled the variance of the measured transcript (minus 
+covariates) to be equal to 1. Thus, the variance contributions
+from the local, distal, and error components sum to 1.
+
+We then fit this variance with a model using the local genotype
+and kinship matrix. The residual variance from this model is
+the variance explained by distal genetics and by error. We can
+estimate the proportion explained by distal genetics by estimating
+the heritability of this residual. 
+
+The distal variance explained is the residual of the above model
+times the heritability. 
+
+We can look at how this number is related to transcript loading.
+ 
+
+```{r distal_var}
+distal.var.files <- list.files(here("Results", "Transcriptomes"), pattern = "Distal_Heritability", 
+    full.names = TRUE) #created by 1a.Tissue_Expression.Rmd
+distal.var <- lapply(distal.var.files, readRDS)
+names(distal.var) <- tissue.names
+```
+
+The following plots show that the residual variance for many of 
+the transcripts after fitting the local marker is still quite 
+high.
+
+```{r var_dist}
+all.resid <- lapply(distal.var, function(x) round(x[,"residual_variance"], 2))
+boxplot(all.resid, ylab = "Variance", 
+    main = "Residual Transcript Variance After Fitting Local Marker")
+```
+
+The heritability of this residual variance is also quite high
+for many of the transncripts, although the bulk of the distribution
+is below 0.5.
+
+```{r herit_dist}
+all.herit <- lapply(distal.var, function(x) round(x[,"residual_heritability"], 2))
+stripchart(all.herit, ylab = "Heritability", 
+    main = "Heritability of Residual Variance", method = "stack",
+    pch = 16, col = "gray", vertical = TRUE, offset = 0.006)
+abline(h = 0.5)
+```
+
+The following plots show how the residual variance and
+heritability are related to each other. The bulk of the
+genes have very high residual variance, but low 
+heritability of that variance.
+
+```{r resid_v_herit}
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    plot.hexbin.as.plot(distal.var[[tx]][,"residual_variance"], 
+        distal.var[[tx]][,"residual_heritability"], main = tissue.names[tx], 
+        round.legend = 2, legend.pos = "topleft", n.bins = 3, xlab = "Residual Variance",
+        ylab = "Heritability")
+    abline(h = 0.5, v = 0.5)
+}
+```
+
+The distributions of distal variance explained for the transcripts
+are shown below. There are many transcripts with zero distal variance
+explained, but also many with a lot of distal variance explained.
+
+Islet has the largest overall distal variance explained, which is
+consistent with the islet having that large distal eQTL hotspot.
+
+The horizontal line shows the overall median distal variance explained.
+
+```{r dist_var_exp}
+dist.var.exp <- lapply(distal.var, function(x) round(x[,"residual_variance"]*x[,"residual_heritability"], 2))
+med.var.exp <- sapply(dist.var.exp, function(x) median(x, na.rm = TRUE))
+
+boxplot(dist.var.exp, col = "lightgray", ylab = "Distal Variance Explained")
+stripchart(dist.var.exp, ylab = "Heritability", 
+    main = "Heritability of Residual Variance", method = "stack",
+    pch = 16, col = "darkgray", vertical = TRUE, offset = 0.005, add = TRUE)
+abline(h = median(unlist(dist.var.exp), na.rm = TRUE))
+```
+
+Is this number correlated with locally imputed transcripts?
+Yes. Why?
+These numbers are positively correlated suggesting that the 
+more heritable variance is explained by local genotype,
+the more is also explained by distal variation. If these
+two numbers are correlated, we'd want them to be negatively
+correlated: the more variance is explained by local genotype,
+the less is explained by distal factors, proportionately. These
+numbers should also sum to no more than 1, but many of them doo.
+
+```{r compare_to_local}
+local.imp <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
+local.var <- lapply(local.imp, function(x) apply(x, 2, var))
+
+par(mfrow = c(2,2))
+total.sum <- vector(mode = "list", length = length(tissue.names))
+names(total.sum) <- tissue.names
+for(tx in 1:length(tissue.names)){
+    common.tx <- intersect(names(dist.var.exp[[tx]]), names(local.var[[tx]]))
+    
+    plot.with.model(local.var[[tx]][common.tx], dist.var.exp[[tx]][common.tx],
+        xlab = "Local variance explained", ylab = "Distal variance explained",
+        main = tissue.names[tx])
+    total.sum[[tx]] <- local.var[[tx]][common.tx] + dist.var.exp[[tx]][common.tx]
+
+}
+
+par(mfrow = c(1,1))
+boxplot(total.sum);abline(h = 1)
+```
+
+What is correlated about these numbers? Is it that kinship piece isn't
+being completely removed when we fit the linear model? What is fit1 
+returning? Is it the variance explained by both the kinship and the
+local bit? Should we correct for kinship before we fit the model?
+Should we not include kinship in the model?
+
+How do we figure out what is being replicated in the two models?
+Look for correlation between the residuals and the original 
+transcript?
+
 ## Distal hotspots
 We want to see if high MGE genes are at all related to 
 distal eQTL hotspots identified in 1a.Tissue_Expression.Rmd.

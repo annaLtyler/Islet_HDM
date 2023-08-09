@@ -1636,22 +1636,48 @@ for(tx in 1:length(tissue.names)){
 
     #if we are starting fresh...
     if(!file.exists(distal.herit.file) || overwrite.results){
-      herit.resid <- matrix(NA, ncol = 2, nrow = length(transcript.id))
+      herit.resid <- matrix(NA, ncol = 3, nrow = length(transcript.id))
       rownames(herit.resid) <- transcript.id
-      colnames(herit.resid) <- c("residual_variance", "residual_heritability")
+      colnames(herit.resid) <- c("local_var", "residual_variance", "residual_heritability")
     }
 
     transcript.idx <- match(transcript.id, tissue.data[[tx]]$annot.mrna$gene.id) 
     nearest.marker <- tissue.data[[tx]]$annot.mrna$nearest.marker.id
 
+    #mean-center all expr
+    centered.expr <- apply(adj.expr[[tx]], 2, function(x) x - mean(x, na.rm = TRUE))
+    #scale all variance to 1
+    scaled.expr <- apply(centered.expr, 2, function(x) x/sd(x, na.rm = TRUE))
+  
     #start where we left off, or at the beginning, if that is warranted
     for(tr in start.idx:length(transcript.id)){
       print(tr)
       if(nearest.marker[tr] == ""){next()}
       marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker[tr])
-      model <- fit1(marker.geno, rankZ(adj.expr[[tx]][,tr]), kinship = Kg)
-      herit.resid[tr,1] <- var(model$resid)
-      herit.resid[tr,2] <- est_herit(model$resid, Kg)
+      trans.expr <- scaled.expr[,transcript.id[tr]]
+  
+      #with kinship
+      #I am keeping the variance of the fitted values to use as the local variance explained
+      model.kin <- fit1(marker.geno, trans.expr, kinship = Kg)
+      imp.local <- model.kin$fitted
+      distal.resid <- model.kin$resid
+      result <- c(var(imp.local), var(distal.resid), est_herit(distal.resid, Kg))
+      herit.resid[tr,] <- result
+
+      #without kinship
+      #model.no.kin <- fit1(marker.geno, trans.expr)
+      #imp.local <- model.no.kin$fitted
+      #distal.resid <- model.no.kin$resid
+      #result <- c(var(imp.local), var(distal.resid), est_herit(distal.resid, Kg))
+      #herit.resid[tr,] <- result
+
+      #straight linear model
+      #model <- lm(trans.expr~marker.geno[names(trans.expr),])
+      #imp.local <- predict(model)
+      #distal.resid <- residuals(model)
+      #result <- c(var(imp.local), var(distal.resid), est_herit(distal.resid, Kg))
+      #herit.resid[tr,] <- result
+
       if(tr %% save.every == 0){
         saveRDS(herit.resid, distal.herit.file)
       }
