@@ -1931,15 +1931,30 @@ local.imp <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_impu
 local.var <- lapply(local.imp, function(x) apply(x, 2, var))
 
 par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    common.transcripts <- intersect(names(local.var[[tx]]), rownames(distal.var[[tx]]))
+    plot(local.var[[tx]][common.transcripts], distal.var[[tx]][common.transcripts,"local_var"],
+        xlab = "Matt's estimate", ylab = "Local model prediction")
+    abline(0,1)
+}
+
+par(mfrow = c(2,2))
 total.sum <- vector(mode = "list", length = length(tissue.names))
 names(total.sum) <- tissue.names
 for(tx in 1:length(tissue.names)){
-    common.tx <- intersect(names(dist.var.exp[[tx]]), names(local.var[[tx]]))
-    
-    plot.with.model(local.var[[tx]][common.tx], dist.var.exp[[tx]][common.tx],
+    #common.tx <- intersect(names(dist.var.exp[[tx]]), names(local.var[[tx]]))
+    #plot.with.model(local.var[[tx]][common.tx], dist.var.exp[[tx]][common.tx],
+    #    xlab = "Local variance explained", ylab = "Distal variance explained",
+    #    main = tissue.names[tx])
+
+    common.tx <- intersect(rownames(distal.var[[tx]]), names(dist.var.exp[[tx]]))
+
+    plot.with.model(distal.var[[tx]][common.tx,"local_var"], dist.var.exp[[tx]][common.tx],
         xlab = "Local variance explained", ylab = "Distal variance explained",
         main = tissue.names[tx])
-    total.sum[[tx]] <- local.var[[tx]][common.tx] + dist.var.exp[[tx]][common.tx]
+
+    total.sum[[tx]] <- distal.var[[tx]][common.tx,"local_var"] + dist.var.exp[[tx]][common.tx]
+
 
 }
 

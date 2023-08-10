@@ -1658,6 +1658,7 @@ for(tx in 1:length(tissue.names)){
   
       #with kinship
       #I am keeping the variance of the fitted values to use as the local variance explained
+      #reserve as much of the signal from kinship as we can by performing a kinship correction
       model.kin <- fit1(marker.geno, trans.expr, kinship = Kg)
       imp.local <- model.kin$fitted
       distal.resid <- model.kin$resid

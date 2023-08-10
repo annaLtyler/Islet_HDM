@@ -1,0 +1,128 @@
+---
+title: "Individual Gene Follow-Up"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+
+This workflow will be used to build up vignettes of individual
+genes in collaboration with Jeff Harder who is working with the
+three bears data.
+
+```{r load_code}
+is.interactive = FALSE
+#is.interactive = TRUE
+library("here")
+
+results.dir <- here("Results", "High_Dim_Med", exp.name)
+if(!file.exists(results.dir)){dir.create(results.dir, recursive = TRUE)}
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("pheatmap", "gprofiler2", "igraph")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+```{r set_var}
+tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
+gene.cols <- categorical_pal(8)
+results.dir <- here("Results", "Vignettes")
+if(!file.exists(results.dir)){dir.create(results.dir)}
+
+jeff.genes <- c("Pnpla2", "Mogat2", "Hadha", "Cpt2", "Capn3")
+```
+
+
+```{r load_data}
+exp.name = "tissue_together-_-complete_mediation-germline_kinship"
+pop.all.mge <- readRDS(here("Results", "High_Dim_Med", exp.name, "Population_MGE_Loadings_all_genetic_effects.RDS"))
+pop.local.mge <- readRDS(here("Results", "High_Dim_Med", exp.name, "Population_MGE_Loadings_local_imp.RDS"))
+```
+
+
+```{r genes, fig.width = 10, fig.height = 5}
+
+gene.table <- gconvert(jeff.genes, organism = "mmusculus")
+
+gene.all.mge.table <- gene.local.mge.table <- NULL
+for(g in 1:nrow(gene.table)){
+	gene.name <- gene.table[g,"input"]
+	gene.id <- gene.table[g,"target"]
+	
+	gene.all.mge <- sapply(pop.all.mge, function(x) x[which(names(x) == gene.id)])	
+	names(gene.all.mge) <- tissue.names
+	gene.all.mge.table <- rbind(gene.all.mge.table, gene.all.mge)
+
+	gene.local.mge <- sapply(pop.local.mge, function(x) x[which(names(x) == gene.id)])	
+	names(gene.local.mge) <- tissue.names	
+	gene.local.mge.table <- rbind(gene.local.mge.table, gene.local.mge)
+	
+}
+
+rownames(gene.all.mge.table) <- rownames(gene.local.mge.table) <- gene.table[,"input"]
+
+barplot(gene.all.mge.table, beside = TRUE, col = gene.cols[1:nrow(gene.table)], main = "Overall MGE")
+legend("topright", fill = gene.cols[1:nrow(gene.table)], legend = gene.table[,"input"], cex = 0.7)
+
+barplot(gene.local.mge.table, beside = TRUE, col = gene.cols[1:nrow(gene.table)], main = "Local MGE")
+legend("topright", fill = gene.cols[1:nrow(gene.table)], legend = gene.table[,"input"], cex = 0.7)
+
+```
+
+How large are these MGE values?
+For each gene in each tissue, we looked at how many genes met or exceeded the MGE 
+of the gene.
+
+```{r rel_mge, fig.width = 4, fig.height = 4}
+pop.all.mge.percentile <- matrix(NA, nrow = nrow(gene.all.mge.table), ncol = ncol(gene.all.mge.table))
+pop.local.mge.percentile <- matrix(NA, nrow = nrow(gene.local.mge.table), ncol = ncol(gene.local.mge.table))
+dimnames(pop.all.mge.percentile) <- dimnames(pop.local.mge.percentile) <- dimnames(gene.all.mge.table)
+
+for(tx in 1:length(tissue.names)){
+
+    all.pos.idx <- which(gene.all.mge.table[,tx] > 0)
+    all.neg.idx <- which(gene.all.mge.table[,tx] < 0)
+
+    if(length(pos.idx) > 0){
+        pos.gene.perc <- 1 - sapply(gene.all.mge.table[all.pos.idx,tx], function(x) length(which(pop.all.mge[[tx]] >= x))/length(pop.all.mge[[tx]]))
+        pop.all.mge.percentile[all.pos.idx,tx] <- pos.gene.perc
+    }
+
+    if(length(neg.idx) > 0){
+        neg.gene.perc <- 1 - sapply(gene.all.mge.table[all.neg.idx,tx], function(x) length(which(pop.all.mge[[tx]] <= x))/length(pop.all.mge[[tx]]))
+        pop.all.mge.percentile[all.neg.idx,tx] <- neg.gene.perc
+    }
+
+    #also look at local percentiles
+    local.pos.idx <- which(gene.local.mge.table[,tx] > 0)
+    local.neg.idx <- which(gene.local.mge.table[,tx] < 0)
+
+   if(length(pos.idx) > 0){
+        pos.gene.perc <- 1 - sapply(gene.local.mge.table[local.pos.idx,tx], function(x) length(which(pop.local.mge[[tx]] >= x))/length(pop.local.mge[[tx]]))
+        pop.local.mge.percentile[local.pos.idx,tx] <- pos.gene.perc
+    }
+
+    if(length(neg.idx) > 0){
+        neg.gene.perc <- 1 - sapply(gene.local.mge.table[local.neg.idx,tx], function(x) length(which(pop.local.mge[[tx]] <= x))/length(pop.local.mge[[tx]]))
+        pop.local.mge.percentile[local.neg.idx,tx] <- neg.gene.perc
+    }
+
+
+}
+
+
+pheatmap(pop.all.mge.percentile, display_numbers = TRUE, cluster_cols = FALSE, cluster_rows = FALSE,
+    main = "All MGE percentile")
+pheatmap(pop.local.mge.percentile, display_numbers = TRUE, cluster_cols = FALSE, cluster_rows = FALSE,
+    main = "local MGE percentile")
+```
