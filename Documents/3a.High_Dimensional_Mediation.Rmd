@@ -585,15 +585,38 @@ a flag that can be turned back on to calculate the
 null loadings and null MGE. If the flag is set to FALSE,
 only population MGE is calculated.
 
+**Note about imputations:** We have found after lots of digging
+that the Bayesian method of imputing transcripts with local
+and distal components is not working. It is merging the local
+and distal signals so that they are highly correlated. We
+are now doing the simplest possible imputation, which is the
+fitted values from the fit1 mixed model using kinship as a
+random effect. This procedure is performed in 1a.Tissue_Expression.Rmd. 
+To calculate the variance explained by the distal component of 
+each transcript, we calculate the variance and heritability of
+the residuals of that fit1 model. The variance of the residuals
+is the amount of transcript variance that is explained by distal
+factors and error. By calculating the heritability of the residuals,
+we can estimate the proportion of the residual variance that is
+due to distal factors. We can then use the product of the residual
+variance and heritability to calculate population-level distal MGE.
+We are implementing that here in replacement of the Bayesian 
+imputations.
+
 ```{r prep_pop_mge}
 calc_null <- FALSE #set to TRUE to calculate null loading and
                    #null MGE distributions.
 
 #read in imputed transcripts so we can calculate null population MGE
 if(use.local.imputation){
-    tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
+    #tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
+
+    #use simple model instead
+    imp.files <- sapply(tissue.names, function(x) paste0("Distal_Heritability_", x, ".RDS"))
+    tissue.imp.local <- lapply(imp.files, function(x) readRDS(here("Results", "Transcriptomes", x)))
+    tissue.imp.gen <- lapply(tissue.imp.local)
 }else{
-    tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_genetic.RDS")))
+    #tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_genetic.RDS")))
 }
 ```
 

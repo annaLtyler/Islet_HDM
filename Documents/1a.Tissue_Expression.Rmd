@@ -1622,14 +1622,18 @@ for(tx in 1:length(tissue.names)){
     distal.herit.file <- here("Results", "Transcriptomes", 
       paste0("Distal_Heritability_", tissue.names[tx], ".RDS"))
     transcript.id <- colnames(adj.expr[[tx]])
+
+    local.imp.file <- here("Results", "Transcriptomes", paste0("Local_Imputation_", tissue.names[tx], ".RDS"))
     
     #check to see if we've already saved some results that we can use
+    #we only need to use one of the files to figure this out
     if(file.exists(distal.herit.file) && !overwrite.results){
       herit.resid <- readRDS(distal.herit.file)
       start.idx <- max(which(!is.na(herit.resid[,1]))) + 1
     }
-  
-  #start where we left off, or at the beginning if there are no data
+      
+
+#start where we left off, or at the beginning if there are no data
   #or we are overwriting previous data.
   if(start.idx < length(transcript.id)){
     sink(here("Results", "Transcriptomes", paste0("progress_", tissue.names[tx], ".txt")))
@@ -1639,6 +1643,9 @@ for(tx in 1:length(tissue.names)){
       herit.resid <- matrix(NA, ncol = 3, nrow = length(transcript.id))
       rownames(herit.resid) <- transcript.id
       colnames(herit.resid) <- c("local_var", "residual_variance", "residual_heritability")
+
+      local.imp <- matrix(NA, ncol = length(transcript.id), nrow = nrow(adj.expr[[tx]]))
+      dimnames(local.imp) <- dimnames(adj.expr[[tx]])
     }
 
     transcript.idx <- match(transcript.id, tissue.data[[tx]]$annot.mrna$gene.id) 
@@ -1661,6 +1668,7 @@ for(tx in 1:length(tissue.names)){
       #reserve as much of the signal from kinship as we can by performing a kinship correction
       model.kin <- fit1(marker.geno, trans.expr, kinship = Kg)
       imp.local <- model.kin$fitted
+      local.imp[,tr] <- imp.local
       distal.resid <- model.kin$resid
       result <- c(var(imp.local), var(distal.resid), est_herit(distal.resid, Kg))
       herit.resid[tr,] <- result
@@ -1681,9 +1689,11 @@ for(tx in 1:length(tissue.names)){
 
       if(tr %% save.every == 0){
         saveRDS(herit.resid, distal.herit.file)
+        saveRDS(local.imp, local.imp.file)
       }
     }
     saveRDS(herit.resid, distal.herit.file)
+    saveRDS(local.imp, local.imp.file)
     sink()
   }
 }
