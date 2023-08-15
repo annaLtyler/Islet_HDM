@@ -1648,9 +1648,6 @@ for(tx in 1:length(tissue.names)){
       dimnames(local.imp) <- dimnames(adj.expr[[tx]])
     }
 
-    transcript.idx <- match(transcript.id, tissue.data[[tx]]$annot.mrna$gene.id) 
-    nearest.marker <- tissue.data[[tx]]$annot.mrna$nearest.marker.id
-
     #mean-center all expr
     centered.expr <- apply(adj.expr[[tx]], 2, function(x) x - mean(x, na.rm = TRUE))
     #scale all variance to 1
@@ -1659,8 +1656,12 @@ for(tx in 1:length(tissue.names)){
     #start where we left off, or at the beginning, if that is warranted
     for(tr in start.idx:length(transcript.id)){
       print(tr)
-      if(nearest.marker[tr] == ""){next()}
-      marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker[tr])
+      
+      gene.info.idx <- which(gene.tables[[tx]]$gene.id == transcript.id[tr])
+      nearest.marker <- gene.tables[[tx]]$nearest.marker.id[gene.info.idx]
+      
+      marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+
       trans.expr <- scaled.expr[,transcript.id[tr]]
   
       #with kinship
