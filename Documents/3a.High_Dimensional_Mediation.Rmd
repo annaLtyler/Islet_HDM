@@ -38,6 +38,9 @@ For this workflow there are several parameters to set.
         The full genetic model gives us better concordance with DO phenotypes,
         but we can't use kinship in the model if we are going to predict phenotypes
         in other populations, like inbred founders, or the CC-RIX.
+        This is now set to TRUE by default because we are using a different 
+        imputation model that only allows us to impute the locally controlled
+        portion of transcription for individuals.
 
 
 ```{r get_args}
@@ -51,7 +54,7 @@ args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
 #args <- c(1,1,1,1,0) #merged tissues, local imputation, mediation mode, weight adjusted
 
 merge.tissues <- as.logical(args[1]) #if TRUE tissue transcriptome kernels are averaged. Otherwise they are used separtely
-use.local.imputation <- as.logical(args[2]) #if TRUE, locally imputed transcripts are used to generate polytranscriptomic risk scores. Otherwise transcripts imputed with the full genetic model are used.
+use.local.imputation <- TRUE #if TRUE, locally imputed transcripts are used to generate polytranscriptomic risk scores. Otherwise transcripts imputed with the full genetic model are used.
 weight.adjusted <- as.logical(args[3]) #if TRUE, body weight is adjusted out of the phenotypes and transcriptome before running mediation
 complete.mediation <- as.logical(args[4]) #if TRUE use a mediation network. If FALSE use a reactive network
 delete_previous <- as.logical(args[5]) #if TRUE, previous results are overwritten
@@ -147,7 +150,7 @@ for(i in 1:length(all.fun)){source(all.fun[i])}
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
 all.packages <- c("pheatmap", "qtl2", "gprofiler2", "Matrix", "RGCCA", 
     "bnstruct", "igraph", "corpcor", "cluster", "RColorBrewer",
-    "grid", "wordcloud", "stringr")
+    "grid", "wordcloud", "stringr", "hexbin")
 load_libraries(all.packages, personal.library = TRUE)
 ```
 
@@ -604,6 +607,7 @@ We are implementing that here in replacement of the Bayesian
 imputations.
 
 ```{r prep_pop_mge}
+
 calc_null <- FALSE #set to TRUE to calculate null loading and
                    #null MGE distributions.
 
@@ -611,29 +615,31 @@ calc_null <- FALSE #set to TRUE to calculate null loading and
 if(use.local.imputation){
     #tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
 
-    #use simple model instead
-    imp.files <- sapply(tissue.names, function(x) paste0("Distal_Heritability_", x, ".RDS"))
-    tissue.imp.local <- lapply(imp.files, function(x) readRDS(here("Results", "Transcriptomes", x)))
-    tissue.imp.gen <- lapply(tissue.imp.local)
+    #use simple model instead. These imputed transcripts are the fitted
+    #values from fit1 with the nearest marker and a kinship correction
+    imp.files <- sapply(tissue.names, function(x) paste0("Local_Imputation_", x, ".RDS"))
+    tissue.imp.gen <- lapply(imp.files, function(x) readRDS(here("Results", "Transcriptomes", x)))
 }else{
     #tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_genetic.RDS")))
 }
 ```
 
 ```{r calc_pop_mge}
+#calculate a population-level MGE for each transcript
+#using the variance explained by local genotype
 
-pop.mge.file <- file.path(results.dir, paste0("Population_MGE_Loadings_", mge.name, ".RDS"))
+pop.local.mge.file <- file.path(results.dir, paste0("Population_Local_MGE_", mge.name, ".RDS"))
 
-if(!file.exists(pop.mge.file)){
-    pop.MGE <- vector(mode = "list", length = length(tissue.names))
+if(!file.exists(pop.local.mge.file)){
+    pop.local.MGE <- vector(mode = "list", length = length(tissue.names))
     for(tx in 1:length(transcript_loadings)){
         tx.r2 <- apply(tissue.imp.gen[[tx]], 2, var)
         common.transcripts <- intersect(names(tx.r2), rownames(transcript_loadings[[tx]]))
-        pop.MGE[[tx]] <- tx.r2[common.transcripts]*transcript_loadings[[tx]][common.transcripts,1]
+        pop.local.MGE[[tx]] <- tx.r2[common.transcripts]*transcript_loadings[[tx]][common.transcripts,1]
     }
-    saveRDS(pop.MGE, pop.mge.file)
+    saveRDS(pop.local.MGE, pop.local.mge.file)
 }else{
-    pop.MGE <- readRDS(pop.mge.file)
+    pop.local.MGE <- readRDS(pop.local.mge.file)
 }
 ```
 
@@ -717,13 +723,13 @@ distribution. Basically, everything is significant.
 
 ```{r mge_dist, fig.width = 8, fig.height = 8}
 if(calc_null){
-    all.dens <- c(lapply(pop.MGE, density), lapply(null_MGE, density))
+    all.dens <- c(lapply(pop.local.MGE, density), lapply(null_MGE, density))
     xmin <- min(sapply(all.dens, function(x) min(x$x)))
     xmax <- max(sapply(all.dens, function(x) max(x$x)))
     ymax <- max(sapply(all.dens, function(x) max(x$y)))
 
     par(mfrow = c(2,2))
-    for(tx in 1:length(pop.MGE)){
+    for(tx in 1:length(pop.local.MGE)){
         plot(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3,
             xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
             main = names(transcript_loadings[tx]))
@@ -790,7 +796,7 @@ This section also writes out the top and bottom transcripts
 for analysis in CMAP.
 
 ```{r enrichment}
-enrich.file <- file.path(results.dir, "Top_Bottom_Enrichment.RDS")
+enrich.file <- file.path(results.dir, "Top_Bottom_Loading_Enrichment.RDS")
 hum.mus.ortho <- as.matrix(read.delim(here("Data", "general", "human.mouse.orthologs.txt"), 
     stringsAsFactors = FALSE))
 
@@ -1012,7 +1018,10 @@ subset_enrichment <- function(individual.enrichments, max.term.size = 5000,
 if(mediation.text == "complete_mediation"){
     #read in the imputed transcripts generated by Matt
     if(use.local.imputation){
-        tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
+        #tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
+        imp.files <- sapply(tissue.names, function(x) paste0("Local_Imputation_", x, ".RDS"))
+        tissue.imp.gen <- lapply(imp.files, function(x) readRDS(here("Results", "Transcriptomes", x)))
+
     }else{
         tissue.imp.gen <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_genetic.RDS")))
     }
@@ -1038,7 +1047,7 @@ if(mediation.text == "complete_mediation"){
     #For each tissue, calculate the MGE
     #exerted by each transcript on the phenotype
     common.large.effect.genes <- vector(mode = "list", length = length(tissue.names))
-    names(common.large.effect.genes) <- names(pop.MGE) <- tissue.names
+    names(common.large.effect.genes) <- names(pop.local.MGE) <- tissue.names
     for(tx in 1:length(tissue.names)){
 
         tx.idx <- which(names(tissue.imp.gen) == tissue.names[tx])
@@ -1056,7 +1065,7 @@ if(mediation.text == "complete_mediation"){
         transcript.MGE <- apply(tissue.imp.gen[[tx.idx]][,common.transcripts], 1, function(x) x*trans.load[common.transcripts,])
         expr.names <- gene.tables[[tx]]$symbol[match(rownames(transcript.MGE), gene.tables[[tx]]$gene.id)]
         rownames(transcript.MGE) <- expr.names
-        ind.score <- colMeans(transcript.MGE)
+        ind.score <- colMeans(transcript.MGE, na.rm = TRUE)
         mean.order <- order(ind.score)
 
         #Do the effect sizes follow a power law? No.
@@ -1066,10 +1075,10 @@ if(mediation.text == "complete_mediation"){
 
     
         #write out cmap tables for these too
-        top.MGE <- sort(pop.MGE[[tx]], decreasing = TRUE)[1:200]
+        top.MGE <- sort(pop.local.MGE[[tx]], decreasing = TRUE)[1:200]
         top.hum.id <- mouse_to_human_ensembl(mouse_ensembl = names(top.MGE), 
             hum.mus.ortho = hum.mus.ortho)
-        bottom.MGE <- sort(pop.MGE[[tx]], decreasing = FALSE)[1:200]
+        bottom.MGE <- sort(pop.local.MGE[[tx]], decreasing = FALSE)[1:200]
         bottom.hum.id <- mouse_to_human_ensembl(mouse_ensembl = names(bottom.MGE), 
             hum.mus.ortho = hum.mus.ortho)
 
@@ -1079,10 +1088,10 @@ if(mediation.text == "complete_mediation"){
             file.path(results.dir, paste0("CMAP_Pop_MGE_", tissue.names[tx], "_", mge.name, ".txt")),
             quote = FALSE, row.names = FALSE, sep = "\t")
 
-        #hist(pop.MGE[[tx]], breaks = 100)
-        pop.neg.MGE <- gost(names(sort(pop.MGE[[tx]]))[1:enrichment.num], 
+        #hist(pop.local.MGE[[tx]], breaks = 100)
+        pop.neg.MGE <- gost(names(sort(pop.local.MGE[[tx]]))[1:enrichment.num], 
             organism = "mmusculus", sources = c("GO", "KEGG", "REACTOME"))
-        pop.pos.MGE <- gost(names(sort(pop.MGE[[tx]], decreasing = TRUE))[1:enrichment.num], 
+        pop.pos.MGE <- gost(names(sort(pop.local.MGE[[tx]], decreasing = TRUE))[1:enrichment.num], 
             organism = "mmusculus", sources = c("GO", "KEGG", "REACTOME"))
 
         pdf(file.path(results.dir, paste0("Population_MGE_Enrichments_", tissue.names[tx], "_", mge.name, ".pdf")), width = 10, height = 5)
@@ -1112,7 +1121,7 @@ if(mediation.text == "complete_mediation"){
             col = "gray",
             main = "Polygenic MGE\non Phenotype Space\nFor Lowest Individual",
             xlab = "MGE", ylab = "Gene Count")
-        abline(v = mean(transcript.MGE[,mean.order[1]]), col = "red")
+        abline(v = mean(transcript.MGE[,mean.order[1]], na.rm = TRUE), col = "red")
         dev.off()
          
         png(file.path(results.dir, paste0("MGE_Distribution_", tissue.names[tx], "_", mge.name, ".png")), width = 10, height = 5, units = "in", res = 200)
@@ -1276,7 +1285,7 @@ if(mediation.text == "complete_mediation"){
         #enrich <- gost(rownames(transcript.MGE)[pc.order[1:100]], organism = "mmusculus")
         #plot.enrichment(enrich)
 
-        mean.MGE <- rowMeans(transcript.MGE)
+        mean.MGE <- rowMeans(transcript.MGE, na.rm = TRUE)
         sorted.mean <- sort(mean.MGE)
         n.on.end <- 15
         low.idx <- 1:n.on.end
@@ -1289,11 +1298,11 @@ if(mediation.text == "complete_mediation"){
         pdf(file.path(results.dir, paste0("Large_Effect_Transcript_Decomp", tissue.names[tx], "_", mge.name, ".pdf")), width = 10, height = 5)
         large.mat <- scaled.expr[[tx]][,u_large]
         par(mfrow = c(1,2))
-        pop.MGE.transcript.col <- colors.from.values(pop.MGE[[tx]], 
+        pop.local.MGE.transcript.col <- colors.from.values(pop.local.MGE[[tx]], 
             use.pheatmap.colors = TRUE)
         individual.pheno.score <- colors.from.values(ind.score, 
             use.pheatmap.colors = TRUE)
-        plot.decomp(t(large.mat), cols = pop.MGE.transcript.col[u_large], 
+        plot.decomp(t(large.mat), cols = pop.local.MGE.transcript.col[u_large], 
             main = "Large-Effect Transcript Decomposition\nby Transcript")
         plot.decomp(large.mat, cols = individual.pheno.score, 
             main = "Large-Effect Transcript Decomposition\nby Individual")
@@ -1473,8 +1482,8 @@ traits and have local eQTL in the population. These
 
 ```{r toa_mge}
 
-toa.mge.mat <- cluster_values(pop.MGE, z.thresh = 3, k.seq = 3:20, 
-    pdf.filename = "TOA_MGE.pdf")
+toa.mge.mat <- cluster_values(pop.local.MGE, z.thresh = 3, k.seq = 3:20, 
+    pdf.filename = "TOA_Local_MGE.pdf")
 
 #pdf("~/Desktop/high_MGE.pdf", width = 5, height = 15)
 #pheatmap(toa.mge.mat, show_rownames = TRUE, cex = 0.7, cluster_cols = FALSE)
@@ -1524,7 +1533,7 @@ if(mediation.text == "complete_mediation"){
     for(tx in 1:length(tissue.names)){
         #cat("###", tissue.names[tx], "\n")
 
-        if(length(pop.MGE[[tx]]) == 0){next()}
+        if(length(pop.local.MGE[[tx]]) == 0){next()}
 
         eqtl.table <- tissue.lod[[tx]]
 
@@ -1532,11 +1541,11 @@ if(mediation.text == "complete_mediation"){
         gene.name <- gene.tables[[tx]]$symbol[match(gene.id, gene.tables[[tx]]$gene.id)]
         gene.lod <- lapply(gene.id, function(x) eqtl.table$lod[which(eqtl.table$gene.id == x)])
         max.lod <- sapply(gene.lod, function(x) if(length(x) > 0){max(x)}else{3})
-        MGE.col <- colors.from.values(pop.MGE[[tx]][gene.id], use.pheatmap.colors = TRUE)
+        MGE.col <- colors.from.values(pop.local.MGE[[tx]][gene.id], use.pheatmap.colors = TRUE)
         #pdf("~/Desktop/test.pdf")
         #plot in the order of population-level MGE
         #so we can see the outliers more easily
-        MGE.order <- order(abs(pop.MGE[[tx]][gene.id]), decreasing = FALSE, na.last = FALSE)
+        MGE.order <- order(abs(pop.local.MGE[[tx]][gene.id]), decreasing = FALSE, na.last = FALSE)
         xV <- max.lod[MGE.order] 
         yV <- transcript_loadings[[tx]][,1][MGE.order]
 
@@ -1551,7 +1560,7 @@ if(mediation.text == "complete_mediation"){
             labels = tail(gene.name[MGE.order], num.label), pos = 4, cex = 0.7)
         abline(h = 0)  
         top.genes <- tail(gene.name[MGE.order], num.label)
-        gene.MGE <- tail(pop.MGE[[tx]][gene.id][MGE.order], num.label)
+        gene.MGE <- tail(pop.local.MGE[[tx]][gene.id][MGE.order], num.label)
         pos.idx <- which(gene.MGE > 0)
         pos.order <- order(gene.MGE[pos.idx], decreasing = TRUE)
         pos.par <- words_to_paragraph(top.genes[pos.idx[pos.order]], line.len = 5)
@@ -1825,7 +1834,7 @@ if(mediation.text == "complete_mediation" && use.local.imputation){
     }
 
     common.ind <- Reduce("intersect", lapply(tissue.mge, colnames))
-    all.tissue.do <- sapply(tissue.mge, function(x) colMeans(x[,common.ind]))
+    all.tissue.do <- sapply(tissue.mge, function(x) colMeans(x[,common.ind], na.rm = TRUE))
     all.inbred <- sapply(tissue.inbred.effects, function(x) colMeans(x, na.rm = TRUE))
     all.overall <- rbind(all.tissue.do, all.inbred)
     all.col <- c(rep("gray", nrow(all.tissue.do)), CCcolors)
@@ -1879,6 +1888,23 @@ distal.var.files <- list.files(here("Results", "Transcriptomes"), pattern = "Dis
     full.names = TRUE) #created by 1a.Tissue_Expression.Rmd
 distal.var <- lapply(distal.var.files, readRDS)
 names(distal.var) <- tissue.names
+
+dist.var.exp <- lapply(distal.var, function(x) round(x[,"residual_variance"]*x[,"residual_heritability"], 2))
+
+pop.distal.mge.file <- file.path(results.dir, paste0("Population_Distal_MGE_", mge.name, ".RDS"))
+if(!file.exists(pop.distal.mge.file)){
+    pop.distal.MGE <- vector(mode = "list", length = length(tissue.names))
+    for(tx in 1:length(transcript_loadings)){
+        common.transcripts <- intersect(names(dist.var.exp[[tx]]), rownames(transcript_loadings[[tx]]))
+        pop.distal.MGE[[tx]] <- dist.var.exp[[tx]][common.transcripts]*transcript_loadings[[tx]][common.transcripts,1]
+    }
+    saveRDS(pop.distal.MGE, pop.distal.mge.file)
+}else{
+    pop.distal.MGE <- readRDS(pop.distal.mge.file)
+}
+
+toa.distal.mge.mat <- cluster_values(pop.distal.MGE, z.thresh = 3, k.seq = 3:20, 
+    pdf.filename = "TOA_Distal_MGE.pdf")
 ```
 
 The following plots show that the residual variance for many of 
@@ -1892,7 +1918,7 @@ boxplot(all.resid, ylab = "Variance",
 ```
 
 The heritability of this residual variance is also quite high
-for many of the transncripts, although the bulk of the distribution
+for many of the transcripts, although the bulk of the distribution
 is below 0.5.
 
 ```{r herit_dist}
@@ -1929,7 +1955,6 @@ consistent with the islet having that large distal eQTL hotspot.
 The horizontal line shows the overall median distal variance explained.
 
 ```{r dist_var_exp}
-dist.var.exp <- lapply(distal.var, function(x) round(x[,"residual_variance"]*x[,"residual_heritability"], 2))
 med.var.exp <- sapply(dist.var.exp, function(x) median(x, na.rm = TRUE))
 
 boxplot(dist.var.exp, col = "lightgray", ylab = "Distal Variance Explained")
@@ -1940,68 +1965,46 @@ abline(h = median(unlist(dist.var.exp), na.rm = TRUE))
 ```
 
 Is this number correlated with locally imputed transcripts?
-Yes. Why?
-These numbers are positively correlated suggesting that the 
-more heritable variance is explained by local genotype,
-the more is also explained by distal variation. If these
-two numbers are correlated, we'd want them to be negatively
-correlated: the more variance is explained by local genotype,
-the less is explained by distal factors, proportionately. These
-numbers should also sum to no more than 1, but many of them doo.
+They are negatively correlated as we expect.
 
 ```{r compare_to_local}
-local.imp <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_imputed_local.RDS")))
-local.var <- lapply(local.imp, function(x) apply(x, 2, var))
-
-par(mfrow = c(2,2))
-for(tx in 1:length(tissue.names)){
-    common.transcripts <- intersect(names(local.var[[tx]]), rownames(distal.var[[tx]]))
-    plot(local.var[[tx]][common.transcripts], distal.var[[tx]][common.transcripts,"local_var"],
-        xlab = "Matt's estimate", ylab = "Local model prediction")
-    abline(0,1)
-}
 
 par(mfrow = c(2,2))
 total.sum <- vector(mode = "list", length = length(tissue.names))
 names(total.sum) <- tissue.names
 for(tx in 1:length(tissue.names)){
-    #common.tx <- intersect(names(dist.var.exp[[tx]]), names(local.var[[tx]]))
-    #plot.with.model(local.var[[tx]][common.tx], dist.var.exp[[tx]][common.tx],
-    #    xlab = "Local variance explained", ylab = "Distal variance explained",
-    #    main = tissue.names[tx])
-
-    common.tx <- intersect(rownames(distal.var[[tx]]), names(dist.var.exp[[tx]]))
-
-    plot.with.model(distal.var[[tx]][common.tx,"local_var"], dist.var.exp[[tx]][common.tx],
-        xlab = "Local variance explained", ylab = "Distal variance explained",
-        main = tissue.names[tx])
-
-    total.sum[[tx]] <- distal.var[[tx]][common.tx,"local_var"] + dist.var.exp[[tx]][common.tx]
-
-
+    plot.with.model(distal.var[[tx]][,"local_var"], dist.var.exp[[tx]],
+        xlab = "Variance Explained by Local Component", 
+        ylab = "Variance Explained by Distal Component")
+    total.sum[[tx]] <- distal.var[[tx]][,"local_var"] + dist.var.exp[[tx]]
 }
-
-par(mfrow = c(1,1))
-boxplot(total.sum);abline(h = 1)
 ```
 
-What is correlated about these numbers? Is it that kinship piece isn't
-being completely removed when we fit the linear model? What is fit1 
-returning? Is it the variance explained by both the kinship and the
-local bit? Should we correct for kinship before we fit the model?
-Should we not include kinship in the model?
+The following boxplot shows the distribution of total heritability 
+of all transcripts in all tissues. These estimates include both 
+local and distal components. Transcripts in the islet seem to be
+the most heritable. Is that weird?
 
-How do we figure out what is being replicated in the two models?
-Look for correlation between the residuals and the original 
-transcript?
+```{r total_heritability}
+par(mfrow = c(1,1))
+boxplot(total.sum)
+```
+
+
 
 ## Distal hotspots
-We want to see if high MGE genes are at all related to 
-distal eQTL hotspots identified in 1a.Tissue_Expression.Rmd.
-To examine this, we will look at MGE of genes based on their
-position in the genome.
+We want to compare the distal hotspots identified in 
+1a.Tissue_Expression.Rmd to genes with high local MGE 
+and high distal MGE. Do transcripts with high MGE of 
+either kind map to the distal hotspots?
 
-```{r hotspot}
+To examine this, we will look at MGE of genes based on 
+the locations of their eQTL.
+
+Below we plot the positions of each eQTL, both distal
+and local, along with the local and distal MGE scores.
+
+```{r hotspot, eval = FALSE}
 
 distal.coef.file <- here("Results", "Transcriptomes", "eQTL_coef_distal.RDS")
 distal.coef <- readRDS(distal.coef.file)
@@ -2009,83 +2012,82 @@ distal.coef <- readRDS(distal.coef.file)
 local.coef.file <- here("Results", "Transcriptomes", "eQTL_coef_local.RDS")
 local.coef <- readRDS(local.coef.file)
 
-for(tx in 1:length(tissue.names)){
+match_eQTL_MGE <- function(eqtl.coef, pop.MGE){
+    
+    transcript.id <- names(pop.MGE)
 
-    #collect MGE data for this tissue
-    transcript.id <- names(pop.MGE[[tx]])
-    transcript.idx <- match(transcript.id, gene.tables[[tx]]$gene.id)
-    transcript.position <- gene.tables[[tx]][transcript.idx,]
+    #get the positions of all the eQTL in this tissue
+    eqtl.markers <- eqtl.coef$marker.id
+    split.markers <- strsplit(eqtl.markers, "_")
+    marker.chr <- sapply(split.markers, function(x) x[1])
+    marker.pos <- as.numeric(sapply(split.markers, function(x) x[2]))/1e6 #convert to Mb
 
-    #collect distal eQTL data for this tissue
-    distal.eqtl.markers <- distal.coef[[tx]]$marker.id
-    distal.split.markers <- strsplit(distal.eqtl.markers, "_")
-    distal.marker.chr <- sapply(distal.split.markers, function(x) x[1])
-    distal.marker.pos <- as.numeric(sapply(distal.split.markers, function(x) x[2]))/1e6 #convert to Mb
+    #align eQTL positions, LOD scores, and MGE for each transcript
+    transcript.idx <- lapply(transcript.id, function(x) eqtl.coef[which(eqtl.coef$gene.id == x),])
+    transcript.chr <- lapply(transcript.idx, function(x) if(nrow(x) > 0){sapply(strsplit(x$marker.id, "_"), function(y) y[1])}else{NULL})
+    transcript.pos <- lapply(transcript.idx, function(x) if(nrow(x) > 0){sapply(strsplit(x$marker.id, "_"), function(y) y[2])}else{NULL})
+    transcript.lod <- lapply(transcript.idx, function(x) if(nrow(x) > 0){x$lod}else{NULL})
 
-    #collect local eQTL data for this tissue
-    local.eqtl.markers <- local.coef[[tx]]$marker.id
-    local.split.markers <- strsplit(local.eqtl.markers, "_")
-    local.marker.chr <- sapply(local.split.markers, function(x) x[1])
-    local.marker.pos <- as.numeric(sapply(local.split.markers, function(x) x[2]))/1e6 #convert to Mb
+    transcript.MGE <- pop.MGE[transcript.id]
+    has.eQTL <- which(sapply(transcript.idx, nrow) > 0)
 
-    all.marker.mge <- vector(mode = "list", length = 20)
-    names(all.marker.mge) <- c(1:19, "X")
+    eQTL.MGE.table <- Reduce("rbind", lapply(has.eQTL, 
+        function(x) cbind(transcript.chr[[x]], 
+        transcript.pos[[x]], 
+        transcript.lod[[x]], 
+        rep(transcript.MGE[[x]], nrow(transcript.idx[[x]])))))
 
-    for(ch in c(1:19, "X")){
+    colnames(eQTL.MGE.table) <- c("Chromosome", "Position", "LOD Score", "MGE")
 
-        #get gene positions and MGE for all transcripts on the chromosome
-        chr.idx <- which(transcript.position$chr == ch)
-        chr.pos <- transcript.position$middle[chr.idx]
-        pos.order <- order(chr.pos, decreasing = FALSE)
-        all.marker.mge[[ch]] <- cbind(chr.pos[pos.order], pop.MGE[[tx]][chr.pos[pos.order]])
+    return(eQTL.MGE.table)
+}
 
-        #get marker positions for local eQTL
-        local.marker.chr.idx <- which(local.marker.chr == ch)
-        local.marker.chr.pos <- local.marker.pos[local.marker.chr.idx]
-        local.marker.order <- order(local.marker.chr.pos, decreasing = FALSE)
+plot_eqtl_MGE <- function(eqtl.MGE.table, main = ""){
+    u_chr <- c(1:19, "X")
+    
+    for(ch in 1:length(u_chr)){
 
-        #get marker positions for distal eQTL
-        distal.marker.chr.idx <- which(distal.marker.chr == ch)
-        distal.marker.chr.pos <- distal.marker.pos[distal.marker.chr.idx]
-        distal.marker.order <- order(distal.marker.chr.pos, decreasing = FALSE)
+        ch.idx <- which(eqtl.MGE.table[,"Chromosome"] == u_chr[ch])
+        ch.pos <- as.numeric(eqtl.MGE.table[ch.idx,"Position"])/1e6
+        ch.lod <- as.numeric(eqtl.MGE.table[ch.idx,"LOD Score"])
+        ch.MGE <- as.numeric(eqtl.MGE.table[ch.idx,"MGE"])
 
-        max.chr.mb <- max(c(chr.pos, local.marker.chr.pos, distal.marker.chr.pos))
-        max.x <- ceiling(max.chr.mb/50)*50
-        xlim <- c(0, max.x)
-
-        #plot MGE for each transcript at the position that it is
-        #encoded on the genome
-        par(mfrow = c(3,1), mar = c(0, 4, 4, 4))
-        plot(chr.pos[pos.order], abs(pop.MGE[[tx]][chr.pos[pos.order]]), type = "h",
-            ylab = "population MGE", main = paste(tissue.names[tx], "Chr", ch),
-            xlim = xlim, axes = FALSE)
+        par(mfrow = c(2,1), mar = c(1,4,4,4))
+        plot(ch.pos, ch.lod, type = "h", 
+            xlab = "", ylab = "LOD score", main = main, axes = FALSE,
+            ylim = c(0, max(ch.lod, na.rm = TRUE)))
         axis(2)
         abline(h = 0)
 
-        #plot local eQTL LOD scores for each marker along the chromosome
-        par(mar = c(1, 4, 1, 4))
-        max.lod <- max(local.coef[[tx]]$lod[local.marker.chr.idx[local.marker.order]])
-        max.y <- ceiling(max.lod/10)*10
-        plot(local.marker.chr.pos[local.marker.order], 
-            local.coef[[tx]]$lod[local.marker.chr.idx[local.marker.order]], 
-            type = "h", col = "#e34a33", xlim = xlim, 
-            xlab = paste("Chromosome", ch, "Position (Mb)"),
-            ylab = "Local LOD", axes = FALSE, ylim = c(0, max.y))
-        axis(2)
+        par(mar = c(4, 4, 0, 4))
+        plot(ch.pos, ch.MGE, type = "h", 
+            xlab = paste("Chromosome", u_chr[ch], "Position (Mb)"), 
+            ylab = "MGE", main = "")
         abline(h = 0)
-
-        #plot distal eQTL LOD scores for each marker along the chromosome
-        par(mar = c(4, 4, 1, 4))
-        plot(distal.marker.chr.pos[distal.marker.order], 
-            distal.coef[[tx]]$lod[distal.marker.chr.pos[distal.marker.order]], 
-            type = "h", col = "#2b8cbe", xlim = xlim, 
-            xlab = paste("Chromosome", ch, "Position (Mb)"),
-            ylab = "Distal LOD", axes = FALSE)
-        axis(1);axis(2)
-
 
     }
 
-
 }
+
+
+#pdf("~/Desktop/test.pdf", width = 10, height = 10)
+for(tx in 1:length(tissue.names)){
+
+    local.eqtl.MGE.table <- match_eQTL_MGE(local.coef[[tx]], pop.local.MGE[[tx]])
+    distal.eqtl.MGE.table <- match_eQTL_MGE(distal.coef[[tx]], pop.distal.MGE[[tx]])
+
+    plot(as.numeric(local.eqtl.MGE.table[,3]), abs(as.numeric(local.eqtl.MGE.table[,4])))
+    plot(as.numeric(distal.eqtl.MGE.table[,3]), abs(as.numeric(distal.eqtl.MGE.table[,4])))
+
+    #pdf("~/Desktop/test_local.pdf", width = 10, height = 8)
+    plot_eqtl_MGE(local.eqtl.MGE.table, main = "Local")
+    #dev.off()
+    
+    #pdf("~/Desktop/test_distal.pdf", width = 10, height = 8)
+    plot_eqtl_MGE(distal.eqtl.MGE.table, main = "Distal")
+    #dev.off()
+ 
+}
+
+#dev.off()
 ```
