@@ -1629,6 +1629,8 @@ for(tx in 1:length(tissue.names)){
     if(file.exists(distal.herit.file) && !overwrite.results){
       herit.resid <- readRDS(distal.herit.file)
       start.idx <- max(which(!is.na(herit.resid[,1]))) + 1
+
+      local.imp <- readRDS(local.imp.file)
     }
       
 
