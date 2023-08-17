@@ -1614,7 +1614,6 @@ We can compare:
   * Do genes with high distal MGE localize in distal eQTL hotspots?
 
 ```{r distal_variance_explained}
-
 save.every = 100
 
 for(tx in 1:length(tissue.names)){
@@ -1659,7 +1658,10 @@ for(tx in 1:length(tissue.names)){
       
       gene.info.idx <- which(gene.tables[[tx]]$gene.id == transcript.id[tr])
       nearest.marker <- gene.tables[[tx]]$nearest.marker.id[gene.info.idx]
-      
+
+       #we won't be able to find nearest markers for genes on Y or MT chromosomes
+      if(nearest.marker == ""){next()}  
+
       marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
 
       trans.expr <- scaled.expr[,transcript.id[tr]]
