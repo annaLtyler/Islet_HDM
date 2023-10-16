@@ -128,7 +128,7 @@ if(!file.exists(transcript.herit.file)){
     all.tx.herit <- vector(mode = "list", length = length(tissue.names))
     names(all.tx.herit) <- tissue.names
     for(tx in 1:length(tissue.names)){
-        tx.herit <- est_herit(expr[[tx]], kinship = kin)
+        tx.herit <- est_herit(scaled.expr[[tx]], kinship = kin)
         all.tx.herit[[tx]] <- tx.herit
     }
     saveRDS(all.tx.herit, transcript.herit.file)
