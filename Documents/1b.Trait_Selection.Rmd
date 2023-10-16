@@ -37,9 +37,10 @@ and initial data processing can be found elsewhere.
 
 Here we focus exclusively on the clinical phenotoype data.
 
-## Read phenotypes and adjust
+## Read phenotypes
 
-Adjust phenotype data for DO generation, sex, and diet days.
+In the following sections, we take a look at some of 
+the individual data points to look for oddities.
 
 ```{r pheno}
 pheno.data <- readRDS(here("Data", "DO", "Clinical_Phenotypes_V11.RDS"))
@@ -47,16 +48,11 @@ pheno.data <- readRDS(here("Data", "DO", "Clinical_Phenotypes_V11.RDS"))
 write.table(pheno.data$annot.phenotype, here("Data", "DO", "Phenotype_Annotations.txt"), 
   sep = "\t", quote = FALSE, row.names = FALSE)
 
-
 num.pheno <- pheno.data$data
 #fix the spelling of adiposity
 colnames(num.pheno)[which(colnames(num.pheno) == "adipocity")] <- "adiposity"
-covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
-num.covar <- dummy_covar(covar)
-rownames(num.covar) <- rownames(num.pheno)
-saveRDS(num.covar, here("Data", "DO", "Clinical_Phenotype_Covariates.RDS"))
-adj.pheno <- adjust(num.pheno, num.covar) #remove sex, wave, and generation from the phenotypes
 ```
+
 
 ## Body Weight
 
@@ -67,11 +63,11 @@ week 11 that is 200 grams, and the other in week 17
 that is 5 grams. 
 
 ```{r bw}
-weight.idx <- grep("weight", colnames(adj.pheno))
+weight.idx <- grep("weight", colnames(num.pheno))
 #remove organ weights
-organ.idx <- sapply(c("heart", "liver", "fat"), function(x) grep(x, colnames(adj.pheno)))
+organ.idx <- sapply(c("heart", "liver", "fat"), function(x) grep(x, colnames(num.pheno)))
 bw.idx <- setdiff(weight.idx, organ.idx)
-bw <- adj.pheno[,bw.idx]
+bw <- num.pheno[,bw.idx]
 ordered.bw  <- cbind(bw[,-1], bw[,1,drop=FALSE])
 boxplot(ordered.bw, las = 2)
 ```
@@ -114,7 +110,7 @@ plot.with.model(bw.decomp$u[,1], ordered.bw[bw.decomp$rows.used,"weight_final"],
 
 ```{r final_trait_mat}
 #initialize a trait matrix that contains all the traits we want to examine.
-final.trait.mat <- adj.pheno[,"weight_final",drop=FALSE]
+final.trait.mat <- num.pheno[,"weight_final",drop=FALSE]
 ```
 
 ## Food consumption
@@ -197,7 +193,7 @@ glucose measurements tended to end with lower glucose measurements.
 
 ```{r glucose, fig.width = 8, fig.height = 8}
 
-glu.mat <- adj.pheno[,c("glu_6", "glu_10", "glu_14", "glu_final")]
+glu.mat <- num.pheno[,c("glu_6", "glu_10", "glu_14", "glu_final")]
 glu.mat[352,] <- NA
 glu.diff <- glu.mat[,"glu_final"] - glu.mat[,"glu_6"] #did glucose go up or down over the course of the experiment?
 glu.dir <- rep(NA, nrow(glu.mat))
@@ -247,7 +243,7 @@ dev.off()
 
 
 ```{r add_final_glucose}
-final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"glu_final",drop=FALSE])
+final.trait.mat <- cbind(final.trait.mat, num.pheno[,"glu_final",drop=FALSE])
 ```
 
 We also use the glucose total area under the curve. 
@@ -256,16 +252,16 @@ than is glu_iAUC.
 
 ```{r glucose_curves, fig.width = 8, fig.height = 8}
 par(mfrow = c(2,2))
-plot.with.model(adj.pheno[,"Glu_tAUC"], adj.pheno[,"Glu_iAUC"],
+plot.with.model(num.pheno[,"Glu_tAUC"], num.pheno[,"Glu_iAUC"],
   xlab = "Glu_tAUC", ylab = "Glu_iAUC")
-plot.with.model(adj.pheno[,"Glu_iAUC"], adj.pheno[,"weight_final"],
+plot.with.model(num.pheno[,"Glu_iAUC"], num.pheno[,"weight_final"],
   xlab = "Glu_iAUC", ylab = "final weight")
-plot.with.model(adj.pheno[,"Glu_tAUC"], adj.pheno[,"weight_final"],
+plot.with.model(num.pheno[,"Glu_tAUC"], num.pheno[,"weight_final"],
   xlab = "Glu_tAUC", ylab = "final weight")
 ```
 
 ```{r add_glu_tAUC}
-final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"Glu_tAUC",drop=FALSE])
+final.trait.mat <- cbind(final.trait.mat, num.pheno[,"Glu_tAUC",drop=FALSE])
 ```
 
 ## Insulin 
@@ -280,8 +276,8 @@ and the change in insulin over the course of the experiment.
 
 ```{r ins_levels, fig.width = 8, fig.height = 4}
 
-ins.mat <- adj.pheno[,c("ins_6", "ins_10", "ins_14", "ins_final")]
-ins.diff <- adj.pheno[,"ins_final"] - adj.pheno[,"ins_6"]
+ins.mat <- num.pheno[,c("ins_6", "ins_10", "ins_14", "ins_final")]
+ins.diff <- num.pheno[,"ins_final"] - num.pheno[,"ins_6"]
 
 par(mfrow = c(1,2))
 plot.with.model(ins.mat[,"ins_6"], ins.diff, xlab = "Initial Insulin", 
@@ -292,7 +288,7 @@ plot.with.model(ins.mat[,"ins_final"], ins.diff, xlab = "Final Insulin",
 
 
 ```{r add_ins_final}
-final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"ins_final",drop=FALSE])
+final.trait.mat <- cbind(final.trait.mat, num.pheno[,"ins_final",drop=FALSE])
 ```
 
 For the insulin curves, we will select Ins_tAUC. 
@@ -304,14 +300,14 @@ like final weight.
 ```{r ins_curves, fig.height = 4, fig.width = 8}
 
 par(mfrow = c(1,2))
-plot.with.model(adj.pheno[,"Ins_tAUC"], adj.pheno[,"weight_final"],
+plot.with.model(num.pheno[,"Ins_tAUC"], num.pheno[,"weight_final"],
   xlab = "total insulin AUC", ylab = "final body weight", report = "cor.test")
-plot.with.model(adj.pheno[,"Ins_iAUC"], adj.pheno[,"weight_final"],
+plot.with.model(num.pheno[,"Ins_iAUC"], num.pheno[,"weight_final"],
   xlab = "adjusted insulin AUC", ylab = "final body weight", report = "cor.test")
 ```
 
 ```{r add_ins_tAUC}
-final.trait.mat <- cbind(final.trait.mat, adj.pheno[,"Ins_tAUC", drop=FALSE])
+final.trait.mat <- cbind(final.trait.mat, num.pheno[,"Ins_tAUC", drop=FALSE])
 ```
 
 ## Triglycerides
@@ -320,7 +316,7 @@ There is an outlier in the first TG measurement at 6 weeks.
 I'm going to remove it on suspicion that it is an error.
 
 ```{r tg}
-tg.mat <- adj.pheno[,c("TG_6", "TG_10", "TG_14", "TG_final")]
+tg.mat <- num.pheno[,c("TG_6", "TG_10", "TG_14", "TG_final")]
 boxplot(tg.mat)
 outliers <- which(tg.mat > 600)
 tg.mat[outliers] <- NA
@@ -355,7 +351,7 @@ traits
 
 ```{r add_panc_traits}
 final.trait.mat <- cbind(final.trait.mat, 
-  adj.pheno[,c("WPIC", "Ins_per_islet", "num_islets", "HOMA_B", "HOMA_IR")])
+  num.pheno[,c("WPIC", "Ins_per_islet", "num_islets", "HOMA_B", "HOMA_IR")])
 ```
 
 ## Cholesterol
@@ -369,7 +365,7 @@ chol.traits <- c("HDL_3_2a", "HDL_2b", "Mid_Zone", "LDL_IVc",
   "LDL_IIa", "LDL_I", "IDL_2", "IDL_1", "VLDL_sm", "VLDL_int", 
   "VLDL_lg", "LDL_pk_diam")
 
-chol.mat <- adj.pheno[,chol.traits]
+chol.mat <- num.pheno[,chol.traits]
 keep.rows <- which(apply(chol.mat, 1, function(x) !all(is.na(x))))
 chol.mat <- chol.mat[keep.rows,]
 pheatmap(cor(chol.mat))
@@ -429,18 +425,26 @@ final.trait.mat <- cbind(final.trait.mat, final.pc.mat)
 ## The rest
 
 We added:
+
 * the rank Z normalized glycogen measurement.
+
 * the rank Z normalized proinsulin measurement.
+
 * Gcg content
+
 * Gcg secreted
+
 * tibia bone mineral density (BMD)
+
 * leptin and adiponectin levels
+
 * organ weights (heart, liver, fat pad)
+
 * adiposity
 
 ```{r add_the_rest}
 final.trait.mat <- cbind(final.trait.mat, 
-  adj.pheno[,c("glycogen_rz", "proinsulin_rz", "Gcg_content", "Gcg_secreted",
+  num.pheno[,c("glycogen_rz", "proinsulin_rz", "Gcg_content", "Gcg_secreted",
   "BMD", "leptin", "adiponectin", "heart_weight", "liver_weight",
   "fat_pad_weight", "adiposity")])
 ```
@@ -502,10 +506,9 @@ pared.traits <- final.trait.mat[,keep.traits]
 
 norm.traits <- apply(pared.traits, 2, rankZ)
 norm.cor <- cor(norm.traits, use = "pairwise.complete.obs")
-pheatmap(norm.cor, cellwidth = 12, cellheight = 12)
 
-imageWithTextColorbar(norm.cor, use.pheatmap.colors = TRUE,
-  orientation = "h", cex = 1, bar.lwd = 2, round.nearest = 0.1)
+
+pheatmap(norm.cor, cellwidth = 12, cellheight = 12)
 
 
 norm.decomp <- plot.decomp(norm.traits, pc = ncol(norm.traits), plot.results = FALSE)
@@ -564,11 +567,35 @@ plot.with.model(rankZ(final.trait.mat[,"fat_pad_weight"]),
 
 ```
 
+## Adjusting
+
+The phenotypes need to be all on the same scale for
+later analyses. Here we first rank Z normalize to 
+minimize the effects of outliers, then we regress 
+out the covariates, and finally we mean center and 
+standardize so that all traits have a variance of 1.
+
+```{r adjust}
+
+#adjust out covariates
+covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
+num.covar <- dummy_covar(covar)
+rownames(num.covar) <- rownames(num.pheno)
+saveRDS(num.covar, here("Data", "DO", "Clinical_Phenotype_Covariates.RDS"))
+
+#remove sex, wave, and generation from the phenotypes
+adj.pheno <- adjust(norm.traits, num.covar) 
+
+#mean center and standardize
+scaled.pheno <- apply(adj.pheno, 2, function(x) scale(x, center = TRUE, scale = TRUE))
+rownames(scaled.pheno) <- rownames(adj.pheno)
+```
+
 The final phenotype matrix is stored in the Data folder in the file
-Clinical_Phenotypes_Filtered.RDS
+Clinical_Phenotypes_Adjusted.RDS
 
 ```{r write_data}
-saveRDS(pared.traits, here("Data", "DO", "Clinical_Phenotypes_Adjusted.RDS"))
+saveRDS(scaled.pheno, here("Data", "DO", "Clinical_Phenotypes_Adjusted.RDS"))
 ```
 
 ## Trait Correlation vs. LOD score
@@ -593,9 +620,9 @@ if(!file.exists(tx.trait.cor.file)){
   tx.trait.cor <- vector(mode = "list", length = length(tissue.names))
   names(tx.trait.cor) <- tissue.names
   for(tx in 1:length(tx.trait.cor)){
-    common.ind <- intersect(rownames(adj.expr[[tx]]), rownames(pared.traits))
+    common.ind <- intersect(rownames(adj.expr[[tx]]), rownames(scaled.pheno))
     tx.trait.cor[[tx]] <- apply(adj.expr[[tx]][common.ind,], 2, 
-      function(x) max(abs(apply(pared.traits[common.ind,], 2, 
+      function(x) max(abs(apply(scaled.pheno[common.ind,], 2, 
       function(y) cor(x, y, use = "pairwise.complete.obs", method = "spearman")))))
   }
   saveRDS(tx.trait.cor, tx.trait.cor.file)
@@ -612,5 +639,4 @@ for(tx in 1:length(local.coef)){
     xlab = "Local eQTL LOD score", ylab = "Maximum Trait Correlation",
     report = "cor.test", main = tissue.names[tx])
 }
-
 ```

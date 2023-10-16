@@ -1,0 +1,218 @@
+---
+title: "High Dimensional Mediation Networks"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+This workflow looks at network properties of genes with high
+and low mediated genetic effects.
+
+Our hypothesis is that the high MGE genes are “less peripheral” 
+than the corresponding genes with the same LOD score. We test 
+this by fitting a model in two ways: 
+
+1. Do high MGE genes have higher-than-expected degree, given their 
+    LOD score?
+
+* Fit a model with log(degree) ~ LOD score. 
+    - test whether the residual values are correlated with MGE. 
+
+2. Is the anti-correlation between degree and LOD less severe 
+    for high MGE genes?
+
+* Fit a model with both LOD score and MGE value as interacting 
+    covariates and determine if the interaction coefficient is 
+    negative.
+
+```{r param}
+fntm.tissue.name <- "adipose tissue"; tissue.name <- "Adipose"
+```
+
+```{r here}
+library(here)
+```
+
+```{r code}
+all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
+for(i in 1:length(all.fun)){source(all.fun[i])}
+```
+
+```{r libraries}
+needed.libraries <- c("gprofiler2", "igraph")
+load_libraries(needed.libraries)
+```
+
+```{r read_data}
+#LOD scores
+tissue.data <- load(here("Data", "dataset.DO.CUBE.multissue.RData"))
+lod.table <- get(paste0("dataset.DO.Cube.", tissue.name))$lod.peaks$additive
+gene.table <- as.matrix(get(paste0("dataset.DO.Cube.", tissue.name))$annot.mrna)
+
+#exp.name <- "tissue_sep-full_imp-_-complete_mediation"
+exp.name <- "tissue_together-local_imp-_-complete_mediation"
+mge <- readRDS(here("Results", "High_Dim_Med", exp.name, "Population_Pressure_Loadings.RDS"))
+tissue.mge <- mge[[which(names(mge) == tissue.name)]]
+
+net.name <- paste0(gsub(" ", "_", fntm.tissue.name), "_top.RDS")
+
+if(!file.exists(here("Data", "FNTM", net.name))){
+    download.tissue.net(tissue.name, project.dir = "~/Documents/Data/FGN/mouse/")
+}
+edges <- readRDS(here("Data", "FNTM", net.name))
+```
+
+Get LOD scores for each transcript with an MGE.
+
+```{r lod}
+tr.idx <- match(names(tissue.mge), lod.table$gene.id)
+mge.lod <- lod.table$lod[tr.idx]
+```
+
+The following plot shows the relationship between the 
+absolute value of MGE and LOD score. There is a weak
+positive relationship. This is in part because LOD
+score is part of the MGE calculation. If a transcript
+mediates the effect of the genome on the phenome, those
+with larger cis effects will have larger effects on 
+phenotype (larger MGE).
+
+```{r mge_v_lod}
+plot.with.model(mge.lod, abs(tissue.mge), xlab = "LOD", ylab = "MGE",
+    main = "LOD vs. |MGE|", report = "cor.test")
+```
+
+```{r deg_fun}
+weighted_degree <- function(gene.id){
+    gene.idx1 <- which(edges[,1] == gene.id)
+    gene.idx2 <- which(edges[,2] == gene.id)
+    unweighted.degree <- length(gene.idx1) + length(gene.idx2)
+    weighted.degree <- sum(edges[c(gene.idx1, gene.idx2),3])
+    weights <- c(unweighted.degree, weighted.degree)
+    return(weights)
+}
+```
+
+```{r translate_id}
+gene.table <- gconvert(names(tissue.mge), organism = "mmusculus", target = "ENTREZGENE_ACC")
+mge.val <- sapply(gene.table[,"input"], function(x) tissue.mge[which(names(tissue.mge) == x)])
+
+fntm.deg.file <- here("Results", "High_Dim_Med", paste("FNTM_Degree_", tissue.name, ".RDS"))
+if(!file.exists(fntm.deg.file)){
+    save.every = 100
+    fntm.deg <- matrix(NA, nrow = length(tissue.mge), ncol = 2)
+    rownames(fntm.deg) <- names(tissue.mge)
+    colnames(fntm.deg) <- c("unweighted_degree", "weighted_degree")
+    sink(here("Results", "High_Dim_Med", "progress.txt"))
+    for(i in 1:nrow(gene.table)){
+        cat(i, "\n")
+        gene.entrez <- as.numeric(gene.table[which(gene.table[,"input"] == names(tissue.mge)[i]),"target"])
+        fntm.deg[i,] <- weighted_degree(gene.entrez)
+        if(i %% save.every == 0){
+            saveRDS(fntm.deg, fntm.deg.file)
+        }
+    }
+    sink()
+    saveRDS(fntm.deg, fntm.deg.file)
+}else{
+    fntm.deg <- readRDS(fntm.deg.file)
+}
+```
+
+
+## STRING
+
+We can also use the STRING network.
+I downloaded the mouse PPI network from (STRING)[https://string-db.org/cgi/download?sessionId=baJjl2M1vw5c&species_text=Mus+musculus]
+I also downloaded the alias file to translate protein IDs to gene IDs.
+
+10090.protein.links.detailed.v11.5.txt.gz
+10090.protein.aliases.v11.5.txt.gz
+
+The network file was very large (1.04 G), so I saved it as an R 
+binary file (string.net.RDS).
+
+```{r string_data}
+alias <- read.delim(here("Data", "STRING", "10090.protein.aliases.v11.5.txt"))
+ensembl.idx <- which(alias[,"source"] == "Ensembl_gene")
+ensembl.table <- alias[ensembl.idx,]
+
+#string.net <- read.table(here("Data", "STRING", "10090.protein.links.detailed.v11.5.txt"), header = TRUE)
+#saveRDS(string.net, here("Data", "STRING", "string.net.RDS"))
+string.net <- readRDS(here("Data", "STRING", "string.net.RDS"))
+```
+
+For each ensembl ID in the MGE data, find the degree in the STRING network.
+
+```{r string.deg}
+string.net.file <- here("Results", "High_Dim_Med", paste0("string.deg_", tissue.name, ".RDS"))
+
+if(!file.exists(string.net.file)){
+    string.deg <- matrix(NA, nrow = length(tissue.mge), ncol = 2)
+    rownames(string.deg) <- names(tissue.mge)
+    colnames(string.deg) <- c("weighted_degree", "unweighted_degree")
+    sink(here("Results", "High_Dim_Med", "progress.txt"))
+    for(i in 1:length(tissue.mge)){
+        cat(i, "\n")
+        gene.idx <- which(ensembl.table[,2] == names(tissue.mge)[i])
+        prot.id <- ensembl.table[gene.idx,1]
+        prot.idx1 <- which(string.net[,1] == prot.id)
+        prot.idx2 <- which(string.net[,2] == prot.id)
+        comb.score <- string.net[c(prot.idx1, prot.idx2),"combined_score"]
+        unweighted.degree <- length(comb.score)
+        weighted.degree <- sum(comb.score)
+        string.deg[i,] <- c(unweighted.degree, weighted.degree)    
+        if(i %% save.every == 0){
+            saveRDS(string.deg, string.net.file)
+        }
+    }
+    saveRDS(string.deg, string.net.file)
+    sink()
+}else{
+    string.deg <- readRDS(string.net.file)
+}
+
+```
+
+## MGE, LOD, and Degree
+
+The following plots are results for test number 1 as described above.
+They show the residuals of the model log(degree)=LOD plotted against
+MGE. 
+
+A positive correlation suggests that 
+
+```{r test1}
+is.weighted <- FALSE
+if(is.weighted){deg.col = 1}else{deg.col = 2}
+
+max.filled <- max(which(!is.na(fntm.deg[,deg.col])))
+not.na <- intersect(which(is.finite(log(fntm.deg[1:max.filled,deg.col]))), 
+    which(is.finite(mge.lod[1:max.filled])))
+fntm_model <- lm(log(fntm.deg[not.na,deg.col])~mge.lod[not.na])
+plot.with.model(abs(tissue.mge[not.na]), residuals(fntm_model)[not.na], 
+    report = "cor.test", main = "FNTM", ylab = "Residuals", xlab = "|MGE|")
+
+
+not.na <- intersect(which(is.finite(log(string.deg[,deg.col]))), which(is.finite(mge.lod)))
+string_model <- lm(log(string.deg[not.na,deg.col])~mge.lod[not.na])
+plot.with.model(abs(tissue.mge[not.na]), residuals(string_model)[not.na],
+    report = "cor.test", main = "STRING", xlab = "|MGE|", ylab = "Residuals")
+```
+
+The following tables show the results for the second test.
+
+```{r test2}
+fntm_int_model <- lm(fntm.deg[,deg.col]~mge.lod*tissue.mge)
+summary(fntm_int_model)
+
+string_int_model <- lm(string.deg[,deg.col]~mge.lod*tissue.mge)
+print(summary(string_int_model))
+
+```

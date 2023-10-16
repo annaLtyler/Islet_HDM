@@ -10,6 +10,7 @@ bibliography: hdm.bib
 ---
 
 ```{r param}
+rm(list = ls()) #clear out the environment
 min.lod <- 8
 remove.pseudogenes = TRUE #if TRUE, removes pseudogenes and predicted genes 
 tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
@@ -78,7 +79,7 @@ all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
 for(i in 1:length(all.fun)){source(all.fun[i])}
 
 all.packages <- c("igraph", "pheatmap", "gprofiler2", "qtl2", "stringr",
-  "wordcloud", "wordcloud2", "hexbin", "regress")
+  "wordcloud", "wordcloud2", "hexbin", "regress", "propagate")
 load_libraries(all.packages, personal.library = TRUE)
 ```
 
@@ -149,6 +150,9 @@ if(remove.pseudogenes){
   }
 }
 ```
+
+Regress covariates out of the rank Z normalized gene 
+expression data.
 
 ```{r adjust}
 adj.expr.file <- here("Data", "DO", "Tissue_Expression_Adjusted.RDS")
@@ -1503,6 +1507,7 @@ gene.name = "Wfdc21";tissue.name = "Adipose"
 gene.name <- "Myo19";tissue.name = "Adipose"
 gene.name = "Lep";tissue.name = "Adipose"
 gene.name = "Alox12"; tissue.name = "Islet"
+gene.name = "Mogat2";tissue.name = "Adipose"
 
 tissue.idx <- which(names(tissue.data) == tissue.name)
 trans.id  <- tissue.data[[tissue.idx]]$annot.mrna$gene.id[which(tissue.data[[tissue.idx]]$annot.mrna$symbol == gene.name)]
@@ -1512,6 +1517,13 @@ plot_tissue_interaction(trans.id, FALSE)
 #expr_across_tissues(transcript.id = trans.id, "CAST")
 #expr_across_tissues(transcript.id = trans.id, "NZO")
 #expr_across_alleles(transcript.id = trans.id, "Islet")
+
+pdf("~/Desktop/test.pdf", width = 12, height = 7)
+for(tx in 1:length(tissue.names)){
+  expr_across_alleles(trans.id, tissue.names[tx])
+}
+dev.off()
+
 
 gene.expr.data <- get_transcript_effects(trans.id, return.data = TRUE)
 gene.geno <- gene.expr.data$genotypes
@@ -1599,107 +1611,35 @@ for(i in 1:length(eic.idx)){
 plot_module_expr_v_clin_pc(eic.id[[4]])
 ```
 
-## Distal variance explained
+## Gene Correlation Degree
 
-We would like to look at the local vs. the distal components 
-of MGE for the population. We can't do this for individuals,
-but we can do it for the population. For each transcript, we
-fit the local marker to the transcript levels. Then we calculate
-the heritability of the residuals. We multiply this number by 
-the transcript loading to get the distal MGE.
+In prepration for making a genetic architecture statement later
+on, we want to calculate degree of each transcript in each 
+transcript correlation network. High-loading transcripts might be
+high-, low-, or mid-degree transcripts in the network.
 
-We can compare: 
-  * the magnituge of MGE across local and distal components
-  * enrichments of the the top and bottom scoring genes in both
-  * Do genes with high distal MGE localize in distal eQTL hotspots?
+Here we calculate degree without saving the full transcript by
+transcript correlation network. They are very large.
 
-```{r distal_variance_explained}
-save.every = 100
+```{r network_degree}
+gene.deg.file <- here("Results", "Transcription_Networks", "Transcript_Degree.RDS")
 
-for(tx in 1:length(tissue.names)){
-    start.idx <- 1
-    distal.herit.file <- here("Results", "Transcriptomes", 
-      paste0("Distal_Heritability_", tissue.names[tx], ".RDS"))
-    transcript.id <- colnames(adj.expr[[tx]])
+if(!file.exists(gene.deg.file)){
+  gene.deg <- vector(mode = "list", length = length(tissue.names))
+  names(gene.deg) <- tissue.names
 
-    local.imp.file <- here("Results", "Transcriptomes", paste0("Local_Imputation_", tissue.names[tx], ".RDS"))
+  for(tx in 2:length(tissue.names)){
+      
+    num.tx <- ncol(adj.expr[[tx]])
+    pop.cor.result <- bigcor(adj.expr[[tx]])
     
-    #check to see if we've already saved some results that we can use
-    #we only need to use one of the files to figure this out
-    if(file.exists(distal.herit.file) && !overwrite.results){
-      herit.resid <- readRDS(distal.herit.file)
-      start.idx <- max(which(!is.na(herit.resid[,1]))) + 1
-
-      local.imp <- readRDS(local.imp.file)
+    #pull out the matrix
+    expr.cor <- pop.cor.result[1:num.tx, 1:num.tx]
+    gene.deg[[tx]] <- colMeans(abs(expr.cor))
+    names(gene.deg[[tx]]) <- colnames(adj.expr[[tx]])
+        
     }
-      
-
-#start where we left off, or at the beginning if there are no data
-  #or we are overwriting previous data.
-  if(start.idx < length(transcript.id)){
-    sink(here("Results", "Transcriptomes", paste0("progress_", tissue.names[tx], ".txt")))
-
-    #if we are starting fresh...
-    if(!file.exists(distal.herit.file) || overwrite.results){
-      herit.resid <- matrix(NA, ncol = 3, nrow = length(transcript.id))
-      rownames(herit.resid) <- transcript.id
-      colnames(herit.resid) <- c("local_var", "residual_variance", "residual_heritability")
-
-      local.imp <- matrix(NA, ncol = length(transcript.id), nrow = nrow(adj.expr[[tx]]))
-      dimnames(local.imp) <- dimnames(adj.expr[[tx]])
-    }
-
-    #mean-center all expr
-    centered.expr <- apply(adj.expr[[tx]], 2, function(x) x - mean(x, na.rm = TRUE))
-    #scale all variance to 1
-    scaled.expr <- apply(centered.expr, 2, function(x) x/sd(x, na.rm = TRUE))
-  
-    #start where we left off, or at the beginning, if that is warranted
-    for(tr in start.idx:length(transcript.id)){
-      print(tr)
-      
-      gene.info.idx <- which(gene.tables[[tx]]$gene.id == transcript.id[tr])
-      nearest.marker <- gene.tables[[tx]]$nearest.marker.id[gene.info.idx]
-
-       #we won't be able to find nearest markers for genes on Y or MT chromosomes
-      if(nearest.marker == ""){next()}  
-
-      marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
-
-      trans.expr <- scaled.expr[,transcript.id[tr]]
-  
-      #with kinship
-      #I am keeping the variance of the fitted values to use as the local variance explained
-      #reserve as much of the signal from kinship as we can by performing a kinship correction
-      model.kin <- fit1(marker.geno, trans.expr, kinship = Kg)
-      imp.local <- model.kin$fitted
-      local.imp[,tr] <- imp.local
-      distal.resid <- model.kin$resid
-      result <- c(var(imp.local), var(distal.resid), est_herit(distal.resid, Kg))
-      herit.resid[tr,] <- result
-
-      #without kinship
-      #model.no.kin <- fit1(marker.geno, trans.expr)
-      #imp.local <- model.no.kin$fitted
-      #distal.resid <- model.no.kin$resid
-      #result <- c(var(imp.local), var(distal.resid), est_herit(distal.resid, Kg))
-      #herit.resid[tr,] <- result
-
-      #straight linear model
-      #model <- lm(trans.expr~marker.geno[names(trans.expr),])
-      #imp.local <- predict(model)
-      #distal.resid <- residuals(model)
-      #result <- c(var(imp.local), var(distal.resid), est_herit(distal.resid, Kg))
-      #herit.resid[tr,] <- result
-
-      if(tr %% save.every == 0){
-        saveRDS(herit.resid, distal.herit.file)
-        saveRDS(local.imp, local.imp.file)
-      }
-    }
-    saveRDS(herit.resid, distal.herit.file)
-    saveRDS(local.imp, local.imp.file)
-    sink()
-  }
+    
+  saveRDS(gene.deg, gene.deg.file)
 }
 ```

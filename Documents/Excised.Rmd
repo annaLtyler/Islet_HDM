@@ -543,3 +543,117 @@ legend("topright", fill = c("#7fc97f", "#beaed4"),
 abline(h = 0)
 #pheatmap(pc.cor, display_numbers = TRUE)
 ```
+
+
+## Local and Distal
+
+We have been thinking about ways to get at the relationship 
+between local and distal effects on gene expression and trait
+space. What we are trying here is the following:
+
+We will fit a model to explain measured transcript abundance
+using the local marker genotype and the genome score, as well
+as the interaction between the local marker genotype and the 
+genome score. 
+
+The code below runs this analysis. We did not find any evidence
+of global epistasis using this analysis.
+
+```{r local_distal}
+
+genome_interaction_models_file <- file.path(results.dir, "Genomic_Interaction_Models.RDS")
+if(!file.exists(genome_interaction_models_file)){
+    genome_interaction_models <- vector(mode = "list", length = length(tissue.names))
+    names(genome_interaction_models) <- tissue.names
+    for(tx in 1:length(tissue.names)){
+        tx.expr <- scaled.expr[[tx]]
+        tx.model <- model_scores[[tx]]
+        common.ind <- intersect(rownames(tx.expr), rownames(tx.model))
+        tx.models <- vector(mode = "list", length = ncol(tx.expr))
+        names(tx.models) <- colnames(tx.expr)    
+
+        high.lod.id <- tissue.lod[[1]]$gene.id[which(tissue.lod[[1]]$lod > 100)]
+        ts <- which(colnames(tx.expr) == high.lod.id[1])
+        for(ts in 1:ncol(tx.expr)){
+            report.progress(ts, ncol(tx.expr))
+
+            nearest.marker <- gene.tables[[tx]]$nearest.marker.id[which(gene.tables[[tx]]$gene.id == colnames(tx.expr)[ts])]
+
+            if(nearest.marker == ""){
+                next()
+            }
+            nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+
+            adj.geno <- adjust(tx.model[common.ind,"Causal",drop=FALSE], nearest.geno[common.ind,1:7,drop=FALSE])
+
+            model_add <- fit1(nearest.geno[common.ind,], tx.expr[common.ind,ts], addcovar = adj.geno)
+            model_int <- fit1(nearest.geno[common.ind,], tx.expr[common.ind,ts], addcovar = adj.geno, intcovar = adj.geno)
+
+            both_models <- list("additive" = model_add, "interactive" = model_int)            
+
+            tx.models[[ts]] <- both_models
+        }
+        genome_interaction_models[[tx]] <- tx.models
+        if(is.interactive){cat("\n")}
+    }
+    saveRDS(genome_interaction_models, genome_interaction_models_file)
+}else{
+    genome_interaction_models <- readRDS(genome_interaction_models_file)
+}
+```
+
+
+
+```{r interaction_analysis}
+high.delta <- 5
+for(tx in 1:length(tissue.names)){
+
+    tx.expr <- scaled.expr[[tx]]
+    tx.model <- model_scores[[tx]]
+    common.ind <- intersect(rownames(tx.expr), rownames(tx.model))
+
+    tx.lod <- t(sapply(genome_interaction_models[[tx]], function(x) if(length(x) > 0){c(x[[1]]$lod, x[[2]]$lod)}else{c(NA, NA)}))
+    lod.delta <- tx.lod[,2] - tx.lod[,1]
+    hist(lod.delta, breaks = 100)
+
+    add_coef <- t(sapply(genome_interaction_models[[tx]], function(x) if(length(x) > 0){x[[1]]$coef}else{rep(NA, 10)}))
+    int_coef <- t(sapply(genome_interaction_models[[tx]], function(x) if(length(x) > 0){x[[2]]$coef}else{rep(NA, 17)}))
+
+
+    check.genes <- which(lod.delta >= high.delta)
+    tx.lod[check.genes,]
+
+    tx.idx <- 2
+    tx.id <- names(check.genes)[tx.idx]
+
+    par(mfrow = c(1,1))
+    barplot(int_coef[tx.id,], las = 2)
+
+    test.allele <- names(which.max(abs(int_coef[tx.id,1:8])))
+
+    nearest.marker <- gene.tables[[tx]]$nearest.marker.id[which(gene.tables[[tx]]$gene.id == tx.id)]
+    nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+
+    with.allele.idx <- which(round(nearest.geno[,test.allele], 2) > 0)
+    without.allele.idx <- which(round(nearest.geno[,test.allele], 2) == 0)
+
+    ts.expr <- tx.expr[common.ind,tx.id]
+    adj.geno <- adjust(tx.model[common.ind,"Causal",drop=FALSE], nearest.geno[common.ind,1:7,drop=FALSE])
+
+
+    par(mfrow = c(1,2))
+
+    allele.col <- rep("#1f78b4", length(adj.geno))
+    allele.col[with.allele.idx] <- "#b2df8a"
+    plot(adj.geno, ts.expr, col = allele.col, pch )
+    plot.with.model(adj.geno[with.allele.idx], ts.expr[with.allele.idx],
+        xlab = "Adjusted Genome Score", ylab = "Expression", 
+        main = paste("With", test.allele, "allele"))
+    plot.with.model(adj.geno[without.allele.idx], ts.expr[without.allele.idx],
+        xlab = "Adjusted Genome Score", ylab = "Expression",
+        main = paste("Without", test.allele, "allele"))
+
+
+}
+
+```

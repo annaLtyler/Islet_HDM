@@ -133,6 +133,10 @@ high_dim_med <- function(causal.matrix, mediating.matrix, outcome.matrix,
         curr_model = rgcca(A, weight.mat, tau = "optimal", verbose = FALSE,
             scheme = scheme)
         
+        curr_x_loading = curr_model$a[[1]]
+        curr_m_loading = curr_model$a[[2]]
+        curr_y_loading = curr_model$a[[3]]
+
         curr_g_score = as.matrix(A[[1]] %*% curr_model$a[[1]])
         curr_t_score = as.matrix(A[[2]] %*% curr_model$a[[2]])
         curr_p_score = as.matrix(A[[3]] %*% curr_model$a[[3]])
@@ -142,6 +146,7 @@ high_dim_med <- function(causal.matrix, mediating.matrix, outcome.matrix,
 
         #check signs before updating weights.
         curr_scores <- check_signs(curr_scores)
+        curr_loadings <- cbind(curr_x_loading, curr_m_loading, curr_y_loading)
         
         #curr_cor = cor(curr_scores[[1]])
         if(use.partial.cor){
@@ -170,7 +175,10 @@ high_dim_med <- function(causal.matrix, mediating.matrix, outcome.matrix,
         weight.mat = weight.mat + t(weight.mat)
     }
 
-    colnames(curr_scores[[1]]) <- c("Causal", "Mediator", "Outcome")
+    
+    colnames(curr_scores[[1]]) <- colnames(curr_loadings) <- c("Causal", "Mediator", "Outcome")
+    rownames(curr_loadings) <- rownames(curr_scores[[1]])
     curr_scores$reason <- stop.decision$reason
+    curr_scores$loadings <- curr_loadings
     return(curr_scores)
 }

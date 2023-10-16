@@ -4,7 +4,8 @@
 #The scores is the appropriate column from the
 #scores matrix returned by high_dim_med(). Use
 #drop=FALSE to make sure the scores are still a
-#matrix. The data.mat is the data to compare to.
+#matrix. 
+#The data.mat is the data to compare to.
 #The loadings are the correlation between the data
 #and the scores. 
 #For example, if you want to find the loadings onto
@@ -16,6 +17,9 @@
 
 calc_loadings <- function(scores, data.mat){
     common.ind <- intersect(rownames(scores), rownames(data.mat))
-    loadings = cor(data.mat[common.ind, ], scores, use = "pairwise.complete.obs")
+    #score.cor = cor(data.mat[common.ind, ], scores, use = "pairwise.complete.obs")
+    loadings <- t(scores) %*% data.mat[common.ind,]/ncol(data.mat)
+    #plot(score.cor, loadings)
+    #text(score.cor, loadings, labels = colnames(data.mat))
     return(loadings)
 }

@@ -14,6 +14,7 @@ between kinshp, gene expression, and traits. It uses output
 from 1a.Tissue_Expression.Rmd and 1b.Trait_Selection.Rmd.
 
 ```{r here, message = FALSE, warning = FALSE}
+rm(list = ls())
 library(here)
 results.dir <- here("Results", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
@@ -28,6 +29,7 @@ load_libraries(all.packages, personal.library = TRUE)
 ```
 
 ```{r read_data}
+
 expr <- readRDS(here("Data", "DO", "Tissue_Expression_Adjusted.RDS")) #generated in 1a.Tissue_Expression.Rmd
 tissue.names <- names(expr)
 
@@ -93,7 +95,9 @@ imageWithTextColorbar(trait.loadings, use.pheatmap.colors = TRUE, cex = 1, bar.l
 ## Transcripts, Traits, and eQTL
 
 The figures below show correlations between eQTL LOD
-scores and trait correlations.
+scores and trait correlations. Trait correlations are
+the maximum absolute value correlation for a transcript
+across all traits.
 
 ```{r max_lod}
 #calculate the maximum LOD score for each transcript
@@ -111,10 +115,8 @@ if(!file.exists(max.lod.file)){
     tx.max.lod <- lapply(tissue.data, function(x) get_max_lod(x$lod.peaks$additive))
     saveRDS(tx.max.lod, max.lod.file)
 }else{
-    tx.max.lod <- readRDS(tx.max.lod.file)
+    tx.max.lod <- readRDS(max.lod.file)
 }
-
-
 ```
 
 ```{r trait_trans_cor, fig.width = 8, fig.height = 8}
@@ -134,9 +136,9 @@ for(tx in 1:length(tissue.names)){
         for(trans in 1:ncol(tx.expr)){
             cat("\n")
             report.progress(trans, ncol(tx.expr))
-            max.trait.cor[trans] <- max(apply(pheno[common.ind,], 2, 
+            max.trait.cor[trans] <- max(abs(apply(pheno[common.ind,], 2, 
                 function(x) cor(x, tx.expr[,trans], use = "pairwise.complete.obs", 
-                method = "spearman")), na.rm = TRUE)
+                method = "spearman"))), na.rm = TRUE)
         }
     saveRDS(max.trait.cor, max.trait.cor.file)
     }else{
@@ -149,3 +151,4 @@ for(tx in 1:length(tissue.names)){
         ylab = "Maximum Trait Correlation")
 }
 ```
+
