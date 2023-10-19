@@ -12,8 +12,8 @@ bibliography: hdm.bib
 ```{r param}
 rm(list = ls()) #clear out the environment
 min.lod <- 8
-remove.pseudogenes = TRUE #if TRUE, removes pseudogenes and predicted genes 
-tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
+remove.pseudogenes = TRUE #if TRUE, removes pseudogenes and predicted genes  
+tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle") 
 tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
 
 #tissue.names <- c("Adipose", "Heart", "Islet", "Liver", "SkeletalMuscle")
@@ -72,6 +72,8 @@ generation.
 library(here)
 results.dir <- here("Results", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
+data.results.dir <- here("Results", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+if(!file.exists(data.results.dir)){dir.create(data.results.dir)}
 ```
 
 ```{r load_code, message = FALSE, warning = FALSE}
@@ -80,6 +82,7 @@ for(i in 1:length(all.fun)){source(all.fun[i])}
 
 all.packages <- c("igraph", "pheatmap", "gprofiler2", "qtl2", "stringr",
   "wordcloud", "wordcloud2", "hexbin", "regress", "propagate")
+
 load_libraries(all.packages, personal.library = TRUE)
 ```
 
@@ -91,7 +94,7 @@ load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata")) #ensembl.version, genoprobs
 
 #write out gene information for later use
 gene.tables <- lapply(tissue.data, function(x) x$annot.mrna)
-saveRDS(gene.tables, here("Data", "DO", "Gene_Tables.RDS"))
+saveRDS(gene.tables, file.path(data.results.dir, "Gene_Tables.RDS"))
 ```
 
 ```{r setup}
@@ -108,7 +111,7 @@ colnames(combo.mat) <- tissue.names
 
 ```{r remove_pseudogenes}
 if(remove.pseudogenes){
-  description.files <- here("Data", "DO", paste0("Gene_Description_", tissue.names, ".RDS"))
+  description.files <- file.path(data.results.dir, paste0("Gene_Description_", tissue.names, ".RDS"))
   if(any(!file.exists(description.files))){
 
     require("biomaRt")
@@ -155,7 +158,7 @@ Regress covariates out of the rank Z normalized gene
 expression data.
 
 ```{r adjust}
-adj.expr.file <- here("Data", "DO", "Tissue_Expression_Adjusted.RDS")
+adj.expr.file <- file.path(data.results.dir, "Tissue_Expression_Adjusted.RDS")
 if(!file.exists(adj.expr.file) || overwrite.results){
   #regress out covariates, and normalize residuals
   adj.expr <- lapply(tissue.data, function(x) adjust(x$data$norm, x$covar.matrix))
@@ -532,7 +535,7 @@ tissue.
 #functional kinship, we will compare it to the 
 #germline kinship.
 
-kin.file <- here("Data", "DO", "overall.kinship.RDS")
+kin.file <- file.path(data.results.dir, "overall.kinship.RDS")
 if(!file.exists(kin.file) || overwrite.results){
     Kg = calc_kinship(genoprobs, "overall")
     saveRDS(Kg, kin.file)
@@ -1498,7 +1501,7 @@ dev.off()
 ```
 
 ```{r, eval = FALSE}
-clin.pheno <- readRDS(here("Data", "DO", "Clinical_Phenotypes_Adjusted.RDS"))
+clin.pheno <- readRDS(file.path(data.results.dir, "Clinical_Phenotypes_Adjusted.RDS"))
 clin.decomp <- plot.decomp(clin.pheno, plot.results = FALSE)
 clin.pc <- clin.decomp$u[,1,drop=FALSE]
 rownames(clin.pc) <- rownames(clin.pheno)[clin.decomp$rows.used]

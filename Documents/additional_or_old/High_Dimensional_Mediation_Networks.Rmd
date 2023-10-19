@@ -18,7 +18,7 @@ Our hypothesis is that the high MGE genes are “less peripheral”
 than the corresponding genes with the same LOD score. We test 
 this by fitting a model in two ways: 
 
-1. Do high MGE genes have higher-than-expected degree, given their 
+1. Do high loading/MGE genes have higher-than-expected degree, given their 
     LOD score?
 
 * Fit a model with log(degree) ~ LOD score. 

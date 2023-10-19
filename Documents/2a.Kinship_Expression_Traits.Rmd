@@ -18,6 +18,7 @@ rm(list = ls())
 library(here)
 results.dir <- here("Results", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
+data.results.dir <- here("Results", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
 ```
 
 ```{r load_code, message = FALSE, warning = FALSE}
@@ -30,15 +31,15 @@ load_libraries(all.packages, personal.library = TRUE)
 
 ```{r read_data}
 
-expr <- readRDS(here("Data", "DO", "Tissue_Expression_Adjusted.RDS")) #generated in 1a.Tissue_Expression.Rmd
+expr <- readRDS(file.path(data.results.dir, "Tissue_Expression_Adjusted.RDS")) #generated in 1a.Tissue_Expression.Rmd
 tissue.names <- names(expr)
 
 common.ind <- Reduce("intersect", lapply(expr, rownames))
 ind.matched.expr <- lapply(expr, function(x) x[common.ind,])
 local.lod <- readRDS(here("Results", "Transcriptomes", "Local_LOD.RDS")) #generated in 1a.Tissue_Expression.Rmd
-gene.tables <- readRDS(here("Data", "DO", "Gene_Tables.RDS")) #generated in 1a.Tissue_Expression.Rmd
+gene.tables <- readRDS(file.path(data.results.dir, "Gene_Tables.RDS")) #generated in 1a.Tissue_Expression.Rmd
 
-pheno <- readRDS(here("Data", "DO", "Clinical_Phenotypes_Adjusted.RDS")) #generated in 1b.Trait_Selection.Rmd
+pheno <- readRDS(file.path(data.results.dir, "Clinical_Phenotypes_Adjusted.RDS")) #generated in 1b.Trait_Selection.Rmd
 pheno.names <- colnames(pheno)
 pheno.class <- c("1.phys", "1.phys", "4.glucose", "4.glucose", "5.insulin", "5.insulin",
     "6.lipid", "6.lipid", "6.lipid", "6.lipid", "2.islet", "2.islet", "2.islet", "3.HOMA", 
@@ -102,7 +103,7 @@ across all traits.
 ```{r max_lod}
 #calculate the maximum LOD score for each transcript
 tissue.data <- lapply(tissue.names, 
-    function(x) readRDS(here("Data", "DO", paste0(x, ".RDS"))))
+    function(x) readRDS(here("Data", "DO", paste0(x, ".RDS")))) #actual data downloaded from Gary
 
 get_max_lod <- function(eqtl.data){
     all.tx <- unique(eqtl.data$gene.id)

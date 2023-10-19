@@ -750,6 +750,14 @@ names(trait.cor) <- tissue.names
 
 ```
 
+```{r test, eval = FALSE}
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    common.tx <- intersect(names(local.var[[tx]]), names(dist.var.exp[[tx]]))
+    plot(local.var[[tx]][common.tx], dist.var.exp[[tx]][common.tx])
+}
+```
+
 ```{r calc_pop_mge}
 #calculate a population-level MGE for each transcript
 #using the variance explained by local genotype

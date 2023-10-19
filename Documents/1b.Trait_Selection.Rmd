@@ -19,6 +19,8 @@ is.interactive = FALSE
 #is.interactive = TRUE
 library("here")
 
+data.results.dir <- here("Results", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
 ```
@@ -45,7 +47,7 @@ the individual data points to look for oddities.
 ```{r pheno}
 pheno.data <- readRDS(here("Data", "DO", "Clinical_Phenotypes_V11.RDS"))
 #write out annotations for phenotypes
-write.table(pheno.data$annot.phenotype, here("Data", "DO", "Phenotype_Annotations.txt"), 
+write.table(pheno.data$annot.phenotype, file.path(data.results.dir, "Phenotype_Annotations.txt"), 
   sep = "\t", quote = FALSE, row.names = FALSE)
 
 num.pheno <- pheno.data$data
@@ -581,7 +583,7 @@ standardize so that all traits have a variance of 1.
 covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
 num.covar <- dummy_covar(covar)
 rownames(num.covar) <- rownames(num.pheno)
-saveRDS(num.covar, here("Data", "DO", "Clinical_Phenotype_Covariates.RDS"))
+saveRDS(num.covar, file.path(data.results.dir, "Clinical_Phenotype_Covariates.RDS"))
 
 #remove sex, wave, and generation from the phenotypes
 adj.pheno <- adjust(norm.traits, num.covar) 
@@ -595,7 +597,7 @@ The final phenotype matrix is stored in the Data folder in the file
 Clinical_Phenotypes_Adjusted.RDS
 
 ```{r write_data}
-saveRDS(scaled.pheno, here("Data", "DO", "Clinical_Phenotypes_Adjusted.RDS"))
+saveRDS(scaled.pheno, file.path(data.results.dir, "Clinical_Phenotypes_Adjusted.RDS"))
 ```
 
 ## Trait Correlation vs. LOD score
@@ -605,10 +607,10 @@ score and its correlation to the traits.
 
 ```{r trait_lod_cor}
 #read in adjusted expression from 1a.Tissue_Expression.Rmd
-adj.expr <- readRDS(here("Data", "DO", "Tissue_Expression_Adjusted.RDS"))
+adj.expr <- readRDS(file.path(data.results.dir, "Tissue_Expression_Adjusted.RDS"))
 tissue.names = names(adj.expr)
 #read in transcript information from 1a.Tissue_Expression.Rmd
-gene.tables <- readRDS(here("Data", "DO", "Gene_Tables.RDS"))
+gene.tables <- readRDS(file.path(data.results.dir, "Gene_Tables.RDS"))
 #read in local LOD score information from 1a.Tissue_Expression.Rmd
 local.coef <- readRDS(here("Results", "Transcriptomes", "eQTL_coef_local.RDS"))
 
