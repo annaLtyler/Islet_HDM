@@ -221,6 +221,10 @@ for(tx in 1:length(tissue.names)){
 ```{r read_imp}
 local.imp.files <- list.files(imputed.results.dir, pattern = "Local", full.names = TRUE)
 tx.local.imp <- lapply(local.imp.files, readRDS)
+
+distal.herit.files <- list.files(imputed.results.dir, pattern = "Distal", full.names = TRUE)
+tx.distal.herit <- lapply(distal.herit.files, readRDS)
+
 ```
 
 
@@ -264,18 +268,14 @@ and never sum to more than 1.
 
 ```{r local_distal_check, fig.width = 8, fig.height = 8}
 
-distal.herit <- lapply(tissue.names, function(x) readRDS(file.path(imputed.results.dir, 
-      paste0("Distal_Heritability_", tissue.names[tx], ".RDS"))))
-
 par(mfrow = c(2,2))
 for(tx in 1:length(tissue.names)){
-    #cat("####", tissue.names[tx], "\n")
-    local.var <- apply(tx.local.imp[[tx]], 2, var)
-    distal.var <- distal.herit[[tx]][,"residual_variance"]
-    common.tx <- intersect(names(local.var), names(distal.var))
-    plot(local.var[common.tx], distal.var[common.tx], xlab = "Local Variance Explained",
+    #check.local.var <- apply(tx.local.imp[[tx]], 2, var)
+    local.var <- tx.distal.herit[[tx]][,"local_var"]
+    #plot(check.local.var, local.var)
+    distal.var <- tx.distal.herit[[tx]][,"residual_variance"]
+    plot(local.var, distal.var, xlab = "Local Variance Explained",
     ylab = "Distal Variance Explained", main = tissue.names[tx])
-    #cat("\n\n")
 }
 
 ```
@@ -313,15 +313,14 @@ names(trait.cor) <- tissue.names
 
 par(mfrow = c(2,2))
 for(tx in 1:length(trait.cor)){
-    imp.expr <- tx.local.imp[[tx]]
-    var.exp <- apply(imp.expr, 2, var)
-    common.tx <- intersect(names(trait.cor[[tx]]), names(var.exp))
+    local.var.exp <- tx.distal.herit[[tx]][,"local_var"]
+    common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp)) #transcripts should be in the same order, but just make sure
 
-    binned_ts <- bin.vector2(var.exp[common.tx], seq(0, 1, 0.05))
+    binned_ts <- bin.vector2(local.var.exp[common.tx], seq(0, 1, 0.05))
     bin_means <- sapply(binned_ts, function(x) mean(abs(trait.cor[[tx]][names(x)]), na.rm = TRUE))
     x_means <- sapply(binned_ts, mean)
 
-    plot(var.exp[common.tx], abs(trait.cor[[tx]][common.tx]),
+    plot(local.var.exp[common.tx], abs(trait.cor[[tx]][common.tx]),
         xlab = "Local Heritability", ylab = "Max Correlation with Trait",
         main = tissue.names[tx], pch = 16)
     points(x_means, bin_means, col = "lightblue", type = "l", lwd = 3)
@@ -335,11 +334,10 @@ The following plots are the same as above, but show the linear fit.
 ```{r local_lin_fit, fig.height = 8, fig.width = 8}
 par(mfrow = c(2,2))
 for(tx in 1:length(trait.cor)){
-    imp.expr <- tx.local.imp[[tx]]
-    var.exp <- apply(imp.expr, 2, var)
-    common.tx <- intersect(names(trait.cor[[tx]]), names(var.exp))
+    local.var.exp <- tx.distal.herit[[tx]][,"local_var"]
+    common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp))
 
-    plot.with.model(var.exp[common.tx], abs(trait.cor[[tx]][common.tx]),
+    plot.with.model(local.var.exp[common.tx], abs(trait.cor[[tx]][common.tx]),
         xlab = "Local Heritability", ylab = "Max Correlation with Trait",
         main = tissue.names[tx], report = "cor.test")
 }
@@ -370,12 +368,9 @@ for(tx in 1:length(tissue.names)){
 
 ```{r, fig.width = 8, fig.height = 8}
 
-herit.files <- list.files(imputed.results.dir, pattern = "Distal", full.names = TRUE)
-tx.herit <- lapply(herit.files, readRDS)
-
 par(mfrow = c(2,2))
 for(tx in 1:length(trait.cor)){
-    distal.herit <- tx.herit[[tx]][,"residual_variance"]*tx.herit[[tx]][,"residual_heritability"]
+    distal.herit <- tx.distal.herit[[tx]][,"residual_variance"]*tx.distal.herit[[tx]][,"residual_heritability"]
     common.tx <- intersect(names(trait.cor[[tx]]), names(distal.herit))
 
     binned_ts <- bin.vector2(distal.herit[common.tx], seq(0, 1, 0.05))
@@ -396,7 +391,7 @@ The following figures show the same data, but with linear fit models.
 ```{r lin_fig, fig.width = 8, fig.height = 8}
 par(mfrow = c(2,2))
 for(tx in 1:length(trait.cor)){
-    distal.herit <- tx.herit[[tx]][,"residual_variance"]*tx.herit[[tx]][,"residual_heritability"]
+    distal.herit <- tx.distal.herit[[tx]][,"residual_variance"]*tx.distal.herit[[tx]][,"residual_heritability"]
     common.tx <- intersect(names(trait.cor[[tx]]), names(distal.herit))
 
     plot.with.model(distal.herit[common.tx], abs(trait.cor[[tx]][common.tx]),
