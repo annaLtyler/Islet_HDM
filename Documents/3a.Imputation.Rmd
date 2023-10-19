@@ -224,10 +224,10 @@ tx.local.imp <- lapply(local.imp.files, readRDS)
 ```
 
 
-## Correlation Check {.tabset .tabset-fade .tabset-pills}
+## Correlation Check
 
-### Imputed and measured 
-
+### Imputed and measured {.tabset .tabset-fade .tabset-pills}
+ 
 Check the correlations of the imputed transcripts with
 transcript measurements. Transcripts with higher local 
 LOD scores should have higher correlations to the 
@@ -235,7 +235,7 @@ measured transcript.
 
 ```{r check_correlations, results = "asis", fig.height = 4, fig.width = 8}
 for(tx in 1:length(tissue.names)){
-    cat("###", tissue.names[tx], "\n")
+    cat("####", tissue.names[tx], "\n")
     measured <- scaled.expr[[tx]]
     imputed <- tx.local.imp[[tx]]
 
@@ -262,17 +262,20 @@ for(tx in 1:length(tissue.names)){
 Check that local and distal heritabilities are anti-correlated
 and never sum to more than 1.
 
-```{r local_distal_check}
+```{r local_distal_check, fig.width = 8, fig.height = 8}
+
 distal.herit <- lapply(tissue.names, function(x) readRDS(file.path(imputed.results.dir, 
       paste0("Distal_Heritability_", tissue.names[tx], ".RDS"))))
 
-
+par(mfrow = c(2,2))
 for(tx in 1:length(tissue.names)){
+    #cat("####", tissue.names[tx], "\n")
     local.var <- apply(tx.local.imp[[tx]], 2, var)
     distal.var <- distal.herit[[tx]][,"residual_variance"]
     common.tx <- intersect(names(local.var), names(distal.var))
     plot(local.var[common.tx], distal.var[common.tx], xlab = "Local Variance Explained",
-    ylab = "Distal Variance Explained")
+    ylab = "Distal Variance Explained", main = tissue.names[tx])
+    #cat("\n\n")
 }
 
 ```
