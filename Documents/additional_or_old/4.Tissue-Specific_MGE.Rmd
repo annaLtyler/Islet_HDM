@@ -18,7 +18,7 @@ mediated genetic effect?
 
 ```{r setup}
 library(here)
-mge.results <- "tissue_together-local_imp-_-complete_mediation"
+mge.results <- "tissue_together-_-complete_mediation-germline_kinship"
 mge.results.dir <- here("Results", "High_Dim_Med", mge.results)
 eqtl.results.dir <- here("Results", "Transcriptomes")
 tissue.names = c("Adipose", "Islet", "Liver", "SkeletalMuscle")
@@ -27,8 +27,9 @@ tissue.cols <- c("orange", "brown", "#8dd3c7", "tan") #colors that are not relat
 ```
 
 ```{r read_previous_results}
-mge <- readRDS(here("Results", "High_Dim_Med", mge.results, "Population_MGE_Loadings.RDS"))
-transcript.loadings <- readRDS(here("Results", "High_Dim_Med", mge.results, "Loadings_Transcripts.RDS"))
+mge <- readRDS(here("Results", "High_Dim_Med", mge.results, "Population_Local_MGE_local_imp_0.RDS"))
+names(mge) <- tissue.names
+transcript.loadings <- readRDS(here("Results", "High_Dim_Med", mge.results, "Loadings_Transcripts_0.RDS"))
 eqtl.pval <- readRDS(here("Results", "Transcriptomes", "Tissue-Specific_eQTL_p_values_no_kin.RDS"))
 eqtl.prop <- readRDS(here("Results", "Transcriptomes", "Transcripts_Relative_Effects.RDS"))
 ```
@@ -74,7 +75,7 @@ pairs(mge.mat)
 What do the tissue-specific effects of some high-MGE transcripts look like?
 
 ```{r examples}
-high.mge <- names(sort(mge.mat[,1], decreasing = TRUE))[4]
+high.mge <- names(sort(mge.mat[,1], decreasing = TRUE))[2]
 mge.mat[high.mge,]
 barplot(mge.mat[high.mge,], ylab = "MGE")
 
@@ -86,9 +87,6 @@ expr_across_alleles(high.mge, tissue.name = "Adipose",
     tissue.expr, gene.information, genoprobs, K, use.kinship = FALSE)
 
 expr_across_alleles(high.mge, tissue.name = "Liver", 
-    tissue.expr, gene.information, genoprobs, K, use.kinship = FALSE)
-
-expr_across_alleles(high.mge, tissue.name = "Heart", 
     tissue.expr, gene.information, genoprobs, K, use.kinship = FALSE)
 
 expr_across_alleles(high.mge, tissue.name = "SkeletalMuscle", 
@@ -103,8 +101,6 @@ expr_across_tissues(high.mge, allele.name = "B6",
 What is the relationship between MGE, or transcript loading,
 for each tissue and the tissue-specific 
 
-Heart is not included, because the imputation hasn't been 
-run on heart data yet.
 
 ```{r}
 
@@ -134,7 +130,7 @@ for(tx in 1:length(mge)){
 
     ranked.transcripts <- rank.2D(cbind(abs(mge[[tx]][common.transcripts]), -log10(eqtl.pval[common.transcripts,"Tissue_by_Genotype"])))
 
-    transcript.id <- tissue.data[[tx]]$annot.mrna$gene.id[match(rownames(transcript.loadings[[tx]]), tissue.data[[tx]]$annot.mrna$symbol)]
+    transcript.id <- rownames(transcript.loadings[[tx]])
     common.transcripts <- intersect(transcript.id, names(mge[[tx]]))
     transcript.idx <- match(common.transcripts, transcript.id)
     plot(abs(transcript.loadings[[tx]][transcript.idx]), 

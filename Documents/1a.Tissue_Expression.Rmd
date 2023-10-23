@@ -1624,7 +1624,7 @@ Here we calculate degree without saving the full transcript by
 transcript correlation network. They are very large.
 
 ```{r network_degree}
-gene.deg.file <- here("Results", "Transcription_Networks", "Transcript_Degree.RDS")
+gene.deg.file <- file.path(results.dir, "Transcript_Degree.RDS")
 
 if(!file.exists(gene.deg.file)){
   gene.deg <- vector(mode = "list", length = length(tissue.names))

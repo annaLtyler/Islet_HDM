@@ -2620,7 +2620,7 @@ transcript correlation network.
 Transcript loading and degree are correlated as follows:
 
 ```{r degree_vs_loading, fig.height = 8, fig.width = 8}
-gene.deg <- readRDS(here("Results", "Transcription_Networks", "Transcript_Degree.RDS")) #calculated in 1a.Tissue_Expression.Rmd
+gene.deg <- readRDS(here("Results", "Transcriptomes", "Transcript_Degree.RDS")) #calculated in 1a.Tissue_Expression.Rmd
 
 par(mfrow = c(2,2))
 for(tx in 1:length(tissue.names)){
@@ -2628,6 +2628,8 @@ for(tx in 1:length(tissue.names)){
     plot.with.model(gene.deg[[tx]][common.tx], abs(transcript_loadings[[tx]][common.tx,]),
         xlab = "Degree", ylab = "|Loading|", main = tissue.names[tx])
 }
+
+mtext("Degree vs. |Loading|", side = 3, outer = TRUE, line = -1.5)
 ```
 
 Local MGE and degree are correlated as follows:
@@ -2639,10 +2641,32 @@ for(tx in 1:length(tissue.names)){
     common.tx <- intersect(names(gene.deg[[tx]]), names(pop.local.MGE[[tx]]))
     plot.with.model(gene.deg[[tx]][common.tx], abs(pop.local.MGE[[tx]][common.tx]),
         xlab = "Degree", ylab = "|Local MGE|", main = tissue.names[tx])
-    plot.hexbin.as.plot(gene.deg[[tx]][common.tx], abs(pop.local.MGE[[tx]][common.tx]),
-        xlab = "Degree", ylab = "|Local MGE|", main = tissue.names[tx])
+    #plot.hexbin.as.plot(gene.deg[[tx]][common.tx], abs(pop.local.MGE[[tx]][common.tx]),
+    #    xlab = "Degree", ylab = "|Local MGE|", main = tissue.names[tx])
 
 }
+mtext("Degree vs. |Local MGE|", side = 3, outer = TRUE, line = -1.5)
+```
+
+```{r degree_local_MGE_loess}
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    common.tx <- intersect(names(gene.deg[[tx]]), names(pop.local.MGE[[tx]]))
+
+    binned_deg <- bin.vector2(gene.deg[[tx]][common.tx], seq(0, 0.3, 0.01))
+    bin_means <- sapply(binned_deg, function(x) mean(abs(pop.local.MGE[[tx]][names(x)]), na.rm = TRUE))
+    #bin_mge <- lapply(binned_deg, function(x) abs(pop.local.MGE[[tx]][names(x)]))
+    #boxplot(bin_mge)
+    x_means <- sapply(binned_deg, mean)
+
+    plot(gene.deg[[tx]][common.tx], abs(pop.local.MGE[[tx]][common.tx]),
+        xlab = "Degree", ylab = "|Local MGE|", main = tissue.names[tx], pch = 16)
+    points(x_means, bin_means, col = "lightblue", type = "l", lwd = 3)
+
+}
+mtext("Degree vs. |Local MGE|, loess", side = 3, outer = TRUE, line = -1.5)
+
+
 ```
 
 Distal MGE and degree are correlated as follows:
@@ -2655,6 +2679,7 @@ for(tx in 1:length(tissue.names)){
     plot.with.model(gene.deg[[tx]][common.tx], abs(pop.distal.MGE[[tx]][common.tx]),
         xlab = "Degree", ylab = "|Distal MGE|", main = tissue.names[tx])
 }
+mtext("Degree vs. |Distal MGE|", side = 3, outer = TRUE, line = -1.5)
 ```
 
 
@@ -2666,5 +2691,7 @@ for(tx in 1:length(tissue.names)){
     plot.with.model(abs(pop.local.MGE[[tx]][common.tx]), 
         abs(pop.distal.MGE[[tx]][common.tx]),
         xlab = "Local MGE", ylab = "Distal MGE", main = tissue.names[tx])
+
 }
+mtext("|Local MGE| vs. |Distal MGE|", side = 3, outer = TRUE, line = -1.5)
 ```

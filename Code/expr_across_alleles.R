@@ -22,7 +22,7 @@ expr_across_alleles <- function(transcript.id, tissue.name, tissue.expr,
   for(a in 1:ncol(nearest.geno)){
     rounded.geno <- bin.vector(nearest.geno[names(expr.list[[tissue.idx]]),a], c(0, 0.5, 1))
     boxplot(expr.list[[tissue.idx]]~rounded.geno, 
-      xlab = "Genotype", ylab = paste(gene.name, "expression"),
+      xlab = "Genotype", ylab = paste(tx.effects$gene.name, "expression"),
       main = names(CCcolors[a]), col = CCcolors[a])
     #plot.with.model(nearest.geno[names(expr.list[[tissue.idx]]),a], 
     #  expr.list[[tissue.idx]], 

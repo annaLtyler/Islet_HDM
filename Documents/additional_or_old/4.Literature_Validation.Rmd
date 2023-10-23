@@ -15,8 +15,9 @@ to see how much is known about genes with high MGE vs.
 genes with low MGE.
 
 ```{r setup}
+rm(list = ls()) #clear R environment
 library(here)
-mge.results <- "tissue_together-full_imp-_-complete_mediation"
+mge.results <- "tissue_together-_-complete_mediation-germline_kinship"
 mge.results.dir <- here("Results", "High_Dim_Med", mge.results)
 
 if(length(grep("full_imp", mge.results)) > 0){
@@ -46,9 +47,9 @@ load_libraries(all.packages, personal.library = TRUE)
 ```
 
 ```{r read_previous_results}
-mge <- readRDS(here("Results", "High_Dim_Med", mge.results, paste0("Population_MGE_Loadings_", kinship.text, ".RDS")))
-transcript.loadings <- readRDS(here("Results", "High_Dim_Med", mge.results, "Loadings_Transcripts.RDS"))
-gene.tables <- readRDS(here("Data", "DO", "Gene_Tables.RDS"))
+mge <- readRDS(here("Results", "High_Dim_Med", mge.results, "Population_Local_MGE_local_imp_0.RDS"))
+transcript.loadings <- readRDS(here("Results", "High_Dim_Med", mge.results, "Loadings_Transcripts_0.RDS"))
+gene.tables <- readRDS(here("Results", "Data", "Gene_Tables.RDS"))
 ```
 
 ```{r, eval = FALSE}
@@ -146,6 +147,7 @@ this category we use the remaining genes in our ortholog table
 that were not included in the T2D list. 
 
 ```{r subset}
+hum.mus.ortho <- read.delim(here("Data", "general", "human.mouse.orthologs.txt")) 
 
 gene.sets <- lapply(cat.groups, 
     function(x) t2d.gene.table[which(evidence.code %in% x),1])
@@ -167,7 +169,6 @@ barplot_with_num(score.counts, ylab = "Number of Genes")
 
 
 ```{r ortho}
-hum.mus.ortho <- read.delim(here("Data", "general", "human.mouse.orthologs.txt")) 
 
 ortho.tables <- lapply(gene.sets, 
     function(x) hum.mus.ortho[match(x, hum.mus.ortho[,"Human.Gene.Name"]),])
@@ -188,7 +189,7 @@ all classes.
 t2d.gene.loadings <- vector(mode = "list", length = length(gene.sets))
 names(t2d.gene.loadings) <- names(gene.sets)
 
-for(i in 1:length(gsea.names.list)){
+for(i in 1:length(gsea.ensembl.list)){
     t2d.gene.loadings[[i]] <- lapply(transcript.loadings, 
         function(x) abs(x[which(rownames(x) %in% gsea.ensembl.list[[i]])]))
 }
@@ -277,9 +278,9 @@ for(tx in 1:length(mge)){
 
 mge.p <- sapply(mge.fgsea, function(x) x$"padj")
 colnames(mge.p) <- names(transcript.loadings)
-rownames(mge.p) <- names(gsea.names.list)
+rownames(mge.p) <- names(gsea.ensembl.list)
 barplot(-log10(mge.p), beside = TRUE, col = cat.cols,
     main = "-log10(Enrichment MGE p)")
-legend("topright", fill = cat.cols, legend = names(gsea.names.list))
+legend("topright", fill = cat.cols, legend = names(gsea.ensembl.list))
 
 ```

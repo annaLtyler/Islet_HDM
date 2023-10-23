@@ -67,7 +67,7 @@ Load code and libraries.
 all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
 for(i in 1:length(all.fun)){source(all.fun[i])}
 
-all.packages <- c("qtl2")
+all.packages <- c("qtl2", "gprofiler2", "pheatmap")
 load_libraries(all.packages, personal.library = TRUE)
 ```
 
@@ -296,7 +296,7 @@ kinship matrix for the transcript levels after controlling for the
 local marker.
 
 
-### Local Heritability and Trait Relavance {.tabset .tabset-fade .tabset-pills}
+### Local Variance Explained and Trait Relavance {.tabset .tabset-fade .tabset-pills}
 
 The following plots show the correlation between the 
 variance explained by the local marker and the trait
@@ -321,7 +321,7 @@ for(tx in 1:length(trait.cor)){
     x_means <- sapply(binned_ts, mean)
 
     plot(local.var.exp[common.tx], abs(trait.cor[[tx]][common.tx]),
-        xlab = "Local Heritability", ylab = "Max Correlation with Trait",
+        xlab = "Local Variance Explained", ylab = "Max Correlation with Trait",
         main = tissue.names[tx], pch = 16)
     points(x_means, bin_means, col = "lightblue", type = "l", lwd = 3)
 }
@@ -338,7 +338,7 @@ for(tx in 1:length(trait.cor)){
     common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp))
 
     plot.with.model(local.var.exp[common.tx], abs(trait.cor[[tx]][common.tx]),
-        xlab = "Local Heritability", ylab = "Max Correlation with Trait",
+        xlab = "Local Variance Explained", ylab = "Max Correlation with Trait",
         main = tissue.names[tx], report = "cor.test")
 }
 ```
@@ -356,13 +356,13 @@ for(tx in 1:length(tissue.names)){
     common.tx <- intersect(names(local.lod), names(trait.cor[[tx]]))
 
     plot.with.model(local.lod[common.tx], abs(trait.cor[[tx]][common.tx]),
-        xlab = "Local Heritability", ylab = "Max Correlation with Trait",
+        xlab = "Local Variance Explained", ylab = "Max Correlation with Trait",
         main = tissue.names[tx], report = "cor.test")
 }
 
 ```
 
-### Distal Heritability and Trait Relavance {.tabset .tabset-fade .tabset-pills}
+### Distal Variance Explained and Trait Relavance {.tabset .tabset-fade .tabset-pills}
 
 #### Variance Explained - Loess
 
@@ -378,7 +378,7 @@ for(tx in 1:length(trait.cor)){
     x_means <- sapply(binned_ts, mean)
 
     plot(distal.herit[common.tx], abs(trait.cor[[tx]][common.tx]),
-        xlab = "Heritability", ylab = "Max Correlation with Trait",
+        xlab = "Variance Explained", ylab = "Max Correlation with Trait",
         main = tissue.names[tx], pch = 16)
     points(x_means, bin_means, col = "lightblue", type = "l", lwd = 3)
 }
@@ -395,7 +395,92 @@ for(tx in 1:length(trait.cor)){
     common.tx <- intersect(names(trait.cor[[tx]]), names(distal.herit))
 
     plot.with.model(distal.herit[common.tx], abs(trait.cor[[tx]][common.tx]),
-        xlab = "Heritability", ylab = "Max Correlation with Trait",
+        xlab = "Variance Explained", ylab = "Max Correlation with Trait",
         main = tissue.names[tx], report = "cor.test")
 }
+```
+
+## Distal Tails {.tabset .tabset-fade .tabset-pills}
+
+The plots with distal variance explained vs. trait relevance
+have prominant tails with high variance explained but very low
+trait relevance. What are these genes?
+
+```{r tails, fig.width = 10, fig.height = 4.5, results = "asis"}
+
+tail.boundaries <- matrix(c(0.5, 0.3, 0.7, 0.2, 0.5, 0.3, 0.55, 0.2), ncol = 2, byrow = TRUE)
+rownames(tail.boundaries) <- tissue.names
+colnames(tail.boundaries) <- c("Variance Explained", "Trait Relatedness")
+
+tail.enrich <- tail.genes <- vector(mode = "list", length = length(tissue.names))
+names(tail.enrich) <- names(tail.genes) <- tissue.names
+
+#pdf("~/Desktop/tails.pdf", width = 8, height = 5)
+for(tx in 1:length(trait.cor)){
+    cat("###", tissue.names[tx], "\n")
+
+    distal.herit <- tx.distal.herit[[tx]][,"residual_variance"]*tx.distal.herit[[tx]][,"residual_heritability"]
+    common.tx <- intersect(names(trait.cor[[tx]]), names(distal.herit))
+
+    tail.idx <- intersect(which(distal.herit[common.tx] > tail.boundaries[tx,1]), 
+        which(abs(trait.cor[[tx]][common.tx]) < tail.boundaries[tx,2]))
+    tail.genes[[tx]] <- common.tx[tail.idx]
+    tail.enrich[[tx]] <- gost(tail.genes[[tx]], organism = "mmusculus", 
+        sources = c("GO", "REACTOME", "HP", "CORuM"))
+
+
+    pt.col <- rep("black", length(common.tx))
+    pt.col[tail.idx] <- "salmon"
+
+    layout(matrix(c(1,2), ncol = 2), widths = c(0.8, 1))
+
+    par(mar = c(4,4,4,4))
+    plot.with.model(distal.herit[common.tx], abs(trait.cor[[tx]][common.tx]),
+        xlab = "Variance Explained", ylab = "Max Correlation with Trait",
+        main = tissue.names[tx], report = "cor.test", col = pt.col)
+
+    plot.enrichment(tail.enrich[[tx]], order.by = "p_value", num.terms = 20, max.term.size = 3000,
+        plot.label = paste("Tail Enrichment for", tissue.names[tx]), text.size = 0.7)
+
+    cat("\n\n")
+}
+#dev.off()
+```
+
+### All Tissues
+
+All the tails are enriched for ribosomal genes.
+
+```{r all_enrich, fig.height = 7, fig.width = 5}
+plot.enrichment.group(tail.enrich, plot.label = "All Tail Enrichments", max.term.size = 3000,
+    n.terms = 20)
+```
+
+### All Genes
+
+The individual gene names in each tail are shown below
+
+```{r tail_genes, fig.width = 3, fig.height = 15}
+all.tail <- Reduce("union", tail.genes)
+
+tail.table <- matrix(0, nrow = length(all.tail), ncol = length(tissue.names))
+rownames(tail.table) <- all.tail
+colnames(tail.table) <- tissue.names
+
+for(tx in 1:length(tissue.names)){
+    tail.table[tail.genes[[tx]],tx] <- 1
+}
+
+gene.info  <- cbind(Reduce("c", lapply(gene.tables, function(x) x$symbol)), 
+    Reduce("c", lapply(gene.tables, function(x) x$gene.id)))
+gene.names  <- gene.info[match(all.tail, gene.info[,2]),1]
+rownames(tail.table) <- gene.names
+
+#pdf("~/Desktop/tail.genes.pdf", width = 3, height = 15)
+pheatmap(tail.table, cluster_cols = FALSE, cex = 0.7)
+#dev.off()
+
+
+#gene.order <- order(rownames(tail.table))
+#pheatmap(tail.table[gene.order,], cluster_rows = FALSE, cluster_cols = FALSE, cex = 0.7)
 ```
