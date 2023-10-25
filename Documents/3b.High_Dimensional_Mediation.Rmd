@@ -2617,6 +2617,8 @@ to know why high-loading/high-MGE genes are high-loading/high-MGE.
 One thing we can do is look at the degree of the genes in the 
 transcript correlation network.
 
+### Transcript Loading vs. Degree
+
 Transcript loading and degree are correlated as follows:
 
 ```{r degree_vs_loading, fig.height = 8, fig.width = 8}
@@ -2632,7 +2634,9 @@ for(tx in 1:length(tissue.names)){
 mtext("Degree vs. |Loading|", side = 3, outer = TRUE, line = -1.5)
 ```
 
-Local MGE and degree are correlated as follows:
+### Local MGE vs. Degree {.tabset .tabset-fade .tabset-pills}
+
+#### Linear
 
 ```{r degree_vs_localMGE, fig.height = 8, fig.width = 8}
 
@@ -2640,13 +2644,15 @@ par(mfrow = c(2,2))
 for(tx in 1:length(tissue.names)){
     common.tx <- intersect(names(gene.deg[[tx]]), names(pop.local.MGE[[tx]]))
     plot.with.model(gene.deg[[tx]][common.tx], abs(pop.local.MGE[[tx]][common.tx]),
-        xlab = "Degree", ylab = "|Local MGE|", main = tissue.names[tx])
+        xlab = "Degree", ylab = "|Local MGE|", main = tissue.names[tx], report = "cor.test")
     #plot.hexbin.as.plot(gene.deg[[tx]][common.tx], abs(pop.local.MGE[[tx]][common.tx]),
     #    xlab = "Degree", ylab = "|Local MGE|", main = tissue.names[tx])
 
 }
 mtext("Degree vs. |Local MGE|", side = 3, outer = TRUE, line = -1.5)
 ```
+
+#### Loess
 
 ```{r degree_local_MGE_loess}
 par(mfrow = c(2,2))
@@ -2669,7 +2675,7 @@ mtext("Degree vs. |Local MGE|, loess", side = 3, outer = TRUE, line = -1.5)
 
 ```
 
-Distal MGE and degree are correlated as follows:
+### Distal MGE vs. Degree
 
 ```{r degree_vs_distalMGE, fig.height = 8, fig.width = 8}
 
@@ -2677,11 +2683,12 @@ par(mfrow = c(2,2))
 for(tx in 1:length(tissue.names)){
     common.tx <- intersect(names(gene.deg[[tx]]), names(pop.distal.MGE[[tx]]))
     plot.with.model(gene.deg[[tx]][common.tx], abs(pop.distal.MGE[[tx]][common.tx]),
-        xlab = "Degree", ylab = "|Distal MGE|", main = tissue.names[tx])
+        xlab = "Degree", ylab = "|Distal MGE|", main = tissue.names[tx], report = "cor.test")
 }
 mtext("Degree vs. |Distal MGE|", side = 3, outer = TRUE, line = -1.5)
 ```
 
+### Local MGE vs. Distal MGE
 
 ```{r localMGE_vs_distalMGE, fig.height = 8, fig.width = 8}
 
@@ -2690,8 +2697,42 @@ for(tx in 1:length(tissue.names)){
     common.tx <- intersect(names(pop.local.MGE[[tx]]), names(pop.distal.MGE[[tx]]))
     plot.with.model(abs(pop.local.MGE[[tx]][common.tx]), 
         abs(pop.distal.MGE[[tx]][common.tx]),
-        xlab = "Local MGE", ylab = "Distal MGE", main = tissue.names[tx])
+        xlab = "Local MGE", ylab = "Distal MGE", main = tissue.names[tx], report = "cor.test")
 
 }
 mtext("|Local MGE| vs. |Distal MGE|", side = 3, outer = TRUE, line = -1.5)
+```
+
+
+## Predictions with transcription
+
+To translate to humans we are creating phenotypic predictions
+based on transcription values. We want to do the parallel
+here in the mice to see what the distributions look like. Are 
+they nudged in one direction or the other, or are they really 
+pegged high or low?
+
+```{r mouse_transcriptomic_prediction}
+#scale expression across individuals as we do in humans
+ind.scaled.expr <- lapply(adj.expr, function(x) apply(x, 1, scale))
+for(tx in 1:length(ind.scaled.expr)){
+    rownames(ind.scaled.expr[[tx]]) <- colnames(adj.expr[[tx]])
+}
+
+#multiply by loadings
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    common.tx <- intersect(rownames(ind.scaled.expr[[tx]]), rownames(transcript_loadings[[tx]]))
+    transcript.pred <- apply(ind.scaled.expr[[tx]][common.tx,], 2, function(x) x * transcript_loadings[[tx]][common.tx,])
+    mean.pred <- colMeans(transcript.pred)
+    pred.order <- order(mean.pred)    
+    #boxplot(transcript.pred[,pred.order])
+    
+    common.ind <- intersect(colnames(ind.scaled.expr[[tx]]), rownames(scaled.pheno))
+    plot.with.model(mean.pred[common.ind], scaled.pheno[common.ind,"weight_final"],
+        xlab = "Prediction", ylab = "Final Weight", main = tissue.names[tx])
+}
+
+
+
 ```

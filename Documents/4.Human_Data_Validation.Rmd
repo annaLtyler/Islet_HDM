@@ -1,0 +1,706 @@
+---
+title: "Human Validation"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+
+This workflow uses the transcript loadings learned in high dimensional mediation 
+on human data to see if the loadings generalize to human conditions (e.g. obesity, 
+metabolic syndrome, diabetes), or to treatments (high-fat diet, vegetable smoothies, etc.)
+
+We downloaded data sets from GEO.
+
+
+```{r load_code}
+rm(list = ls())
+
+#is.interactive = TRUE
+library("here")
+
+results.dir <- here("Results", "Human_Validation")
+if(!file.exists(results.dir)){dir.create(results.dir, recursive = TRUE)}
+
+exp.name = "tissue_together-_-complete_mediation-germline_kinship"
+data.results.dir <- here("Results", "High_Dim_Med", exp.name)
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("pheatmap", "gprofiler2", "RColorBrewer", "GEOquery", "limma")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+
+
+```{r read_mouse_data}
+transcript_loadings <- readRDS(file.path(data.results.dir, "Loadings_Transcripts_0.RDS"))
+mus.hum <- read.delim(here("Data", "general", "human.mouse.orthologs.txt"))
+```
+
+
+## Obesity Status in post-menopausal women
+
+Can we use the transcriptomic signature from the adipose tissue of
+post-menopausal women to predict obesity?
+
+The first study we will look at is titled "Transcriptome profile of subcutaneous 
+adipocytes isolated from obese vs. lean postmenopausal women" 
+[GSE44000](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE44000).
+
+Purified adipocyte samples were isolated from subcutaneous adipose tissue
+surgical biopsies of 7 obese (BMI>30) and 7 lean (BMI<25) postmenoposal 
+women and gene expression was quantified with Agilent-014850, 4X44K human 
+whole genome platform arrays (GPL6480)
+
+
+```{r fun}
+#This function reads in a GEO data set
+#It renames the rows using human gene names
+#and matches the mouse ortholog table
+#It also normalizes the data across individuals
+read_geo <- function(accession, ortholog.table, gene.id.col = 1, num_as = "ENTREZGENE_ACC"){
+    expr <- read.delim(here("Data", "Human", paste0(accession, "_series_matrix.txt")), 
+        comment.char = "!", row.names = gene.id.col)
+
+    gene.id.table <- gconvert(rownames(expr), numeric_ns = num_as)
+
+    #re-label rows of expression table with ensembl IDs
+    id.idx <- match(rownames(expr), gene.id.table[,"input"])
+    id.name <- gene.id.table[id.idx,"name"]
+    not.na <- c(which(!is.na(id.name)), which(id.name != "none"))
+    u_genes <- unique(id.name[not.na])
+
+    #average over all probes in the gene
+    avg.expr <- t(sapply(u_genes, function(x) colMeans(expr[which(id.name == x),,drop=FALSE])))
+    rownames(avg.expr) <- u_genes
+
+    #get mouse orthologs
+    common.genes <- intersect(rownames(avg.expr), ortholog.table[,"Human.Gene.Name"])
+    u_id <- gene.id.table[match(common.genes, gene.id.table[,"name"]), "target"]
+    mus.idx <- match(u_id, ortholog.table[,"Human.Ensembl"])
+    ortho.table <- ortholog.table[mus.idx,]
+
+    #subset expression table to match orthologs
+    aligned.expr <- avg.expr[common.genes,]
+    norm.expr <- t(apply(aligned.expr, 1, scale))
+
+    results = list("human_expression" = norm.expr, "orthologs" = ortho.table)
+    return(results)
+}
+
+#This function reads in the meta data table created by copying
+#and pasting the file names from the GEO website into an excel
+#file and saving as a csv. This function splits by the specified
+#character and extracts the specified elements to create a status
+#vector for the individuals. It also creates a color vector for
+#the individuals based on status.
+read_status <- function(accession, split.char = "_", status.elements = c(1,2,3), 
+    status.col = brewer.pal(8, "Set2")){
+    
+    status.table <- read.csv(here("Data", "Human", paste0(accession, "_meta.csv")), header = FALSE)
+
+    subj.status <- sapply(strsplit(status.table[,2], split.char), function(x) paste(x[status.elements], collapse = "_"))
+    u_status <- unique(subj.status)
+    u_status.col <- status.col[1:length(u_status)]
+    subj.col <- unlist(lapply(1:length(u_status), function(x) rep(u_status.col[x], length(which(subj.status == u_status[x])))))
+
+    subj.table <- cbind(status.table, subj.status, subj.col)
+    colnames(subj.table) <- c("ID", "Name", "Status", "Color")
+
+    result <- list("subject_table" = subj.table, "unique_status" = u_status, "status_color" = u_status.col)
+    return(result)
+}
+
+#read geo meta. Sometimes the meta data are not available in the sample
+#names and must be read in from a file. This will be called 
+#accession_series_matrix.txt and sometimes has and 
+#sometimes does not have the gene expression data with it.
+#line numbers can be acquired by opening the file in excel.
+#named numbers is a named vector containing line numbers of 
+#useful information named by their eventual column name in 
+#a table.
+#If the expression data aren't stored in this file, we will
+#use GEO2R to read in the data.
+read_seq_meta <- function(accession, named.numbers, comment.char = "!"){
+    matrix.file <- here("Data", "Human", paste0(accession, "_series_matrix.txt"))
+    meta.data <- sapply(named.numbers, function(x) t(read.table(matrix.file, skip = x-1, nrows = 1)))
+    meta.table <- meta.data[-1,] #take off label row
+    colnames(meta.table)  <- names(named.numbers)
+    return(meta.table)
+}
+
+```
+
+Read in expression data and average over all probes in each gene.
+
+```{r postmenopausal}
+matched.expr <- read_geo("GSE44000", mus.hum)
+aligned.expr <- matched.expr$human_expression
+aligned.ortho <- matched.expr$orthologs
+
+subj.status <- read_status("GSE44000", split.char = "_", status.elements = 3)
+subj.table <- subj.status$subject_table
+u_status <- subj.status$unique_status
+status.col <- subj.status$status_color
+```
+
+The following boxplots show the predicted human phenotype by
+status. The gene expression was measured in adipose tissue,
+and the prediction is the best using the adipose loadings.
+
+
+```{r mult_loadings, fig.width = 8, fig.height = 8}
+#pdf("~/Desktop/test.pdf", width = 8, height = 8)
+par(mfrow = c(2,2))
+tissue.names <- names(transcript_loadings)
+for(tx in 1:length(tissue.names)){
+
+    tx.loadings <- transcript_loadings[[tx]]
+    
+    common.tx <- intersect(rownames(tx.loadings), aligned.ortho[,"Mouse.Ortholog.Ensembl"])
+    ortho.idx <- match(common.tx, aligned.ortho[,"Mouse.Ortholog.Ensembl"]) #these indices match expression matrix
+    #excluded.tx <- setdiff(rownames(tx.loadings), common.tx)
+    #boxplot(list("shared" = tx.loadings[common.tx,1], "not shared" = tx.loadings[excluded.tx,1]))
+    
+    loaded.expr <- aligned.expr[ortho.idx,] * tx.loadings[common.tx,]
+    ind.means <- colMeans(loaded.expr)
+    group.test <- aov(ind.means~as.factor(subj.table[,"Status"]))
+    pval <- anova(group.test)[,"Pr(>F)"][1]
+    boxplot(ind.means~as.factor(subj.table[,"Status"]), col = status.col, xlab = "", 
+        ylab = "Predicted Phenotype", 
+        main = paste(tissue.names[tx], "\np =", signif(pval, 2)))
+    abline(h = 0)
+}
+#dev.off()
+```
+
+## Dietary restriction {.tabset .tabset-fade .tabset-pills}
+
+Does restricting calories or protein cause the transcriptomic
+profile of adipose tissue to become less obese-like?
+
+GEO accession: GSE192587
+
+Summary (submitter-provided): Aims/hypothesis: Dietary restriction (DR) reduces 
+adiposity and improves metabolism in patients with one or 
+more symptoms of the metabolic syndrome. Nonetheless, it 
+remains elusive whether the benefits of DR in humans are 
+mediated by calorie or nutrient restriction. This study 
+was conducted to identify whether isocaloric dietary protein 
+restriction is sufficient to confer the beneficial effects of 
+dietary restriction in patients with metabolic syndrome.
+Methods: We performed a prospective, randomized controlled 
+dietary intervention under constant nutritional and medical 
+supervision. A total of 21 individuals diagnosed with the 
+metabolic syndrome was randomly assigned for caloric restriction 
+(CR; n = 11, mean age 49 ± 8.5 years, female 63%; diet of 
+5,941 ± 686 KJ per day) or isocaloric dietary protein restriction 
+(PR; n = 10, mean age 51.6 ± 8.9 years, female 50%; diet of 
+8,409 ± 2,360 KJ per day) and followed for 27 days.
+Results: Like CR, PR promoted weight loss (-6.6%, P= 0.0041) 
+due to reduction in adiposity (-9.9%, P= 0.0007), associated 
+with reductions in blood glucose (-52.7%, P= 0.0002), lipid 
+levels (cholesterol, -35.4%, P= 0.0010; triglycerides, -39.5% 
+P= 0.0022) and blood pressure (systolic, -37.7 P< 0.0001; 
+diastolic, -73.2% P< 0.0001). PR resulted in enrichment of 
+metabolic pathways related to the immune system such as B cell 
+proliferation, lymphocyte proliferation and leukocyte 
+proliferation in subcutaneous adipose tissue. Hence, a reduction 
+in calorie intake or changes in the gut microbiome are not 
+necessary to confer the metabolic benefits of DR. Instead, a 
+reduction in protein intake with a mild increase in carbohydrate 
+intake to maintain the isocaloric balance of the diet is 
+sufficient to improve metabolic control.
+Conclusions/interpretation: Protein restriction is sufficient 
+to confer almost the same clinical outcomes as calorie restriction 
+without the need for a reduction in calorie intake. The isocaloric 
+characteristic of the PR intervention makes this approach a more 
+attractive and less drastic dietary strategy in clinical settings 
+and has greater potential to be used as adjuvant therapy for people 
+with the metabolic syndrome.
+
+I used the analyze with R button on the GEO website to access the 
+data file.
+
+The supplementary file (GSE192587_series_matrix.txt) at the bottom 
+of the accession page has patient information.
+
+This array used human genome assembly hg38. We downloaded the file
+Human.GRCh38.p13.annot.tsv (from XXX) for gene annotation. I removed
+all single and double quotes.
+
+
+```{r dietary_restriction}
+# load counts table from GEO
+accession <- "GSE192587"
+counts <- read.csv(here("Data", "Human", paste0(accession, "_counts.csv")))
+gene.table <- counts[,1:6]
+tbl <- counts[,7:ncol(counts)]
+rownames(tbl) <- gene.table[,1]
+
+#this normalization procedure is taken from GEO2R
+# pre-filter low count genes
+# keep genes with at least 2 counts > 10
+keep <- rowSums( tbl >= 10 ) >= 2
+tbl <- tbl[keep, ]
+
+# log transform raw counts
+# instead of raw counts can display vst(as.matrix(tbl)) i.e. variance stabilized counts
+dat <- log10(tbl + 1)
+
+#adjust for sex
+covar.table <- read_seq_meta("GSE192587", named.numbers = c("Pt_Label" = 59, "Sample_ID" = 48,
+    "timepoint" = 57, "treatment" = 58, "sex" = 60))
+
+sex <- dummy_covar(covar.table[,"sex",drop=FALSE])
+rownames(sex) <- covar.table[,"Sample_ID"]
+adj.expr <- adjust(t(dat), sex)
+
+u_groups <- unique(covar.table[,c("timepoint", "treatment")])
+
+#normalize across individuals
+scaled.expr <- apply(adj.expr, 2, scale)
+#boxplot(scaled.expr[,1:10])
+rownames(scaled.expr) <- rownames(adj.expr)
+
+
+#Convert the gene IDs to names and align with mouse orthologs
+common.ensembl <- intersect(colnames(scaled.expr), mus.hum[,"Human.Ensembl"])
+mus.ensembl <- mus.hum[match(common.ensembl, mus.hum[,"Human.Ensembl"]), "Mouse.Ortholog.Ensembl"]
+matched.expr <- scaled.expr[,match(common.ensembl, colnames(scaled.expr))]
+```
+
+```{r load_genes, fig.width = 10, fig.height = 5, results = "asis"}
+#pdf("~/Desktop/Diet.pdf", width = 10, height = 5)
+for(tx in 1:length(tissue.names)){
+    cat("###", tissue.names[tx], "\n")
+    tx.loadings <- transcript_loadings[[tx]]
+    common.mus.tx <- intersect(mus.ensembl, rownames(tx.loadings)) #find the genes that are both in the expression data and have loadings
+    expr.idx <- match(common.mus.tx, mus.ensembl) #find the location of the common IDs in the expression data
+    loading.idx <- match(common.mus.tx, rownames(tx.loadings)) #find the location of the common IDs in the loadings
+    loaded.expr <- apply(scaled.expr[,expr.idx], 1, function(x) x*tx.loadings[loading.idx,]) #multiply the scaled expression by the loadings
+    tx.pred <- colMeans(loaded.expr) #use the means to make our phenotype prediction
+    
+    #par(mar = c(4, 20, 4, 4))
+    #boxplot(tx.pred~as.factor(covar.table[,"timepoint"])*as.factor(covar.table[,"treatment"]), 
+    #    ylab = "", xlab = "Prediction", las = 2, horizontal = TRUE, main = tissue.names[tx])
+    #test <- aov(tx.pred~as.factor(covar.table[,"timepoint"])*as.factor(covar.table[,"treatment"]))
+    #TukeyHSD(test)
+
+    par(mfrow = c(1,2))
+
+    calorie.idx <- grep("Calorie", covar.table[,"treatment"])
+    protein.idx <- grep("Protein", covar.table[,"treatment"])
+    before.idx <- grep("Before", covar.table[,"timepoint"])
+    after.idx <- grep("After", covar.table[,"timepoint"])
+    
+    plot.new()
+    plot.window(xlim = c(0,1), ylim = c(min(tx.pred)*1.1, max(tx.pred)))
+    pt.id <- unique(covar.table[calorie.idx,"Pt_Label"])
+    for(p in 1:length(pt.id)){
+        pt.before <- intersect(which(covar.table[,"Pt_Label"] == pt.id[p]), before.idx)
+        pt.after <- intersect(which(covar.table[,"Pt_Label"] == pt.id[p]), after.idx)
+        if(length(pt.before) > 0 && length(pt.after) > 0){
+            points(x = c(0,1), y = tx.pred[c(pt.before, pt.after)], type = "b")
+        }
+    }
+    axis(2)
+    mtext("Prediction", side = 2, line = 2.5)
+    text("Before", x = 0.015, y = min(tx.pred)*1.05)
+    text("After", x = 1, y = min(tx.pred)*1.05)
+    mtext("Calore Restriction", side = 3)
+
+    plot.new()
+    plot.window(xlim = c(0,1), ylim = c(min(tx.pred)*1.1, max(tx.pred)))
+    pt.id <- unique(covar.table[protein.idx,"Pt_Label"])
+    for(p in 1:length(pt.id)){
+        pt.before <- intersect(which(covar.table[,"Pt_Label"] == pt.id[p]), before.idx)
+        pt.after <- intersect(which(covar.table[,"Pt_Label"] == pt.id[p]), after.idx)
+        if(length(pt.before) > 0 && length(pt.after) > 0){
+            points(x = c(0,1), y = tx.pred[c(pt.before, pt.after)], type = "b")
+        }
+    }
+    axis(2)
+    mtext("Prediction", side = 2, line = 2.5)
+    text("Before", x = 0.015, y = min(tx.pred)*1.05)
+    text("After", x = 1, y = min(tx.pred)*1.05)
+    mtext("Protein Restriction", side = 3)
+
+    mtext(tissue.names[tx], side = 3, outer = TRUE, line = -1.5)
+    cat("\n\n")
+}
+#dev.off()
+```
+
+## Obesity in Children
+
+accession # GSE205668
+
+Study design: The Leipzig Childhood adipose tissue cohort comprises 
+Caucasian children aged 0-18 years who underwent elective orthopedic 
+surgery, herniotomy/orchidopexie, or other surgeries. Exclusion criteria 
+were severe diseases and medication that might affect adipose tissue 
+biology, such as: diabetes, generalized inflammation, malignant diseases, 
+genetic syndromes, or permanent immobilization. Written informed consent 
+was obtained from all parents and study protocols were approved by the local 
+Ethics Committee (265-08, 265- 08-ff) and registered in the National Clinical 
+Trials database (NCT02208141). BMI data were standardized to age- and sex- 
+specific centiles by applying German reference data, and are represented as 
+BMI standard score (SDS). Overweight and obesity are defined by a cutoff of 
+1.28 and 1.88 SDS (90th or 97th centile), respectively. Subcutaneous adipose 
+tissue samples were excised during surgery, washed three times in PBS, and 
+immediately frozen in liquid nitrogen for RNA isolation.
+
+```{r get_from_geo}
+
+# load counts table from GEO
+accession <- "GSE205668"
+
+counts <- read.delim(here("Data", "Human", paste0(accession, "_counts.txt")), row.names = 1)
+
+# pre-filter low count genes
+# keep genes with at least 2 counts > 10
+keep <- rowSums( counts >= 10 ) >= 2
+counts <- counts[keep, ]
+
+# log transform raw counts
+# instead of raw counts can display vst(as.matrix(tbl)) i.e. variance stabilized counts
+dat <- log10(counts + 1)
+
+covar.table <- read_seq_meta(accession, named.numbers = c("Pt_Label" = 31, "sex" = 41,
+    "status" = 42, "age" = 43))
+sex <- dummy_covar(covar.table[,"sex", drop=FALSE])
+age <- as.numeric(gsub("age: ", "", covar.table[,"age"]))
+
+adj.expr <- adjust(t(dat), cbind(sex, age))
+
+scaled.expr <- apply(adj.expr, 2, scale)
+rownames(scaled.expr) <- rownames(adj.expr)
+
+#get orthologs
+hum.ensembl <- substr(colnames(scaled.expr), 1, 15)
+common.ensembl <- intersect(hum.ensembl, mus.hum[,"Human.Ensembl"])
+mus.ensembl <- mus.hum[match(common.ensembl, mus.hum[,"Human.Ensembl"]), "Mouse.Ortholog.Ensembl"]
+matched.expr <- scaled.expr[,match(common.ensembl, hum.ensembl)]
+
+#see if obesity can be predicted from gene expression
+#pdf("~/Desktop/Diet.pdf", width = 10, height = 5)
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    tx.loadings <- transcript_loadings[[tx]]
+    common.mus.tx <- intersect(mus.ensembl, rownames(tx.loadings)) #find the genes that are both in the expression data and have loadings
+    expr.idx <- match(common.mus.tx, mus.ensembl) #find the location of the common IDs in the expression data
+    loading.idx <- match(common.mus.tx, rownames(tx.loadings)) #find the location of the common IDs in the loadings
+    loaded.expr <- apply(scaled.expr[,expr.idx], 1, function(x) x*tx.loadings[loading.idx,]) #multiply the scaled expression by the loadings
+    tx.pred <- colMeans(loaded.expr, na.rm = TRUE) #use the means to make our phenotype prediction
+    
+    test <- aov(tx.pred~as.factor(covar.table[,"status"]))
+    p <- anova(test)[,"Pr(>F)"][1]
+    boxplot(tx.pred~as.factor(covar.table[,"status"]), xlab = "", ylab = "Prediction", 
+        main = paste(tissue.names[tx], "\np =", signif(p, 2)))
+}
+#dev.off()
+```
+
+
+## Trans-regulatory insulin resistance
+
+Sixty two participants at the tail ends of the distribution of 
+insulin sensitivity adjusted for age, gender and natural logarithm 
+of BMI for each ethnic group separately. Individuals at tail ends 
+were well matched for age, gender, BMI, and percent fat, but were 
+different for insulin sensitivity. Participants were of age 20 years 
+to 55 years, body mass index (BMI) between 19 kg/m2 and 42 kg/m2, 
+and had all biopsies obtained in the fasting state.
+
+accession number: GSE40234
+
+```{r read_trans_reg, fig.width = 8, fig.height = 8}
+accession.number = "GSE40234"
+matched.expr <- read_geo(accession.number, mus.hum)
+aligned.expr <- matched.expr$human_expression
+aligned.ortho <- matched.expr$orthologs
+
+subj.status <- read_status(accession.number, split.char = " ", status.elements = c(1,2))
+subj.table <- subj.status$subject_table
+u_status <- subj.status$unique_status
+status.col <- subj.status$status_color
+
+
+par(mfrow = c(2,2))
+tissue.names <- names(transcript_loadings)
+for(tx in 1:length(tissue.names)){
+
+    tx.loadings <- transcript_loadings[[tx]]
+    
+    common.tx <- intersect(rownames(tx.loadings), aligned.ortho[,"Mouse.Ortholog.Ensembl"])
+    ortho.idx <- match(common.tx, aligned.ortho[,"Mouse.Ortholog.Ensembl"]) #these indices match expression matrix
+    #excluded.tx <- setdiff(rownames(tx.loadings), common.tx)
+    #boxplot(list("shared" = tx.loadings[common.tx,1], "not shared" = tx.loadings[excluded.tx,1]))
+    
+    loaded.expr <- aligned.expr[ortho.idx,] * tx.loadings[common.tx,]
+    ind.means <- colMeans(loaded.expr)
+    group.test <- aov(ind.means~as.factor(subj.table[,"Status"]))
+    pval <- anova(group.test)[,"Pr(>F)"][1]
+    boxplot(ind.means~as.factor(subj.table[,"Status"]), col = status.col, xlab = "", 
+        ylab = "Predicted Phenotype", 
+        main = paste(tissue.names[tx], "\np =", signif(pval, 2)))
+    abline(h = 0)
+}
+```
+
+## Visceral fat profile
+
+accession number: GSE29231
+
+Three biological replicates with four technical replicates each were used to 
+generate expression profiles. Total cellular RNA from biopsy samples was 
+isolated using mirVana™ miRNA Isolation Kit (Ambion, Austin, TX). The 
+quantity and the quality of RNA samples were determined using Nanodrop-1000 
+(Thermo Fischer Scientific, Wilmington, USA) and Agilent 2100 Bioanalyzer 
+(Agilent Technologies, Santa Clara, CA), in that order. RNA samples with a 
+RIN (RNA Integrity Number) value between 5-8 were used for expression profiling. 
+Starting with 500 ng of total RNA, Illumina TotalPrepTM RNA Amplification Kit was 
+used for preparing first and second strand cDNA, purification of cDNA, in vitro 
+transcription to synthesize biotin labeled cRNA, and purification of the labeled 
+cRNA, in that sequence. The quantitation of cRNA was performed using Nanodrop-1000.
+Illumina HumanHT-12 v3 Expression BeadChip arrays were hybridized with 750 ng of 
+labeled cRNA samples. Hybridization and washing were perforemd according to the
+manufacturer's protocol. The arrays were scanned and read using Illumina iScan 
+System, and the data extraction, average normalization and downstream analysis 
+performed using Illumina GenomeStudio V2010.1.
+
+accession number: GSE40234
+
+```{r analyze_visceral, fig.width = 8, fig.height = 8}
+accession.number = "GSE29231"
+matched.expr <- read_geo(accession.number, mus.hum)
+aligned.expr <- matched.expr$human_expression
+aligned.ortho <- matched.expr$orthologs
+
+subj.status <- read_status(accession.number, split.char = " ", status.elements = c(1,2))
+subj.table <- subj.status$subject_table
+u_status <- subj.status$unique_status
+status.col <- subj.status$status_color
+
+
+par(mfrow = c(2,2))
+tissue.names <- names(transcript_loadings)
+for(tx in 1:length(tissue.names)){
+
+    tx.loadings <- transcript_loadings[[tx]]
+    
+    common.tx <- intersect(rownames(tx.loadings), aligned.ortho[,"Mouse.Ortholog.Ensembl"])
+    ortho.idx <- match(common.tx, aligned.ortho[,"Mouse.Ortholog.Ensembl"]) #these indices match expression matrix
+    #excluded.tx <- setdiff(rownames(tx.loadings), common.tx)
+    #boxplot(list("shared" = tx.loadings[common.tx,1], "not shared" = tx.loadings[excluded.tx,1]))
+    
+    loaded.expr <- aligned.expr[ortho.idx,] * tx.loadings[common.tx,]
+    ind.means <- colMeans(loaded.expr)
+    group.test <- aov(ind.means~as.factor(subj.table[,"Status"]))
+    pval <- anova(group.test)[,"Pr(>F)"][1]
+    boxplot(ind.means~as.factor(subj.table[,"Status"]), col = status.col, xlab = "", 
+        ylab = "Predicted Phenotype", 
+        main = paste(tissue.names[tx], "\np =", signif(pval, 2)))
+    abline(h = 0)
+}
+```
+
+## Subcutaneous fat profile
+
+accession number: GSE29226
+
+Three biological replicates with four technical replicates each were used to 
+generate expression profiles. Total cellular RNA from biopsy samples was 
+isolated using mirVana™ miRNA Isolation Kit (Ambion, Austin, TX). The 
+quantity and the quality of RNA samples were determined using Nanodrop-1000 
+(Thermo Fischer Scientific, Wilmington, USA) and Agilent 2100 Bioanalyzer 
+(Agilent Technologies, Santa Clara, CA), in that order. RNA samples with a 
+RIN (RNA Integrity Number) value between 5-8 were used for expression profiling. 
+Starting with 500 ng of total RNA, Illumina TotalPrepTM RNA Amplification Kit was 
+used for preparing first and second strand cDNA, purification of cDNA, in vitro 
+transcription to synthesize biotin labeled cRNA, and purification of the labeled 
+cRNA, in that sequence. The quantitation of cRNA was performed using Nanodrop-1000.
+Illumina HumanHT-12 v3 Expression BeadChip arrays were hybridized with 750 ng of 
+labeled cRNA samples. Hybridization and washing were perforemd according to the
+manufacturer's protocol. The arrays were scanned and read using Illumina iScan 
+System, and the data extraction, average normalization and downstream analysis 
+performed using Illumina GenomeStudio V2010.1.
+
+accession number: GSE40234
+
+```{r analyze_subcu, fig.width = 8, fig.height = 8}
+accession.number = "GSE29226"
+matched.expr <- read_geo(accession.number, mus.hum)
+aligned.expr <- matched.expr$human_expression
+aligned.ortho <- matched.expr$orthologs
+
+subj.status <- read_status(accession.number, split.char = " ", status.elements = c(1))
+subj.table <- subj.status$subject_table
+u_status <- subj.status$unique_status
+status.col <- subj.status$status_color
+
+
+par(mfrow = c(2,2))
+tissue.names <- names(transcript_loadings)
+for(tx in 1:length(tissue.names)){
+
+    tx.loadings <- transcript_loadings[[tx]]
+    
+    common.tx <- intersect(rownames(tx.loadings), aligned.ortho[,"Mouse.Ortholog.Ensembl"])
+    ortho.idx <- match(common.tx, aligned.ortho[,"Mouse.Ortholog.Ensembl"]) #these indices match expression matrix
+    #excluded.tx <- setdiff(rownames(tx.loadings), common.tx)
+    #boxplot(list("shared" = tx.loadings[common.tx,1], "not shared" = tx.loadings[excluded.tx,1]))
+    
+    loaded.expr <- aligned.expr[ortho.idx,] * tx.loadings[common.tx,]
+    ind.means <- colMeans(loaded.expr)
+    group.test <- aov(ind.means~as.factor(subj.table[,"Status"]))
+    pval <- anova(group.test)[,"Pr(>F)"][1]
+    boxplot(ind.means~as.factor(subj.table[,"Status"]), col = status.col, xlab = "", 
+        ylab = "Predicted Phenotype", 
+        main = paste(tissue.names[tx], "\np =", signif(pval, 2)))
+    abline(h = 0)
+}
+```
+
+## Resveretrol
+
+accession number: GSE32357
+
+Resveratrol is a naturally occurring compound that profoundly 
+affects energy metabolism and mitochondrial function and serves 
+as a calorie restriction mimetic, at least in animal models of obesity. 
+Here we treated 10 healthy, obese men with placebo and 150 mg/day 
+resveratrol in a randomized double-blind cross-over study for 30 days. 
+Resveratrol supplementation significantly reduced sleeping- and resting 
+metabolic rate. In muscle, resveratrol activated AMPK, increased SIRT1 
+and PGC-1alpha protein levels, increased citrate synthase activity, and 
+improved muscle mitochondrial respiration on a fatty acid-derived 
+substrate. Furthermore, resveratrol elevated intramyocellular lipid 
+levels, and decreased intrahepatic lipid content, circulating glucose, 
+triglycerides, alanine-aminotransferase, and inflammation markers. 
+Systolic blood pressure dropped and HOMA index improved after resveratrol. 
+In the postprandial state, adipose tissue lipolysis and plasma fatty acid 
+and glycerol decreased. In conclusion, we demonstrate that 30 days of 
+resveratrol supplementation induces profound metabolic changes in obese 
+subjects, mimicking the effects of calorie restriction.
+
+
+```{r analyze_resveratrol, fig.width = 8, fig.height = 8}
+accession.number = "GSE32357"
+matched.expr <- read_geo(accession.number, mus.hum, num_as = "AFFY_HUGENE_1_0_ST_V1")
+aligned.expr <- matched.expr$human_expression
+aligned.ortho <- matched.expr$orthologs
+
+subj.status <- read_status(accession.number, split.char = "_", status.elements = c(3))
+subj.table <- subj.status$subject_table
+u_status <- subj.status$unique_status
+status.col <- subj.status$status_color
+
+
+par(mfrow = c(2,2))
+tissue.names <- names(transcript_loadings)
+for(tx in 1:length(tissue.names)){
+
+    tx.loadings <- transcript_loadings[[tx]]
+    
+    common.tx <- intersect(rownames(tx.loadings), aligned.ortho[,"Mouse.Ortholog.Ensembl"])
+    ortho.idx <- match(common.tx, aligned.ortho[,"Mouse.Ortholog.Ensembl"]) #these indices match expression matrix
+    #excluded.tx <- setdiff(rownames(tx.loadings), common.tx)
+    #boxplot(list("shared" = tx.loadings[common.tx,1], "not shared" = tx.loadings[excluded.tx,1]))
+    
+    loaded.expr <- aligned.expr[ortho.idx,] * tx.loadings[common.tx,]
+    ind.means <- colMeans(loaded.expr)
+    group.test <- aov(ind.means~as.factor(subj.table[,"Status"]))
+    pval <- anova(group.test)[,"Pr(>F)"][1]
+    boxplot(ind.means~as.factor(subj.table[,"Status"]), col = status.col, xlab = "", 
+        ylab = "Predicted Phenotype", 
+        main = paste(tissue.names[tx], "\np =", signif(pval, 2)))
+    abline(h = 0)
+}
+```
+
+## Lean v obese
+
+accession number: GSE235696
+
+Fat accumulation is the main manifestation of obesity. 
+Obesity forms the largest fat pool because white adipocytes 
+primarily store energy, whereas larger adipocytes may encounter 
+hypoxia and mechanical stress and have higher levels of 
+inflammatory cytokines and lipolysis release. In this study, 
+we performed high-throughput sequencing to analyze the differentially 
+expressed circRNAs in visceral adipose tissue between lean and obese 
+individuals, and searched for the important mechanisms involved in the 
+regulation of adipogenesis
+
+
+```{r lean_v_obese}
+# load counts table from GEO
+accession <- "GSE235696"
+counts <- read.csv(here("Data", "Human", paste0(accession, "_counts.csv")))
+num.counts <- as.matrix(counts[,2:ncol(counts)])
+gene.name <- counts[,1]
+
+#this normalization procedure is taken from GEO2R
+# pre-filter low count genes
+# keep genes with at least 2 counts > 10
+keep <- rowSums(num.counts >= 10 ) >= 2
+tbl <- num.counts[keep, ]
+gene.name <- gene.name[keep]
+
+# log transform raw counts
+# instead of raw counts can display vst(as.matrix(tbl)) i.e. variance stabilized counts
+dat <- log10(tbl + 1)
+
+#adjust for sex
+covar.table <- read_seq_meta(accession, named.numbers = c("Pt_Label" = 43, "Sample_ID" = 29,
+    "Status" = 38))
+
+#normalize across individuals
+scaled.expr <- t(apply(dat, 1, scale))
+#boxplot(scaled.expr[,1:10])
+dimnames(scaled.expr) <- dimnames(dat)
+
+
+#Convert the gene names and align with mouse orthologs
+common.name <- intersect(gene.name, mus.hum[,"Human.Gene.Name"])
+mus.name <- mus.hum[match(common.ensembl, mus.hum[,"Human.Gene.Name"]), "Mouse.Ortholog.Name"]
+matched.expr <- scaled.expr[match(common.name, gene.name),]
+```
+
+```{r load_genes, fig.width = 10, fig.height = 5, results = "asis"}
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    cat("###", tissue.names[tx], "\n")
+    tx.loadings <- transcript_loadings[[tx]]
+    mus.ensembl <- mus.hum[match(mus.name, mus.hum[,"Mouse.Ortholog.Name"]), "Mouse.Ortholog.Ensembl"]
+    common.mus.tx <- intersect(mus.ensembl, rownames(tx.loadings)) #find the genes that are both in the expression data and have loadings
+    common.mus.names <- mus.hum[match(common.mus.tx, mus.hum[,"Mouse.Ortholog.Ensembl"]), "Mouse.Ortholog.Name"]
+    expr.idx <- match(common.mus.names, mus.name) #find the location of the common IDs in the expression data
+    loading.idx <- match(common.mus.tx, rownames(tx.loadings)) #find the location of the common IDs in the loadings
+    loaded.expr <- apply(scaled.expr[expr.idx,], 2, function(x) x*tx.loadings[loading.idx,]) #multiply the scaled expression by the loadings
+    tx.pred <- colMeans(loaded.expr) #use the means to make our phenotype prediction
+    
+    group.test <- aov(tx.pred~as.factor(covar.table[,"Status"]))
+    pval <- anova(group.test)[,"Pr(>F)"][1]
+    boxplot(tx.pred~as.factor(covar.table[,"Status"]), col = status.col, xlab = "", 
+        ylab = "Predicted Phenotype", 
+        main = paste(tissue.names[tx], "\np =", signif(pval, 2)))
+    abline(h = 0)
+
+}
+#dev.off()
+```
+
+

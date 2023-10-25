@@ -483,4 +483,12 @@ pheatmap(tail.table, cluster_cols = FALSE, cex = 0.7)
 
 #gene.order <- order(rownames(tail.table))
 #pheatmap(tail.table[gene.order,], cluster_rows = FALSE, cluster_cols = FALSE, cex = 0.7)
+
+#par(mfrow = c(2,2))
+#for(tx in 1:length(tissue.names)){
+#    var.test <- apply(adj.expr[[tx]], 2, var)
+#    not.tail <- setdiff(colnames(adj.expr[[tx]]), tail.genes[[tx]])
+#    boxplot(list("Tail Genes" = log10(var.test[tail.genes[[tx]]]), 
+#        "Other Genes" = log10(var.test[not.tail])), main = tissue.names[tx])
+#}
 ```
