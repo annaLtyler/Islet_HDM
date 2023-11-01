@@ -1630,7 +1630,7 @@ if(!file.exists(gene.deg.file)){
   gene.deg <- vector(mode = "list", length = length(tissue.names))
   names(gene.deg) <- tissue.names
 
-  for(tx in 2:length(tissue.names)){
+  for(tx in 1:length(tissue.names)){
       
     num.tx <- ncol(adj.expr[[tx]])
     pop.cor.result <- bigcor(adj.expr[[tx]])
