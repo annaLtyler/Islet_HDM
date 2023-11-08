@@ -225,6 +225,8 @@ tx.local.imp <- lapply(local.imp.files, readRDS)
 distal.herit.files <- list.files(imputed.results.dir, pattern = "Distal", full.names = TRUE)
 tx.distal.herit <- lapply(distal.herit.files, readRDS)
 
+local.var.exp <- lapply(tx.distal.herit, function(x) x[,"local_var"])
+distal.var.exp <- lapply(tx.distal.herit, function(x) x[,"residual_variance"]*x[,"residual_heritability"])
 ```
 
 
@@ -280,6 +282,53 @@ for(tx in 1:length(tissue.names)){
 
 ```
 
+### Local and distal contribution to transcripts
+
+What are the relative contributions of local and distal 
+regulation to trait variation?
+
+The following plot compares the variance explained by local and
+distal components across the tissues. Both components contribute
+about the same to transcript levels.
+
+We calculated these values in the following way:
+
+1. The variance of the measured transcript is the sum of the 
+    variance contributions from covariates, local genotype, 
+    distal genotype, and error. We already removed the variance
+    from the covariates, so we are left with all the other 
+    variance components. 
+
+*transcript = cov + local_genotype + kinship + error*
+
+2. We scaled the remaining variance each transcript (measured minus 
+    covariates) to be equal to 1. Thus, the variance contributions
+    from the local, distal, and error components sum to 1.
+
+*adj_transcript = local_genotype + kinship + error*
+
+3. We then fit this variance with a model using the local genotype
+    and kinship matrix. The residual variance from this model is
+    the variance explained by distal genetics and by error. We can
+    estimate the proportion explained by distal genetics by estimating
+    the heritability of this residual. The *distal variance explained* 
+    is the variance of the residual of the above model times the 
+    heritability of the residual. 
+ 
+
+```{r local_var, fig.width = 8, fig.height = 5}
+
+common.tx <- Reduce("intersect", lapply(distal.var.exp, names))
+local.distal.comp <- list("Local" = Reduce("cbind", lapply(local.var.exp, function(x) x[common.tx])),
+    "Distal" = Reduce("cbind", lapply(distal.var.exp, function(x) x[common.tx])))
+for(i in 1:length(local.distal.comp)){
+    colnames(local.distal.comp[[i]]) <- tissue.names
+}
+plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "Variance Explained",
+    main = "Variance Explained by Local and Distal Components")
+```
+
+
 ## Heritability and Trait Relevance
 
 We want to examine the relationship between heritability and 
@@ -313,14 +362,14 @@ names(trait.cor) <- tissue.names
 
 par(mfrow = c(2,2))
 for(tx in 1:length(trait.cor)){
-    local.var.exp <- tx.distal.herit[[tx]][,"local_var"]
-    common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp)) #transcripts should be in the same order, but just make sure
 
-    binned_ts <- bin.vector2(local.var.exp[common.tx], seq(0, 1, 0.05))
+    common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp[[tx]])) #transcripts should be in the same order, but just make sure
+
+    binned_ts <- bin.vector2(local.var.exp[[tx]][common.tx], seq(0, 1, 0.05))
     bin_means <- sapply(binned_ts, function(x) mean(abs(trait.cor[[tx]][names(x)]), na.rm = TRUE))
     x_means <- sapply(binned_ts, mean)
 
-    plot(local.var.exp[common.tx], abs(trait.cor[[tx]][common.tx]),
+    plot(local.var.exp[[tx]][common.tx], abs(trait.cor[[tx]][common.tx]),
         xlab = "Local Variance Explained", ylab = "Max Correlation with Trait",
         main = tissue.names[tx], pch = 16)
     points(x_means, bin_means, col = "lightblue", type = "l", lwd = 3)
@@ -334,10 +383,9 @@ The following plots are the same as above, but show the linear fit.
 ```{r local_lin_fit, fig.height = 8, fig.width = 8}
 par(mfrow = c(2,2))
 for(tx in 1:length(trait.cor)){
-    local.var.exp <- tx.distal.herit[[tx]][,"local_var"]
-    common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp))
+    common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp[[tx]]))
 
-    plot.with.model(local.var.exp[common.tx], abs(trait.cor[[tx]][common.tx]),
+    plot.with.model(local.var.exp[[tx]][common.tx], abs(trait.cor[[tx]][common.tx]),
         xlab = "Local Variance Explained", ylab = "Max Correlation with Trait",
         main = tissue.names[tx], report = "cor.test")
 }

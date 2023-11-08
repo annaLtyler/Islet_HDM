@@ -1639,7 +1639,7 @@ if(!file.exists(gene.deg.file)){
     expr.cor <- pop.cor.result[1:num.tx, 1:num.tx]
     gene.deg[[tx]] <- colMeans(abs(expr.cor))
     names(gene.deg[[tx]]) <- colnames(adj.expr[[tx]])
-        
+
     }
     
   saveRDS(gene.deg, gene.deg.file)

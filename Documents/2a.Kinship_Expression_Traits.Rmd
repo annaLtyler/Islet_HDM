@@ -19,6 +19,7 @@ library(here)
 results.dir <- here("Results", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
 data.results.dir <- here("Results", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+is.interactive = FALSE #set to true to show verbose reporting of progress on some longer processes
 ```
 
 ```{r load_code, message = FALSE, warning = FALSE}
@@ -136,7 +137,7 @@ for(tx in 1:length(tissue.names)){
         names(max.trait.cor) <- colnames(tx.expr)
         for(trans in 1:ncol(tx.expr)){
             cat("\n")
-            report.progress(trans, ncol(tx.expr))
+            if(is.interactive){report.progress(trans, ncol(tx.expr))}
             max.trait.cor[trans] <- max(abs(apply(pheno[common.ind,], 2, 
                 function(x) cor(x, tx.expr[,trans], use = "pairwise.complete.obs", 
                 method = "spearman"))), na.rm = TRUE)

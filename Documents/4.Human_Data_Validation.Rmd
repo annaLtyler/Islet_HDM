@@ -22,13 +22,16 @@ We downloaded data sets from GEO.
 
 Go to GEO search: https://www.ncbi.nlm.nih.gov/geo/index.cgi
 
+Advanced search for data sets: https://www.ncbi.nlm.nih.gov/gds/advanced/
+
 use search: 
 
-(("visceral adipose") AND "Homo sapiens"[porgn:__txid9606]) AND 
+("adipose" AND obes* AND "Homo sapiens"[porgn:__txid9606] AND mRNA) AND 
 ("Expression profiling by high throughput sequencing"[DataSet Type] OR 
 "Expression profiling by array"[DataSet Type]) 
 
-On October 31, 2023 this yielded 43 studies.
+*I am still fine-tuning this search. I'm not yet sure how to get it to
+give me a reasonable number of good data sets*
 
 We then read through the descriptions to identify studies that 
 profiled the full transcriptome of visceral adipose tissue in 
@@ -63,6 +66,7 @@ load_libraries(all.packages, personal.library = TRUE)
 
 ```{r read_mouse_data}
 transcript_loadings <- readRDS(file.path(data.results.dir, "Loadings_Transcripts_0.RDS"))
+tissue.names <- names(transcript_loadings)
 mus.hum <- read.delim(here("Data", "general", "human.mouse.orthologs.txt"))
 ```
 
@@ -171,13 +175,18 @@ individuals (non hypertension) and overweight/obese individuals
 with hypertension, and sequenced their transcriptome.
 
 ```{r hypertension}
+
 # load counts table from GEO
 accession <- "GSE217007"
 
 counts <- read.delim(here("Data", "Human", paste0(accession, "_gene_expression.txt")), row.names = 1)
 gene.info <- counts[,c(1:4)]
 gene.name <- gene.info[,1]
-num.counts <- as.matrix(counts[,5:ncol(counts)])
+
+#the gene expression matrix has multiple entries for each sample, counts
+#and fpkm. Take out only the counts.
+count.type <- sapply(strsplit(colnames(counts), "_"), function(x) x[2])
+num.counts <- as.matrix(counts[,which(count.type == "count")])
 rownames(num.counts) <- gene.name
 
 # pre-filter low count genes
@@ -189,21 +198,34 @@ num.counts <- num.counts[keep, ]
 # instead of raw counts can display vst(as.matrix(tbl)) i.e. variance stabilized counts
 dat <- log10(num.counts + 1)
 
-covar.table <- read_seq_meta(accession, named.numbers = c("Pt_Label" = 31, "sex" = 41,
-    "status" = 42, "age" = 43))
-sex <- dummy_covar(covar.table[,"sex", drop=FALSE])
-age <- as.numeric(gsub("age: ", "", covar.table[,"age"]))
+covar.table <- read_seq_meta(accession, named.numbers = c("Sample_label" = 31, "age" = 42,
+    "sex" = 43, "weight" = 44, "height" = 45, "BMI" = 46, "blood_pressure" = 47,
+    "pulse" = 48, "glucose" = 49, "alb" = 50, "scr" = 51, "bun" = 52, "ua" = 53, "alt" = 54,
+    "ast" = 55, "status" = 56), color.by = "status")
 
-adj.expr <- adjust(t(dat), cbind(sex, age))
+expr.sample.id <- sapply(strsplit(colnames(adj.expr), "_"), function(x) x[1])
+matched.covar <- covar.table[match(expr.sample.id, covar.table[,1]),]
 
-scaled.expr <- apply(adj.expr, 2, scale)
-rownames(scaled.expr) <- rownames(adj.expr)
+#all female
+#sex <- dummy_covar(covar.table[,"sex", drop=FALSE])
+age <- matrix(as.numeric(gsub("age: ", "", matched.covar[,"age"])), ncol = 1)
+adj.expr <- adjust(t(dat), age)
+#adj.expr <- dat
+
+scaled.expr <- t(apply(adj.expr, 2, scale))
+colnames(scaled.expr) <- rownames(adj.expr)
 
 #get orthologs
-hum.ensembl <- substr(colnames(scaled.expr), 1, 15)
-common.ensembl <- intersect(hum.ensembl, mus.hum[,"Human.Ensembl"])
-mus.ensembl <- mus.hum[match(common.ensembl, mus.hum[,"Human.Ensembl"]), "Mouse.Ortholog.Ensembl"]
-matched.expr <- scaled.expr[,match(common.ensembl, hum.ensembl)]
+hum.gene.name <- rownames(scaled.expr)
+common.name <- intersect(hum.gene.name, mus.hum[,"Human.Gene.Name"])
+mus.name <- mus.hum[match(common.name, mus.hum[,"Human.Gene.Name"]), "Mouse.Ortholog.Name"]
+mus.ensembl <- mus.hum[match(common.name, mus.hum[,"Human.Gene.Name"]), "Mouse.Ortholog.Ensembl"]
+matched.expr <- scaled.expr[match(common.name, hum.gene.name),]
+
+ob.status <- rep(NA, nrow(matched.covar))
+ob.status[grep("normal", matched.covar[,"status"])] <- "normal"
+ob.status[grep("obese", matched.covar[,"status"])] <- "obese"
+ob.status <- as.factor(ob.status)
 
 #see if obesity can be predicted from gene expression
 #pdf("~/Desktop/Diet.pdf", width = 10, height = 5)
@@ -213,12 +235,104 @@ for(tx in 1:length(tissue.names)){
     common.mus.tx <- intersect(mus.ensembl, rownames(tx.loadings)) #find the genes that are both in the expression data and have loadings
     expr.idx <- match(common.mus.tx, mus.ensembl) #find the location of the common IDs in the expression data
     loading.idx <- match(common.mus.tx, rownames(tx.loadings)) #find the location of the common IDs in the loadings
-    loaded.expr <- apply(scaled.expr[,expr.idx], 1, function(x) x*tx.loadings[loading.idx,]) #multiply the scaled expression by the loadings
+    loaded.expr <- apply(scaled.expr[expr.idx,], 2, function(x) x*tx.loadings[loading.idx,]) #multiply the scaled expression by the loadings
     tx.pred <- colMeans(loaded.expr, na.rm = TRUE) #use the means to make our phenotype prediction
     
-    test <- aov(tx.pred~as.factor(covar.table[,"status"]))
+    test <- aov(tx.pred~ob.status)
     p <- anova(test)[,"Pr(>F)"][1]
-    boxplot(tx.pred~as.factor(covar.table[,"status"]), xlab = "", ylab = "Prediction", 
+    boxplot(tx.pred~ob.status, xlab = "", ylab = "Prediction", 
+        main = paste(tissue.names[tx], "\np =", signif(p, 2)))
+}
+```
+
+```{r hypertension_quant, fig.width = 12, fig.height = 9}
+quant.col <- c("weight", "height", "BMI", "pulse", "glucose", 
+    "alb", "scr", "bun", "ua", "alt", "ast")
+
+for(tx in 1:length(tissue.names)){
+    
+    tx.loadings <- transcript_loadings[[tx]]
+    common.mus.tx <- intersect(mus.ensembl, rownames(tx.loadings)) #find the genes that are both in the expression data and have loadings
+    expr.idx <- match(common.mus.tx, mus.ensembl) #find the location of the common IDs in the expression data
+    loading.idx <- match(common.mus.tx, rownames(tx.loadings)) #find the location of the common IDs in the loadings
+    loaded.expr <- apply(scaled.expr[expr.idx,], 2, function(x) x*tx.loadings[loading.idx,]) #multiply the scaled expression by the loadings
+    tx.pred <- colMeans(loaded.expr, na.rm = TRUE) #use the means to make our phenotype prediction
+    
+    par(mfrow = c(3,4))
+    for(p in 1:length(quant.col)){
+        trait <- as.numeric(sapply(strsplit(matched.covar[,quant.col[p]], ":"), function(x) x[2]))
+        plot.with.model(tx.pred, trait, xlab = "Prediction", ylab = quant.col[p], main = quant.col[p],
+            col = matched.covar[,"Color"], report = "cor.test")
+    }
+
+}
+
+```
+
+## G protein study
+
+Transcriptome signature of GPS2-regulated genes between 
+shGFP and shGPS2 during adipognesis was assessed through 
+RNAseq analysis. Epigenomic status of shGFP and shGPS2 
+preadipocytes and adipocytes was analyzed using histone 
+marker H3K27ac ChIPseq. GPS2 cistrome was analyzed in hMADS 
+cells at day 0 and day 14 of differentiation. Transcriptome 
+signature of non-diabetic and diabetic obese patients was 
+assessed through RNAseq.
+
+```{r g_protein}
+
+# load counts table from GEO
+accession <- "GSE152517"
+
+num.counts <- read.delim(here("Data", "Human", paste0(accession, "_RNAseq_patients_rawcounts.txt")), row.names = 1)
+gene.name <- rownames(num.counts)
+
+# pre-filter low count genes
+# keep genes with at least 2 counts > 10
+keep <- rowSums(num.counts >= 10 ) >= 2
+num.counts <- num.counts[keep, ]
+
+# log transform raw counts
+# instead of raw counts can display vst(as.matrix(tbl)) i.e. variance stabilized counts
+dat <- log10(num.counts + 1)
+
+covar.table <- read_seq_meta(accession, named.numbers = c("Sample_label" = 34, "sample_type" = 43,
+    "status" = 44))
+
+#we only want the tissue-derived samples
+sample.idx <- sapply(colnames(dat), function(x) grep(x, covar.table[,"Sample_label"]))
+matched.covar <- covar.table[sample.idx,]
+
+#no covariates
+adj.expr <- dat
+
+scaled.expr <- t(apply(adj.expr, 1, scale))
+dimnames(scaled.expr) <- dimnames(adj.expr)
+
+#get orthologs
+hum.gene.name <- rownames(scaled.expr)
+common.name <- intersect(hum.gene.name, mus.hum[,"Human.Gene.Name"])
+mus.name <- mus.hum[match(common.name, mus.hum[,"Human.Gene.Name"]), "Mouse.Ortholog.Name"]
+mus.ensembl <- mus.hum[match(common.name, mus.hum[,"Human.Gene.Name"]), "Mouse.Ortholog.Ensembl"]
+matched.expr <- scaled.expr[match(common.name, hum.gene.name),]
+
+ob.status <- as.factor(sapply(strsplit(matched.covar[,"status"], ": "), function(x) x[2]))
+
+#see if obesity can be predicted from gene expression
+#pdf("~/Desktop/Diet.pdf", width = 10, height = 5)
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    tx.loadings <- transcript_loadings[[tx]]
+    common.mus.tx <- intersect(mus.ensembl, rownames(tx.loadings)) #find the genes that are both in the expression data and have loadings
+    expr.idx <- match(common.mus.tx, mus.ensembl) #find the location of the common IDs in the expression data
+    loading.idx <- match(common.mus.tx, rownames(tx.loadings)) #find the location of the common IDs in the loadings
+    loaded.expr <- apply(scaled.expr[expr.idx,], 2, function(x) x*tx.loadings[loading.idx,]) #multiply the scaled expression by the loadings
+    tx.pred <- colMeans(loaded.expr, na.rm = TRUE) #use the means to make our phenotype prediction
+    
+    test <- aov(tx.pred~ob.status)
+    p <- anova(test)[,"Pr(>F)"][1]
+    boxplot(tx.pred~ob.status, xlab = "", ylab = "Prediction", 
         main = paste(tissue.names[tx], "\np =", signif(p, 2)))
 }
 ```
@@ -259,7 +373,6 @@ and the prediction is the best using the adipose loadings.
 ```{r postmenopausal_loadings, fig.width = 8, fig.height = 8}
 #pdf("~/Desktop/test.pdf", width = 8, height = 8)
 par(mfrow = c(2,2))
-tissue.names <- names(transcript_loadings)
 for(tx in 1:length(tissue.names)){
 
     tx.loadings <- transcript_loadings[[tx]]
@@ -727,6 +840,106 @@ for(tx in 1:length(tissue.names)){
 }
 ```
 
+## Non-alcoholic fatty liver disease
+
+Accession number: GSE200678
+
+To understand the role of adipose tissue senescence in 
+NAFLD/NASH, RNA sequencing was performed in the visceral 
+adipose tissue of NAFLD and NASH pateints.
+
+Comparative gene expression profiling analysis of RNA-seq 
+data for visceral adipose tissue of NAFLD and NASH patients
+
+```{r nafld}
+# load counts table from GEO
+accession <- "GSE200678"
+
+num.counts <- as.matrix(read.delim(here("Data", "Human", paste0(accession, "_Kallisto_visceral_AT_tissue_count.txt")), row.names = 1))
+gene.name <- rownames(num.counts)
+
+#this normalization procedure is taken from GEO2R
+# pre-filter low count genes
+# keep genes with at least 2 counts > 10
+keep <- rowSums(num.counts >= 10 ) >= 2
+tbl <- num.counts[keep, ]
+gene.name <- gene.name[keep]
+
+# log transform raw counts
+# instead of raw counts can display vst(as.matrix(tbl)) i.e. variance stabilized counts
+dat <- log10(tbl + 1)
+
+#adjust for sex
+covar.table <- read_seq_meta(accession, named.numbers = c("Pt_Label" = 29, "Status" = 40,
+    "sex" = 41, "age" = 42, "bmi" = 43, "disease" = 44), color.by = "Status")
+
+#adjust for covariates
+sex <- dummy_covar(covar.table[,"sex",drop=FALSE])
+age <- as.numeric(sapply(strsplit(covar.table[,"age"], ":"), function(x) x[2]))
+adj.expr <- adjust(t(dat), cbind(sex, age))
+
+#cbind(colnames(dat), covar.table[,1])
+
+#normalize across individuals
+scaled.expr <- t(apply(adj.expr, 2, scale))
+#boxplot(scaled.expr[,1:10])
+dimnames(scaled.expr) <- dimnames(dat)
+
+#Convert the gene names and align with mouse orthologs
+common.name <- intersect(gene.name, mus.hum[,"Human.Gene.Name"])
+mus.name <- mus.hum[match(common.name, mus.hum[,"Human.Gene.Name"]), "Mouse.Ortholog.Name"]
+matched.expr <- scaled.expr[match(common.name, gene.name),]
+
+
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    tx.loadings <- transcript_loadings[[tx]]
+    mus.ensembl <- mus.hum[match(mus.name, mus.hum[,"Mouse.Ortholog.Name"]), "Mouse.Ortholog.Ensembl"]
+    common.mus.tx <- intersect(mus.ensembl, rownames(tx.loadings)) #find the genes that are both in the expression data and have loadings
+    common.mus.names <- mus.hum[match(common.mus.tx, mus.hum[,"Mouse.Ortholog.Ensembl"]), "Mouse.Ortholog.Name"]
+    expr.idx <- match(common.mus.names, mus.name) #find the location of the common IDs in the expression data
+    loading.idx <- match(common.mus.tx, rownames(tx.loadings)) #find the location of the common IDs in the loadings
+    loaded.expr <- apply(scaled.expr[expr.idx,], 2, function(x) x*tx.loadings[loading.idx,]) #multiply the scaled expression by the loadings
+    tx.pred <- colMeans(loaded.expr) #use the means to make our phenotype prediction
+    #barplot(tx.pred)
+
+    group.test <- aov(tx.pred~as.factor(covar.table[,"Status"]))
+    pval <- anova(group.test)[,"Pr(>F)"][1]
+    boxplot(tx.pred~as.factor(covar.table[,"Status"]), xlab = "", 
+        ylab = "Predicted Phenotype", 
+        main = paste(tissue.names[tx], "\np =", signif(pval, 2)))
+    abline(h = 0)
+
+
+}
+#dev.off()
+
+```
+
+```{r nafld_quant, fig.width = 12, fig.height = 9}
+quant.col <- c("bmi")
+
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    
+    tx.loadings <- transcript_loadings[[tx]]
+    common.mus.tx <- intersect(mus.ensembl, rownames(tx.loadings)) #find the genes that are both in the expression data and have loadings
+    expr.idx <- match(common.mus.tx, mus.ensembl) #find the location of the common IDs in the expression data
+    loading.idx <- match(common.mus.tx, rownames(tx.loadings)) #find the location of the common IDs in the loadings
+    loaded.expr <- apply(scaled.expr[expr.idx,], 2, function(x) x*tx.loadings[loading.idx,]) #multiply the scaled expression by the loadings
+    tx.pred <- colMeans(loaded.expr, na.rm = TRUE) #use the means to make our phenotype prediction
+    
+
+    for(p in 1:length(quant.col)){
+        trait <- as.numeric(sapply(strsplit(covar.table[,quant.col[p]], ":"), function(x) x[2]))
+        plot.with.model(tx.pred, trait, xlab = "Prediction", ylab = quant.col[p], main = quant.col[p],
+            report = "cor.test")
+    }
+
+}
+
+```
+
 ## Lean v obese
 
 accession number: GSE235696
@@ -798,7 +1011,6 @@ for(tx in 1:length(tissue.names)){
 }
 #dev.off()
 ```
-
 
 
 

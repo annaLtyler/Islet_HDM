@@ -1,0 +1,145 @@
+---
+title: "Mouse Validation"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+
+The purpose of this workflow is to validate the transcript
+loadings we identified in HDMA in another population. Rather
+than do this in the CC-RIX, which would be the first publication
+for those data, we can use a published data set, like the Svenson
+DO. The Svenson DO only measured liver expression, so if this
+doesn't work, it's not a big deal. 
+
+```{r load_code}
+rm(list = ls())
+
+#is.interactive = TRUE
+library("here")
+
+exp.name = "tissue_together-_-complete_mediation-germline_kinship"
+data.results.dir <- here("Results", "High_Dim_Med", exp.name)
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("pheatmap", "gprofiler2", "RColorBrewer", "GEOquery", "limma")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+
+```{r read_mouse_data}
+transcript_loadings <- readRDS(file.path(data.results.dir, "Loadings_Transcripts_0.RDS"))
+tissue.names <- names(transcript_loadings)
+
+svenson_do <- load(here("Data", "DO", "Svenson_DO850_for_eQTL_viewer_v9.RData"))
+norm_expr <- dataset.mrna$data$norm
+
+covar.mat <- dataset.phenotype$covar.matrix
+
+#subset by diet
+hfd.idx <- which(covar.mat[,"diethf"] == 1)
+chow.idx <- which(covar.mat[,"diethf"] == 0)
+
+common.hfd <- intersect(names(hfd.idx), rownames(norm_expr))
+common.chow <- intersect(names(chow.idx), rownames(norm_expr))
+
+hfd.expr <- norm_expr[common.hfd,]
+chow.expr <- norm_expr[common.chow,]
+
+#adjust for sex and generation
+adj_hfd <- adjust(hfd.expr, covar.mat[,c(1,3:8)])
+adj_chow <- adjust(chow.expr, covar.mat[,c(1,3:8)])
+
+scaled_hfd <- apply(adj_hfd, 2, scale)
+dimnames(scaled_hfd) <- dimnames(adj_hfd)
+
+scaled_chow <- apply(adj_chow, 2, scale)
+dimnames(scaled_chow) <- dimnames(adj_chow)
+```
+
+```{r pheno}
+pheno <- dataset.phenotype$data
+hfd.adj.pheno <- adjust(pheno[common.hfd,], covar.mat[,c(1,3:8)])
+chow.adj.pheno <- adjust(pheno[common.chow,], covar.mat[,c(1,3:8)])
+```
+
+```{r load_expression, fig.width = 8, fig.height = 8}
+#pdf("~/Desktop/DO850.pdf")
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    tx.loadings <- transcript_loadings[[tx]]
+    common.tx <- intersect(colnames(scaled_hfd), rownames(tx.loadings))
+    loaded_chow <- apply(scaled_chow[,common.tx], 1, function(x) x*tx.loadings[common.tx,])
+    loaded_hfd <- apply(scaled_hfd[,common.tx], 1, function(x) x*tx.loadings[common.tx,])
+
+    pred.chow <- colMeans(loaded_chow)
+    pred.hfd <- colMeans(loaded_hfd)
+
+    common.hfd <- intersect(names(pred.hfd), rownames(hfd.adj.pheno))
+    plot.with.model(pred.hfd[common.hfd], hfd.adj.pheno[common.hfd,"bw_pc1"], 
+        xlab = "Prediction", ylab = "BW PC1", main = paste("HFD", tissue.names[tx]))
+
+    common.chow <- intersect(names(pred.chow), rownames(chow.adj.pheno))
+    plot.with.model(pred.chow[common.chow], chow.adj.pheno[common.chow,"bw_pc1"], 
+        xlab = "Prediction", ylab = "BW PC1", main = paste("Chow", tissue.names[tx]))
+
+}
+#dev.off()
+
+```
+
+```{r all_cor}
+chow.cor <- hfd.cor <- matrix(NA, nrow = length(tissue.names), ncol = ncol(pheno))
+rownames(chow.cor) <- rownames(hfd.cor) <- tissue.names
+colnames(chow.cor) <- colnames(hfd.cor) <- colnames(pheno)
+
+for(tx in 1:length(tissue.names)){
+    tx.loadings <- transcript_loadings[[tx]]
+    common.tx <- intersect(colnames(adj_hfd), rownames(tx.loadings))
+    loaded_chow <- apply(scaled_chow[,common.tx], 1, function(x) x*tx.loadings[common.tx,])
+    loaded_hfd <- apply(scaled_hfd[,common.tx], 1, function(x) x*tx.loadings[common.tx,])
+
+    pred.chow <- colMeans(loaded_chow)
+    pred.hfd <- colMeans(loaded_hfd)
+
+    common.chow <- intersect(names(pred.chow), rownames(chow.adj.pheno))
+    all.chow.cor <- apply(chow.adj.pheno[common.chow,], 2, 
+        function(x) cor(x, pred.chow[common.chow], use = "pairwise.complete.obs", 
+        method = "spearman"))
+    chow.cor[tx,] <- all.chow.cor
+
+    common.hfd <- intersect(names(pred.hfd), rownames(hfd.adj.pheno))
+    all.hfd.cor <- apply(hfd.adj.pheno[common.hfd,], 2, 
+        function(x) cor(x, pred.hfd[common.hfd], use = "pairwise.complete.obs", 
+        method = "spearman"))
+    hfd.cor[tx,] <- all.hfd.cor
+}
+```
+
+The following heat map shows that the liver loadings give 
+us the highest correlations with body weight and insulin
+measurements. This heat map shows results for the chow 
+animals only.
+
+```{r chow_trait_cor, fig.width = 4, fig.height = 11}
+pheatmap(t(chow.cor), cluster_cols = FALSE)
+```
+
+The following heat map is the same as above, but is
+for the HFD animals only.
+
+
+```{r hfd_trait_cor, fig.width = 4, fig.height = 11}
+pheatmap(t(hfd.cor), cluster_cols = FALSE)
+```

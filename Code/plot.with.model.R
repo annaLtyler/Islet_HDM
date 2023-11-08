@@ -1,9 +1,10 @@
 #This function takes an x and y and plots them with a fitted linear model
-
+#if write.results is FALSE, the correlation or model results will not be
+#written in the plot title
 
 plot.with.model <- function(x, y, xlim = NULL, ylim = NULL, col = "black", 
 line.col = "#a6bddb", pch = 16, main, xlab, ylab, report = c("lm", "cor.test"), 
-cex = 1, plot.results = TRUE, add = FALSE, plot.type = "p"){
+cex = 1, plot.results = TRUE, write.results = TRUE, add = FALSE, plot.type = "p"){
 	
 	if(missing(main)){main = ""}
 	if(missing(xlab)){xlab = deparse(substitute(x))}
@@ -40,7 +41,11 @@ cex = 1, plot.results = TRUE, add = FALSE, plot.type = "p"){
 	}
 
 	if(plot.results){
-	new.title <- paste0(main, "\n", rlab, " = ", r2, ", p = ", signif(p, 2))
+		if(write.results){
+			new.title <- paste0(main, "\n", rlab, " = ", r2, ", p = ", signif(p, 2))
+		}else{
+			new.title <- ""
+		}
 	if(!add){
 		plot(x,y, xlim = xlim, ylim = ylim, col = col, pch = pch, main = new.title, 
 		xlab = xlab, ylab = ylab, type = plot.type, cex = cex)
