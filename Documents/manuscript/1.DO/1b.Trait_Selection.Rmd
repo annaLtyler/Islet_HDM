@@ -19,7 +19,7 @@ is.interactive = FALSE
 #is.interactive = TRUE
 library("here")
 
-data.results.dir <- here("Results", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+data.results.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
@@ -593,12 +593,45 @@ scaled.pheno <- apply(adj.pheno, 2, function(x) scale(x, center = TRUE, scale = 
 rownames(scaled.pheno) <- rownames(adj.pheno)
 ```
 
+
+The following plot shows the contributions of each trait to 
+the principal components of the trait matrix. The bars
+along the top show the variance explained by each PC.
+
+The traits are renamed to be more descriptive. These names are
+stored in Data/DO/trait_names.csv
+
+
+```{r trait_pc}
+descriptive_names <- read.csv(here("Data", "DO", "trait_names.csv"), header = FALSE)
+
+trait.decomp <- plot.decomp(scaled.pheno, pc = ncol(scaled.pheno), plot.results = FALSE)
+pc.mat <- trait.decomp$v
+colnames(pc.mat) <- paste0("PC", 1:ncol(pc.mat))
+rownames(pc.mat) <- descriptive_names[,2]
+
+#png("~/Desktop/trait_pc.png", width = 6, height = 7, units = "in", res = 100)
+layout(matrix(c(1,2,3), ncol = 1), heights = c(0.5, 1, 0.2))
+par(mar = c(0, 7.7, 4, 3.7))
+barplot_with_num(round(trait.decomp$var.exp*100), ylab = "% Variance Explained")
+par(mar = c(4,8,0,4))
+imageWithText(pc.mat*-1, use.pheatmap.colors = TRUE, show.text = FALSE, row.text.shift = 0.04,
+  col.text.shift = 0.04)
+par(mar = c(4,14,0,14))
+imageWithTextColorbar(pc.mat, use.pheatmap.colors = TRUE, bar.lwd = 3, cex = 1.5,
+  orientation = "h", axis.line = 1.5)
+#dev.off()
+```
+
 The final phenotype matrix is stored in the Data folder in the file
 Clinical_Phenotypes_Adjusted.RDS
+
+The names in this final matrix are the same as in the above plot.
 
 ```{r write_data}
 saveRDS(scaled.pheno, file.path(data.results.dir, "Clinical_Phenotypes_Adjusted.RDS"))
 ```
+
 
 ## Trait Correlation vs. LOD score
 

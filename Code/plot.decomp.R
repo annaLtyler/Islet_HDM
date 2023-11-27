@@ -71,16 +71,16 @@ xlim = NULL, plot.results = TRUE){
 					}
 					plot(pc.mat[,1], pc.mat[,2], xlab = colnames(pc.mat)[1], 
 					ylab = colnames(pc.mat)[2], 
-					main = plot.label[i], col = cols, pch = pch, cex = cex,
+					main = plot.label[i], col = cols[na.rows], pch = pch, cex = cex,
 					xlim = xlim)
 					text(pc.mat[,1], pc.mat[,2], rownames(mat), pos = 4, cex = label.cex)
 				}else{
 					plot(pc.mat[,1], pc.mat[,2], xlab = colnames(pc.mat)[1], 
 					ylab = colnames(pc.mat)[2], 
-					main = plot.label[i], col = cols, pch = pch, cex = cex)
+					main = plot.label[i], col = cols[na.rows], pch = pch, cex = cex)
 				}
 			}else{
-				pairs(pc.mat[,1:pc], col = cols, pch = pch, cex = cex,
+				pairs(pc.mat[,1:pc], col = cols[na.rows], pch = pch, cex = cex,
 				main = plot.label[i])
 				}
 		}

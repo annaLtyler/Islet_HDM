@@ -72,7 +72,7 @@ generation.
 library(here)
 results.dir <- here("Results", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
-data.results.dir <- here("Results", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+data.results.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
 if(!file.exists(data.results.dir)){dir.create(data.results.dir)}
 ```
 

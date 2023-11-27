@@ -8,7 +8,7 @@ test.pam.k <- function(mat, kseq = 2:10, diss = FALSE, metric = "euclidean", plo
     rownames(mem)  <- rownames(mat)
 
     for(i in 1:length(kseq)){
-        km <- pam(mat, k = kseq[i], diss = FALSE, metric = "euclidean")
+        km <- pam(mat, k = kseq[i], diss = FALSE, metric = metric)
         mem[,i] <- km$clustering
         mem.f <- data.frame(as.factor(mem[,i]))
         si <- silhouette(km)

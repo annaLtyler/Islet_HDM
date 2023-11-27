@@ -1,0 +1,44 @@
+---
+title: "Impute CC-RIX Gene Expression"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+The purpose of this workflow is use local eQTL identified
+in the DO to impute gene expression in the CC-RIX. We
+compare imputed values to measured values and check to make
+sure that transcripts with strong eQTL in the DO are imputed
+accurately in the CC-RIX.
+
+
+```{r load_code}
+rm(list = ls()) #clear out workspace
+is.interactive = FALSE
+#is.interactive = TRUE
+library("here")
+
+data.dir <- here("Data", "CC-RIX") #directory holding original data
+data.results.dir <- here("Results", "CC-RIX", "Data") #directory holding parsed data for downstream workflows
+results.dir <- here("Results", "CC-RIX", "Imputed") #directory holding results from this workflow
+if(!file.exists(results.dir)){dir.create(results.dir)}
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("pheatmap", "qtl2", "gprofiler2")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+
+```{r read_data}
+
+```

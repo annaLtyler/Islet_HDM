@@ -11,19 +11,64 @@ output:
 ---
 
 ## Introduction
-The purpose of this workflow is to wrangle some CC-RIX data in 
-preparation for validation of the Sash3 hypothesis and other 
-hypotheses developed in the DO CCA analysis. 
+The purpose of this workflow is to wrangle the CC-RIX data in 
+preparation for validation of findings from high-dimensional 
+mediation (HDM) in the diversity outbred (DO) mice. 
 
-This pipeline does the following:
+With HDM we identified loadings on transcripts in the DO mice.
+These loadings indicate whether inheriting increased (or decreased)
+expression of a transcript is associated with increased 
+(or decreased) phenotype score. 
+
+We want to explore the following subjects:
+
+1. Polygenic Risk Scores - 
+    Local eQTLs in the DO mice can be summed together to predict 
+    phenotype score in individuals. Can we do the same in the 
+    CC-RIX? Do the eQTL effects learned in the DO mice replicate
+    in the CC-RIX? And can we sum these effects together to 
+    predict phenotype (here body weight) in the CC-RIX?
+    If yes, this suggests that local regulation of transcripts
+    is an important contributor to phenotypic outomces and risk
+    of disease.
+
+2. Polytranscriptomic Risk Scores -  
+    Transcript loadings learned from HDM give us information about
+    both heritability of transcript levels and their relationship
+    to phenotype. Can we use the loadings directly to predict 
+    phenotype score in CC-RIX mice using their tissue-specific 
+    gene expression? If yes, this suggests that distally heritable
+    disease risk and its related transcriptional profiles learned 
+    in the DO mice contribute to disease risk in the CC-RIX 
+    population, despite vastly different kinship structure in the
+    two populations.
+
+
+This pipeline prepares the CC-RIX data in the following way:
+
+1. Identifies covariates in the CC-RIX data and creates a covariate matrix.
+2. Formats gene expression data to match that of the DO
+3. Adjusts gene expression for covariates and saves adjusted matrices
+4. Generates phenotype matrices for the mice 
+    * Phenotypes were measured asynchronously at multiple timepoints
+    * We summarize each into an early timepoint and a late timepoint
+    * We also summarize body weight into a single measurement to capture
+        the final body weight
+4. Aligns phenotypes and gene expression data
 
 ```{r load_code}
+rm(list = ls()) #clear out workspace
+
 is.interactive = FALSE
 #is.interactive = TRUE
 library("here")
 
-data.dir <- here("Data", "CC-RIX")
-results.dir <- here("Results", "CC-RIX")
+data.dir <- here("Data", "CC-RIX") #directory holding original data
+
+data.results.dir <- here("Results", "CC-RIX", "Data") #directory holding parsed data for downstream workflows
+if(!file.exists(data.results.dir)){dir.create(data.results.dir)}
+
+results.dir <- here("Results", "CC-RIX", "Data_Exploration") #directory holding visualizations from this workflow
 if(!file.exists(results.dir)){dir.create(results.dir)}
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
@@ -52,9 +97,6 @@ if(!data.loaded){
         expr[[i]] <- as.matrix(expr[[i]][,2:ncol(expr[[i]])])
     }
 
-    genoprobs <- readRDS(file.path(data.dir, "Genoprobs.RDS")) #created by 3.5.CC-RIX_genotypes.Rmd
-    K <- readRDS(file.path(data.dir, "Kinship.RDS"))
-    map <- readRDS(file.path(data.dir, "Map.RDS"))
     manifest <- as.matrix(read.csv(file.path(data.dir, "Original_Samples_Manifest.csv")))
 }
 ```
@@ -67,11 +109,11 @@ want to subdivide along these groups in the future.
 ```{r covar}
 factor.covar <- annot[,c("Sex", "Age", "RNAseq_Batch", "Diet", "Treatment")]
 rownames(factor.covar) <- annot[,1]
-write.csv(factor.covar, file.path(data.dir, "Covar.csv"))
+write.csv(factor.covar, file.path(data.results.dir, "Covar.csv"))
 
 group.def <- c("Sex", "Diet", "Treatment") #use these factors to define groups
 groups <- unique(factor.covar[,group.def])
-write.csv(groups, file.path(data.dir, "Groups.csv"), quote = FALSE)
+write.csv(groups, file.path(data.results.dir, "Groups.csv"), quote = FALSE)
 #covar.mat <- dummy_covar(factor.covar)
 ```
 
@@ -101,35 +143,11 @@ for(i in 1:length(expr)){
     expr.covar <- dummy_covar(expr.mouse.info.table[,c("Sex", "Diet", "Treatment", "Timepoint")])
     adj.expr[[i]] <- adjust(expr[[i]], expr.covar)
 }
-saveRDS(expr, file.path(data.dir, "Expression.by.Tissue.RDS"))
+saveRDS(expr, file.path(data.results.dir, "Expression.by.Tissue.RDS"))
 
 #also save expression adjusted for all covariates
-saveRDS(adj.expr, file.path(data.dir, "Expression.by.Tissue.Adjusted.RDS"))
+saveRDS(adj.expr, file.path(data.results.dir, "Expression.by.Tissue.Adjusted.RDS"))
 
-```
-
-Generate similar matrices for the imputed expression.
-
-```{r imp_expr}
-#read in imputed expression tables
-expr.files <- get.files(here("Data", "imputed"), want = "CC", dont.want = "expanded", full.names = TRUE)
-imp.expr <- lapply(expr.files, readRDS)
-
-split.strains <- strsplit(expr.mouse.info.table[,"User.Defined.Strain"], " ")
-strain1 <- sapply(split.strains, function(x) x[1])
-strain2 <- sapply(split.strains, function(x) x[3])
-
-exp.imp.expr <- vector(mode = "list", length = length(imp.expr))
-names(exp.imp.expr) <- gsub("_imputed_transcriptome_local.RDS", "", gsub("CC-RIX_", "", basename(expr.files)))
-
-for(tx in 1:length(exp.imp.expr)){
-    strain1.idx <- sapply(strain1, function(x) grep(x, rownames(imp.expr[[tx]]$Auto)))
-    strain2.idx <- sapply(strain2, function(x) grep(x, rownames(imp.expr[[tx]]$Auto)))
-    full.imp.expr <- t(sapply(1:length(strain1.idx), function(x) imp.expr[[tx]]$Auto[strain1.idx[x], strain2.idx[x],]))
-    rownames(full.imp.expr) <- expr.mouse.info.table[,1]
-    exp.imp.expr[[tx]] <- full.imp.expr
-}
-saveRDS(exp.imp.expr, here("Data", "imputed", "Expanded_Imputed_CC-RIX_Expression.RDS"))
 ```
 
 ## Phenotypes
@@ -278,7 +296,7 @@ pheatmap(pred.weight.mat[weight.order,], cluster_rows = FALSE, cluster_cols = FA
 
 mouse.weight.val <- apply(pred.weight.mat, 1, function(x) x[max(which(!is.na(x)))])
 #hist(mouse.weight.val, breaks = 100)
-write.table(mouse.weight.val, file.path(data.dir, "Weight.Summarized.csv"), 
+write.table(mouse.weight.val, file.path(data.results.dir, "Weight.Summarized.csv"), 
 col.names = "Body.Weight", sep = ",")
 ```
 
@@ -357,10 +375,8 @@ for(g in 1:nrow(groups)){
     cat("\n\n")
 }   
 
-write.csv(chem.mat, file.path(data.dir, "Blood.Chemistries.Summarized.csv"))
+write.csv(chem.mat, file.path(data.results.dir, "Blood.Chemistries.Summarized.csv"))
 ```
-
-I am going to save the food and water processing for another time. 
 
 ## Gene Expression and Blood Chemistry {.tabset .tabset-fade .tabset-pills}
 
@@ -426,10 +442,5 @@ match_pheno_expr <- function(expr.list, pheno.mat){
     matched.lists <- list("expr" = matched.expr, "traits" = matched.pheno)
     return(matched.lists)
 }
-
-```
-
-```{r adjust_expr}
-
 
 ```

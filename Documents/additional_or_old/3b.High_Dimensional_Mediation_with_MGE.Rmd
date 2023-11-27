@@ -132,7 +132,7 @@ adjust_before_fitting = NULL
                             #scores to use for the adjustment.
                             #set to NULL to fit the original model
 if(!is.null(adjust_before_fitting)){
-    adjust.file <- here("Results", "High_Dim_Med", exp.name, adjust_before_fitting)
+    adjust.file <- here("Results", "High_Dim_Med_with_MGE", exp.name, adjust_before_fitting)
     check.file <- file.exists(adjust.file)
     if(!check.file){stop("Error in parameter: adjust_before_fitting\nThe model must be fit before the adjustment.")}
     model_scores <- readRDS(adjust.file)
@@ -156,7 +156,7 @@ is.interactive = FALSE
 #is.interactive = TRUE
 library("here")
 
-results.dir <- here("Results", "High_Dim_Med", exp.name)
+results.dir <- here("Results", "High_Dim_Med_with_MGE", exp.name)
 if(!file.exists(results.dir)){dir.create(results.dir, recursive = TRUE)}
 
 data.results.dir <- here("Results", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
@@ -768,6 +768,7 @@ for(tx in 1:length(tissue.names)){
 pop.local.mge.file <- file.path(results.dir, paste0("Population_Local_MGE_", mge.name, "_", adjust_numeral, ".RDS"))
 if(!file.exists(pop.local.mge.file)){
     pop.local.MGE <- vector(mode = "list", length = length(tissue.names))
+    names(pop.local.MGE) <- tissue.names
     for(tx in 1:length(transcript_loadings)){
         tx.r2 <- apply(tissue.imp.gen[[tx]], 2, var)
         common.transcripts <- intersect(names(tx.r2), rownames(transcript_loadings[[tx]]))
@@ -782,6 +783,7 @@ if(!file.exists(pop.local.mge.file)){
 pop.distal.mge.file <- file.path(results.dir, paste0("Population_Distal_MGE_", mge.name, "_", adjust_numeral, ".RDS"))
 if(!file.exists(pop.distal.mge.file)){
     pop.distal.MGE <- vector(mode = "list", length = length(tissue.names))
+    names(pop.distal.MGE) <- tissue.names
     for(tx in 1:length(transcript_loadings)){
         common.transcripts <- intersect(names(dist.var.exp[[tx]]), rownames(transcript_loadings[[tx]]))
         pop.distal.MGE[[tx]] <- dist.var.exp[[tx]][common.transcripts]*transcript_loadings[[tx]][common.transcripts,1]

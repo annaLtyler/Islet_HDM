@@ -18,7 +18,7 @@ rm(list = ls())
 library(here)
 results.dir <- here("Results", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
-data.results.dir <- here("Results", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+data.results.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
 is.interactive = FALSE #set to true to show verbose reporting of progress on some longer processes
 ```
 

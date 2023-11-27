@@ -111,7 +111,7 @@ adjust_before_fitting = NULL
                             #scores to use for the adjustment.
                             #set to NULL to fit the original model
 if(!is.null(adjust_before_fitting)){
-    adjust.file <- here("Results", "High_Dim_Med", exp.name, adjust_before_fitting)
+    adjust.file <- here("Results", "High_Dim_Med_no_MGE", exp.name, adjust_before_fitting)
     check.file <- file.exists(adjust.file)
     if(!check.file){stop("Error in parameter: adjust_before_fitting\nThe model must be fit before the adjustment.")}
     model_scores <- readRDS(adjust.file)
@@ -133,13 +133,14 @@ is.interactive = FALSE
 #is.interactive = TRUE
 library("here")
 
-results.dir <- here("Results", "High_Dim_Med", exp.name)
+results.dir <- here("Results", "High_Dim_Med_no_MGE", exp.name)
 if(!file.exists(results.dir)){dir.create(results.dir, recursive = TRUE)}
 
-data.results.dir <- here("Results", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+data.results.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
+
 ```
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
@@ -806,7 +807,7 @@ maximum trait correlation and transcript loading.
 They are highly correlated, particularly for 
 adipose tissue.
 
-```{r loading_cor, fig.height = 6, fig.width = 5, results = "asis"}
+```{r loading_cor, fig.height = 5, fig.width = 5, results = "asis"}
 for(tx in 1:length(tissue.names)){
     cat("####", tissue.names[tx], "\n")
     common.tx <- intersect(rownames(transcript_loadings[[tx]]), names(trait.cor[[tx]]))
@@ -1100,6 +1101,8 @@ higher phenotype scores than in those with lower scores.
 
 ```{r polygenic_risk_score, warning = FALSE, message = FALSE, fig.width = 8, fig.height = 8}
 if(mediation.text == "complete_mediation"){
+    pred.mats <- vector(mode = "list", length = length(tissue.names))
+    names(pred.mats) <- tissue.names
 
     for(tx in 1:length(tissue.names)){
 
@@ -1129,7 +1132,7 @@ if(mediation.text == "complete_mediation"){
         boxplot(cbind(transcript.pred[[tx]][,c(leanest, fattest)]), las = 2, ylab = "Loaded Transcript",
             main = "Comparison of Top and Bottom 10 of Phenotype Distribution")
         abline(h = 0);abline(v = 10.5)
-       #dev.off()
+        #dev.off()
 
         #boxplot(transcript.pred[,common.ind[pheno.order]])
         pred.mat <- matrix(0, nrow = nrow(transcript.pred[[tx]]), ncol = length(phenome.score))
@@ -1137,15 +1140,22 @@ if(mediation.text == "complete_mediation"){
         
         pred.mat[which(transcript.pred[[tx]][,names(sorted.phenome.score)] > 0)] <- 1
         sorted.pred <- apply(pred.mat, 2, sort)
-
-        png(file.path(results.dir, paste0("Risk_Count_", tissue.names[tx], "_", 
-            adjust_numeral, ".png")), width = 10, height = 5, units = "in", res = 100)
-            pheatmap(sorted.pred, cluster_rows = FALSE, cluster_cols = FALSE, show_rownames = FALSE,
-                show_colnames = FALSE)
-        dev.off()
+        pred.mats[[tx]] <- sorted.pred
     }
 }
 graphics.off() #make sure all graphics devices are shut off
+```
+
+```{r plot_prediction_matrices}
+for(tx in 1:length(tissue.names)){
+    png(file.path(results.dir, paste0("Risk_Count_", tissue.names[tx], "_", 
+        adjust_numeral, ".png")), width = 10, height = 5, units = "in", res = 100)
+        pheatmap(sorted.pred, cluster_rows = FALSE, cluster_cols = FALSE, show_rownames = FALSE,
+            show_colnames = FALSE)
+    dev.off()
+}
+
+
 ```
 
 # Tissues of Action
@@ -1231,7 +1241,21 @@ cluster_values <- function(value.list, z.thresh = 3, k.seq = 3:20){
     #select the term with the smallest p value to represent 
     #each group
     group.labels <- sapply(group.enrich, get_max_enrich)
-    names(group.enrich) <- group.labels
+    names(group.enrich) <- names(group.gene.names) <- group.labels
+
+    results <- list("group_enrich" = group.enrich, "group_genes" = group.gene.names, 
+        "loadings" = value.mat, "grouped_values" = group.vals)
+    invisible(results)
+
+}
+
+plot_clustered_values <- function(cluster_results){
+
+    group.enrich <- cluster_results$group_enrich
+    value.mat <- cluster_results$loadings
+    group.gene.names <- cluster_results$group_genes
+    group.labels <- names(group.enrich)
+    group.vals <- cluster_results$grouped_values
 
     enrich.labels <- lapply(1:length(group.enrich), 
         function(x) rep(group.labels[x], length(group.gene.names[[x]])))
@@ -1269,9 +1293,6 @@ cluster_values <- function(value.list, z.thresh = 3, k.seq = 3:20){
         boxplot(group.vals[[g]], main = get_max_enrich(group.enrich[[g]]))
         abline(h = 0)
     }
-
-    invisible(value.mat)
-
 }
 ```
 
@@ -1298,11 +1319,27 @@ shared clusters:
 
 transcript.loading.list <- lapply(transcript_loadings, function(x) x[,1])
 
+toa_loadings_file <- file.path(results.dir, paste0("TOA_Transcript_Loadings_", adjust_numeral, "_Results.RDS"))
+if(!file.exists(toa_loadings_file)){
+   toa.results <- cluster_values(value.list = transcript.loading.list, z.thresh = 3, 
+        k.seq = 3:20)
+    saveRDS(toa.results, toa_loadings_file)
+}else{
+    toa.results <- readRDS(toa_loadings_file)
+}
+
 graphics.off()
 pdf(file.path(results.dir, paste0("TOA_Transcript_Loadings_", adjust_numeral, ".pdf")))
-toa.loading.mat <- cluster_values(value.list = transcript.loading.list, z.thresh = 3, 
-    k.seq = 3:20)
+plot_clustered_values(toa.results)
 dev.off()
+
+#write out gene lists for each cluster
+gene.lists <- toa.results[[2]]
+for(g in 1:length(gene.lists)){
+    file.name <- paste0(gsub(" ", "_", names(gene.lists)[g]), "_cluster.txt")
+    write.table(gene.lists[[g]], here("Results", "Gene_Sets", file.name),
+        sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+}
 
 ```
 
