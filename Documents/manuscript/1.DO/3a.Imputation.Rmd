@@ -15,7 +15,7 @@ remove.pseudogenes = TRUE #if TRUE, removes pseudogenes and predicted genes
 tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
 tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
 is.interactive = FALSE
-overwrite.results = FALSE
+overwrite.results = TRUE
 ```
 
 ## Introduction
