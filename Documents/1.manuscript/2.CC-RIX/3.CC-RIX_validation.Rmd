@@ -1,0 +1,676 @@
+---
+title: "CC-RIX validation"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+The purpose of this workflow is to use data from the 
+CC-RIX for validation of transcript loadings developed 
+in the DO. 
+
+We used high-dimensional mediation to identify the 
+distally component of the transcriptome that is also 
+related to phenotypes. A positive loading indicates
+that inheriting higher expression of a transcript
+*increases* risk of obesity and insulin resistance
+on a high-fat diet. Conversely, a negative loading
+indicates that inheriting higher expression of a
+transcript *reduces* risk of obesity and insulin
+resistance on a high-fat diet. 
+
+We then calculated the mediated genetic effect of
+each local eQTL based on these loadings and the 
+allele effects on the transcription in the DO.
+
+For example, a CAST allele that increases expression 
+of a transcript with a positive loading is a risk 
+allele. 
+
+We want to ask if these allele effects can be 
+translated to the CC-RIX. Does the CAST allele
+described above increase expression in the CC-RIX,
+and is it associated with increased risk of obesity
+and insulin resistance?
+
+We can do this in a couple ways:
+
+1. Imputed transcripts
+    We can use the imputed transcripts as a proxy for the
+    local genetic effect on transcription for each gene.
+    We can correlate these directly with the traits (TWAS).
+    Multiplying the imputed transcripts by the transcript
+    loadings gives us MGE. The sum of the MGEs is the poly-
+    genic risk score. Should we show that different subsets
+    of MGE still cannot predict phenotypes? The TWAS subset,
+    the whole transcriptome, etc.
+
+2. Measured transcripts
+    If we multiply the measured transcripts by the transcript
+    loadings, we capture the distal effects on transcription 
+    in the CC-RIX as well as the local effects. The sum of 
+    this vector *does* correlate with phenotypes in the CC-RIX.
+    This tells us that actual transcription is more constrained
+    that what the local eQTLs would suggest, and that the actual
+    the loadings do translate across populations. The loadings
+    are the heritable portion of the transcriptome that is also
+    correlated with the traits, and that it translatable across
+    populations and across species.
+
+
+The phenotype data from the CC-RIX are quite different 
+from those in the DO, so instead of comparing things 
+directly, we looked for correlations with transcripts 
+and composite transcripts to all individual traits for 
+a general sense of how the transcripts relate to traits 
+in this different population.
+
+
+```{r setup}
+rm(list = ls()) #clear R workspace
+library("here")
+```
+
+```{r set_param}
+is.interactive = FALSE
+#is.interactive = TRUE
+
+#set whether to use a subset of specified genes or the full set
+#subset.or.full <- "subset"; gene.name = "Aldh2"; exp.name = "imputed_local"
+#subset.or.full <- "subset"; gene.name <- c("Ifi44","Trim30a","Usp18","Ifit1","Ifit3","Oasl2","Rtp4","Irf7","Cxcl10","Ube2l6","Rnf213","Bst2","Stat1","Isg15","Lgals3bp","Rnf213","Parp12","Samd9l","Apol9a","Gbp2","Irgm2","Xaf1","Ifi205","Ifi203","Stat2","Ifih1","Oas1g","Apol9b","Sp100","Gbp6","Ddx58","Gbp3","Ifi204","Tor3a","Dtx3l","Oas1b","Ccl5","Parp14","Agrn","Tgtp1","Cmpk2","Nell2","Eif2ak2")
+#subset.or.full <- "subset"; gene.name <- c("Slfn3", "AI662270", "Poldip2", "Slfn2", "Wfdc21", "Ap2b1", "Abcc3") #TWAS hits
+subset.or.full = "full"
+
+#exp.name tells which Mediation results folder to look in for the transcript loadings
+exp.name = "tissue_together-_-complete_mediation-germline_kinship" 
+
+use.cc.imputed.transcriptome = TRUE #set this to TRUE to do the equivalent of genomic prediction
+
+#trait_relevance <- "loadings" #uses transcript loading from high dimensional mediation
+trait_relevance <- "twas" #uses TWAS correlations with traits to ask how well TWAS translates
+```
+
+```{r set_dir}
+data.dir <- here("Data", "CC-RIX")
+cc.parsed.data.dir <- here("Results", "CC-RIX", "Data")
+results.dir <- here("Results", "CC-RIX", "Validation")
+if(!file.exists(results.dir)){dir.create(results.dir)}
+```
+
+```{r load_code}
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("pheatmap", "qtl2", "gprofiler2")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+The following code chunk is where the object of the analysis is set.
+The analysis can either look at sets of specified genes, or at the 
+full transcriptome profile. Either way, the loadings on the transcripts
+are derived from high dimensional mediation in the DO mice. 
+These parameters are all set below. After setting the manual or mediation 
+parameter, set the corresponding parameters in the appropriate if chunk.
+
+```{r param_text}
+
+if(subset.or.full == "subset"){
+    label.text <- paste("manually defined genes:", paste(gene.name, sep = "\n"))
+}else{
+    label.text <- "a mediation-derived composite transcriptome."
+}
+
+
+if(use.cc.imputed.transcriptome){
+    imp.text <- "imputed"
+}else{
+    imp.text <- "measured"
+}
+
+
+```
+
+* Gene expression in this analysis was set to analyze `r label.text`
+* We are also using `r imp.text` transcripts in the CC-RIX.
+
+```{r fun}
+
+get_num_covar <- function(mouse.id){
+    #get mouse covariates
+    mouse.covar <- t(sapply(mouse.id, 
+        function(x) get_CC_RIX_mouse_info(x, manifest, input.type = "Barcode.1")))
+    num.covar <- c("Sex", "Diet", "Treatment", "Timepoint")
+    factor.info <- lapply(num.covar, function(x) as.factor(mouse.covar[,x]))
+    num.info <- Reduce("cbind", lapply(factor.info, function(x) as.numeric(x)-1))
+    colnames(num.info) <- num.covar
+    rownames(num.info) <- mouse.covar[,1]
+    return(num.info)
+}
+
+```
+
+
+```{r read_data, warning = FALSE}
+gene.info <- read.delim(here("Data", "general", "mouse_gene_info.txt"))
+
+if(trait_relevance == "loadings"){
+    transcript.loadings <- readRDS(here("Results", "DO", "High_Dim_Med_no_MGE", exp.name, "Loadings_Transcripts_0.RDS"))
+}else{
+    twas.loadings <- readRDS(here("Results", "DO", "Transcriptomes", "TWAS_imputed_expr_trait_cor.RDS")) #generated by 3a.Imputation.Rmd
+    #just take body weight for now
+    transcript.loadings <- lapply(twas.loadings, function(x) t(x["Chol_PC1",, drop = FALSE]))
+}
+
+annot <- read.csv(file.path(data.dir, "final_sample_annotations.csv"))
+genoprobs <- readRDS(here("Results", "CC-RIX", "Genotypes", "Genoprobs.RDS")) #created by 3.5.CC-RIX_genotypes.Rmd
+K <- readRDS(here("Results", "CC-RIX", "Genotypes", "Kinship.RDS"))
+map <- readRDS(here("Results", "CC-RIX", "Genotypes", "Map.RDS"))
+manifest <- as.matrix(read.csv(file.path(data.dir, "Original_Samples_Manifest.csv")))
+covar <- read.csv(file.path(cc.parsed.data.dir, "Covar.csv"), row.names = 1)
+bw <- read.csv(file.path(cc.parsed.data.dir, "Weight.Summarized.csv"), header = TRUE, row.names = 1)
+chem.mat <- read.csv(file.path(cc.parsed.data.dir, "Blood.Chemistries.Summarized.csv"), row.names = 1)
+num.chem <- apply(as.matrix(chem.mat[5:ncol(chem.mat)]), 2, as.numeric)
+rownames(num.chem) <- chem.mat[,1]
+groups <- read.csv(file.path(cc.parsed.data.dir, "Groups.csv"), row.names = 1)
+group.def <- colnames(groups)
+
+if(use.cc.imputed.transcriptome){
+    #expanded CC-RIX imputed expression matrices for autosomes 
+    #generated by CC_Imputation_Check.Rmd
+    expr.files <- list.files(here("Results", "CC-RIX", "Imputed"), pattern = "Imputed", 
+        full.names = TRUE)
+    imp.expr <- lapply(expr.files, readRDS)
+    names(imp.expr) <- sapply(strsplit(gsub(".RDS", "", basename(expr.files)), "_"), function(x) x[3])
+
+    #expand imputed expression to all individuals in the data set
+    tissue.expr <- vector(mode = "list", length = length(imp.expr))
+    names(tissue.expr) <- names(imp.expr)
+    for(tx in 1:length(tissue.expr)){
+        #get expression for each animal
+        u_ind <- unique(annot[,"climb.id"])
+        unique.info <- t(sapply(u_ind, function(x) get_mouse_info(x, manifest, "CLIMB.ID")))
+        ind_strains <- gsub(" x ", "_", gsub(" X ", "_", unique.info[,"User.Defined.Strain"]))
+        strain.idx <- match(ind_strains, rownames(imp.expr[[tx]]))
+        expanded.mat <- imp.expr[[tx]][strain.idx,]
+        rownames(expanded.mat) <- unique.info[,"Barcode.1"]
+
+        #there were quite a few unimputable transcripts in the imputed data
+        #remove any transcript for which all entries are NA
+        allna <- which(apply(expanded.mat, 2, function(x) all(is.na(x))))
+        to.keep <- setdiff(1:ncol(expanded.mat), allna)
+        tissue.expr[[tx]] <- expanded.mat[,to.keep]
+    }
+}else{
+    #otherwise read measured expression
+    tissue.expr <- readRDS(file.path(cc.parsed.data.dir, "Expression.by.Tissue.RDS"))
+}
+
+#match up the matrices so we are looking at the same subset of 
+#mice across all gene expression and traits.
+common.ind <- Reduce("intersect", list(Reduce("intersect", lapply(tissue.expr, rownames)), rownames(bw), rownames(chem.mat)))
+common.expr <- lapply(tissue.expr, function(x) x[common.ind,])
+common.bw <- as.matrix(bw[common.ind,,drop=FALSE])
+common.chem <- num.chem[common.ind,,drop=FALSE]
+covar.groups <- chem.mat[common.ind,1:4]
+
+common.pheno <- cbind(common.bw, common.chem) #look at all traits together
+
+#get sex, diet, treatment, and timepoint covariates for all mice.
+#adjust everything for covariates ahead of time to have on hand
+common.covar <- get_num_covar(common.ind)
+adj.pheno <- adjust(common.pheno, common.covar)
+
+
+#if we are using measured expression also adjust this
+if(imp.text == "measured"){
+    adj.expr <- lapply(common.expr, function(x) adjust(x, common.covar))
+}
+```
+
+## Calculate MGE
+
+We want to test whether the transcript loadings that we learned in the 
+DO translate to the CC-RIX. To do this, we calculate a value we are 
+calling "mediated genetic effect" (MGE). The mediated genetic effect
+is the effect of genotype on phenotype that is mediated through the
+transcripts. To calculate MGE we multiply the transcript loadings
+identified in the DO by gene expression scaled across individuals.
+
+If the loadings correctly indicate a correlation between a heritable 
+increase in transcript abundance and obesity, individuals with high 
+expression should also have higher traits. If we are using the gene
+expression that is imputed from the local genotype, we are looking
+at the locally mediated genetic effect. If this value is correlated
+with obesity traits, we can conclude that individuals with high 
+expression due to local allele effects are at higher risk of obesity.
+This suggests that eQTLs have an effect on traits through their
+influence on local gene expression.
+
+If we use measured gene expression we are looking at local heritability, 
+distal heritability, and reaction to the phenotype all at the same time. 
+This MGE should be more highly correlated with traits than the locally 
+derived MGE, but we're not sure how much more correlated it will be.
+
+Here we create MGE matrices based on the DO-derived loadings. If we 
+are looking at measured expression in this run, we calculate both 
+adjusted and unadjusted transcription matrices before multiplying by 
+the loadings. This allows us to look both within groups and accross 
+the whole population for effects. After calculating MGE across all
+transcripts, we can select subsets of transcripts if specified.
+
+```{r load_expr}
+
+#match up the expression and loadings. The CC-RIX don't have
+#measured gene expression in the Islet, but they could have
+#imputed gene expression in the islet. 
+#use all the expression indices and match these with the
+#gene weight vectors
+expr.idx <- 1:length(common.expr)
+loading.idx <- sapply(names(common.expr), 
+    function(x) grep(x,  names(transcript.loadings), ignore.case = TRUE))
+
+#multiply the gene expression and adjusted gene expression
+#in each tissue by the loadings from the same tissue
+mge <- adj.mge <- vector(mode = "list", length = length(common.expr))
+names(mge) <- names(adj.mge) <- names(common.expr)
+for(tx in 1:length(expr.idx)){
+    
+    tx.loadings <- transcript.loadings[[loading.idx[[tx]]]]
+    tx.expr <- common.expr[[expr.idx[[tx]]]]
+    common.tx <- intersect(rownames(tx.loadings), colnames(tx.expr))
+    
+    #scale across individuals
+    scaled.expr <- apply(tx.expr, 2, scale)
+    dimnames(scaled.expr) <- dimnames(tx.expr)
+    
+    common.tx <- intersect(rownames(tx.loadings), colnames(tx.expr))
+    mge[[tx]] <- t(apply(scaled.expr[,common.tx], 1, function(x) x*tx.loadings[common.tx,1]))
+
+    #also load adjusted gene expression if we are looking at measured gene expression
+    #if we are only looking at imputed gene expression we can skip this, because the
+    #imputed gene expression does not include the covariates in the model.
+    if(imp.text == "measured"){ 
+        adj.tx.expr <- adj.expr[[expr.idx[[tx]]]]
+        scaled.adj.expr <- apply(adj.tx.expr, 2, scale)
+        dimnames(scaled.adj.expr) <- dimnames(adj.tx.expr)
+        adj.mge[[tx]] <- t(apply(scaled.adj.expr[,common.tx], 1, function(x) x*tx.loadings[common.tx,1]))
+    }
+}
+
+#if we only want to look at a subset of transcripts, pull those out now
+if(subset.or.full == "subset"){
+    gene.idx <- match(gene.name, gene.info[,"external_gene_name"])
+    na.idx <- which(is.na(gene.idx))
+    if(length(na.idx) > 0){
+        warning(paste("Could not find genes:", gene.name[na.idx], sep = "\n"))
+    }
+    gene.idx <- gene.idx[which(!is.na(gene.idx))]
+    gene.id <- gene.info[gene.idx,"ensembl_gene_id"]
+    sub.mge <- lapply(mge, function(x) x[,which(colnames(x) %in% gene.id),drop=FALSE])
+    mge <- sub.mge
+
+    if(imp.text == "measured"){
+        sub.adj.mge <- lapply(adj.mge, function(x) x[,which(colnames(x) %in% gene.id),drop=FALSE])
+        adj.mge <- sub.adj.mge
+    }
+}
+```
+
+## MGE and Traits {.tabset .tabset-fade .tabset-pills}
+
+In this section we examine whether our calculated MGE in each
+tissue is correlated with phenotype measurements. We look first 
+within each sex-diet-treatment group, so we use the MGE values 
+that were calculated from unadjusted gene expression and traits. 
+Here we plot the rankZ MGE values against the rankZ trait values. 
+
+```{r mge_and_pheno, results = "asis", fig.width = 12, fig.height = 9}
+all.pheno.cor <- vector(mode = "list", length = length(tissue.expr))
+names(all.pheno.cor) <- names(tissue.expr)
+
+for(tx in 1:length(tissue.expr)){
+    cat("###", names(tissue.expr)[tx], "{.tabset .tabset-fade .tabset-pills}\n")
+    group.cor.mat <- matrix(NA, nrow = nrow(groups), ncol = ncol(common.pheno))
+    colnames(group.cor.mat) <- colnames(common.pheno)
+    rownames(group.cor.mat) <- apply(groups, 1, function(x) paste(x, collapse = "_"))
+    for(g in 1:nrow(groups)){
+        cat("####", paste(groups[g,], collapse = " "), "\n")
+        group.locale <- Reduce("intersect", lapply(group.def, 
+            function(x) which(covar.groups[,x] == groups[g,x])))
+
+        mge.mean <- rowMeans(mge[[tx]][group.locale,], na.rm = TRUE)
+        group.pheno <- common.pheno[group.locale,]
+
+        par(mfrow = c(3,4))
+        all.group.cor <- sapply(1:ncol(common.pheno), 
+                function(j) plot.with.model(rankZ(mge.mean), rankZ(group.pheno[,j]),
+                ylab = colnames(group.pheno)[j], xlab = "Expression", 
+                main = colnames(group.pheno)[j], report = "lm"))
+        group.cor.mat[g,] <- all.group.cor[1,]
+    cat("\n\n")
+    }
+    all.pheno.cor[[tx]] <- group.cor.mat
+    cat("\n\n")
+}
+
+```
+
+## MGE and Traits Summary {.tabset .tabset-fade .tabset-pills}
+
+The following plots summarize the correlations above.
+
+```{r plot_cor_summary, results = "asis", fig.height = 6, fig.width = 6}
+#par(mfrow = c(2,2))
+global.max <- max(unlist(all.pheno.cor), na.rm = TRUE)
+global.min <- min(unlist(all.pheno.cor), na.rm = TRUE)
+for(i in 1:length(all.pheno.cor)){
+    cat("###", names(all.pheno.cor)[i], "\n")
+    if(all(is.na(all.pheno.cor[[i]]))){
+        plot.text("No expression in this tissue.")
+        next()
+        cat("\n\n")
+    }
+    par(mar = c(10,7,1,1))
+    #sort rows and columns based on the first PC
+    #plot.decomp(all.pheno.cor[[i]], label.points = TRUE)
+    #plot.decomp(t(all.pheno.cor[[i]]), label.points = TRUE)
+    row.order.2d <- sort.by.then.by(plot.decomp(all.pheno.cor[[i]], 
+        plot.results = FALSE)$u, col.type = c("n", "n"), return.order = TRUE)
+    row.order <- row.order.2d[,1]
+    col.order.2d <- sort.by.then.by(plot.decomp(t(all.pheno.cor[[i]]), 
+        plot.results = FALSE)$u, col.type = c("n", "n"), return.order = TRUE)
+    col.order <- col.order.2d[,1]
+    imageWithText(t(all.pheno.cor[[i]][row.order, col.order]), 
+        global.color.scale = TRUE, global.min = global.min, global.max = global.max, 
+        use.pheatmap.colors = TRUE, col.text.rotation = 45, cex = 0.8,
+        col.text.adj = 1, col.text.shift = 0.08, row.text.shift = 0.08)
+    
+    #pheatmap(t(all.pheno.cor[[i]]), cluster_rows = FALSE, 
+    #cluster_cols = FALSE, display_numbers = TRUE)
+    cat("\n\n")
+}
+```
+
+The following box plots further summarize the correlations across
+tissues and traits. 
+
+### All Tissues and Traits
+
+```{r grouped_boxes, fig.width = 12, fig.height = 5}
+plot.grouped.boxes(all.pheno.cor, type = "Matrix", print.vals = NA)
+par(xpd = FALSE)
+abline(h = 0)
+```
+
+### All Tissues
+
+```{r cor_by_tissue, fig.width = 4, fig.height = 4}
+boxplot(lapply(all.pheno.cor, function(x) if(length(x) > 0){abs(x)}else{NA}), ylab = "correlation")
+```
+
+### Tissues and Traits Separated
+
+```{r cor_by_trait, fig.width = 9, fig.height = 4}
+par(mfrow = c(1,3), mar = c(8, 4, 4, 4))
+for(i in 1:length(all.pheno.cor)){
+    boxplot(all.pheno.cor[[i]], las = 2, 
+    main = names(all.pheno.cor)[i], 
+    ylim = c(global.min, global.max))
+    abline(h = 0)
+}
+```
+
+### Tissues and Traits Separated by Group {.tabset .tabset-fade .tabset-pills}
+
+```{r cor_by_group, fig.width = 12, fig.height = 9, results = "asis"}
+
+for(i in 1:length(all.pheno.cor)){
+    cat("####", names(all.pheno.cor)[i], "\n")
+    par(mfrow = c(3,4), mar = c(8,4,4,1))
+    for(j in 1:ncol(all.pheno.cor[[i]])){
+        boxplot(abs(all.pheno.cor[[i]][,j])~as.factor(groups[,"Diet"])*as.factor(groups[,"Sex"]), 
+        las = 2, main = paste(names(all.pheno.cor)[i], colnames(all.pheno.cor[[i]])[j]), 
+        xlab = "", ylim = c(0,0.7), ylab = colnames(all.pheno.cor[[i]][j]))
+    }
+    cat("\n\n")
+}
+```
+
+## Correlations by factor {.tabset .tabset-fade .tabset-pills}
+
+The following plots show how the correlations group by 
+sex, diet, and treatment. The correlations with traits
+might be higher in the animals on high-fat diet, for 
+example, because the DO mice, where we leanred the
+model, were all on the high-fat diet.
+
+```{r cor_by_factor, results = "asis", fig.width = 9, fig.height = 6}
+factor.pairs <- pair.matrix(1:ncol(groups))
+for(tx in 1:length(all.pheno.cor)){
+    cat("###", names(all.pheno.cor)[tx], "\n")
+    par(mfrow = c(2,ncol(groups)))
+    ymax <- max(all.pheno.cor[[tx]])
+    par(mar = c(4,4,4,4))
+    for(f in 1:ncol(groups)){
+        boxplot(all.pheno.cor[[tx]]~as.factor(groups[,f]), xlab = "", ylab = "Correlation",
+            ylim = c(0, ymax), main = colnames(groups)[f])
+    }
+    par(mar = c(8,4,1,4))
+    for(p in 1:nrow(factor.pairs)){
+        f1  <- factor.pairs[p,1]
+        f2 <- factor.pairs[p,2]
+        boxplot(all.pheno.cor[[tx]]~as.factor(groups[,f1])*as.factor(groups[,f2]), 
+            xlab = "", ylab = "Correlation", las = 2,
+            ylim = c(0, ymax), main = paste(colnames(groups)[f1], "and", colnames(groups)[f2]))
+    }
+    cat("\n\n")
+}
+```
+
+## MGE and Traits: Full Population {.tabset .tabset-fade .tabset-pills}
+
+The following plots show the correlation between the composite
+transcript and the traits for the population as a whole. For
+these we use the adjusted MGE and trait values. Again we look
+at the correlation of rankZ normalized values.
+
+```{r pop_traits, warning = FALSE, fig.width = 12, fig.height = 9, results = "asis"}
+
+#if we are using measured gene expression, use the adjusted mge.
+#otherwise, use the unadjusted
+#always use the adjust phenotypes because the imputed gene 
+#expression does not include the covariates.
+if(imp.text == "measured"){
+    pop.mge <- adj.mge
+    pop.expr <- adj.expr
+}else{
+    pop.mge <- mge
+    pop.expr <- common.expr
+}
+
+pop.pheno.cor <- vector(mode = "list", length = length(tissue.expr))
+names(pop.pheno.cor) <- names(tissue.expr)
+for(i in 1:length(tissue.expr)){
+    cat("###", names(tissue.expr)[i], "\n")
+    par(mfrow = c(3,4))
+    mean.mge <- rowMeans(pop.mge[[i]], na.rm = TRUE)
+    pheno.cor <- t(sapply(1:ncol(adj.pheno), 
+        function(x) plot.with.model(rankZ(mean.mge), rankZ(adj.pheno[,x]), 
+        ylab = colnames(adj.pheno)[x], report = "cor.test", 
+        main = colnames(adj.pheno)[x], xlab = "Compostite Expression")))
+    rownames(pheno.cor) <- colnames(adj.pheno)
+    pop.pheno.cor[[i]] <- pheno.cor
+    cat("\n\n")
+}
+```
+
+## MGE and Traits: Full Population Overview
+
+The following bar plot shows the correlations between the 
+composite transcript and traits across all tissues.
+
+```{r pop_results}
+cor.mat <- sapply(pop.pheno.cor, function(x) x[,1])
+p.mat <- sapply(pop.pheno.cor, function(x) -log10(x[,2]))
+#plot(cor.mat, p.mat, xlab = "correlation", ylab = "-log10(p value)")
+#pheatmap(cor.mat, display_numbers = TRUE)
+
+tissue.cols <- c("orange", "tan", "brown") #colors that are not related to the DO/CC colors
+par(mar = c(8, 4, 4, 4))
+barplot(t(cor.mat), beside = TRUE, col = tissue.cols, las = 2)
+abline(h = 0)
+legend("topright", fill = tissue.cols, legend = names(pop.pheno.cor))
+```
+
+## Effects of Treatment on Expression
+
+We looked to see if the expression of the named genes or composite 
+transcript was affected by either diet or metformin. If this 
+is measured transcription, we expect to see that these factors
+do have an effect on transcription. However, if we are using 
+the imputed transcription, there should be no effect.
+
+```{r treat_effect}
+treat_effect <- function(contrast = c("Diet", "Treatment")){
+    contrast.locale <- which(colnames(groups) == contrast)
+    no_contrast_groups <- unique(groups[,-contrast.locale])
+    test.factors <- colnames(no_contrast_groups)
+    results <- vector(mode = "list", length = length(common.expr))
+    names(results) <- names(common.expr)
+    contrast.names <- unique(groups[,contrast.locale])
+
+    for(tx in 1:length(mge)){
+        cat("####", names(pop.mge)[tx], "\n")
+        results.table <- matrix(NA, nrow = nrow(no_contrast_groups), ncol = 3)
+        colnames(results.table) <- c(sort(unique(groups[,contrast])), "p")
+        tx.mge <- pop.mge[[tx]]
+        mean.mge <- rowMeans(tx.mge, na.rm = TRUE)
+        all.group.vals <- vector(mode = "list", length = nrow(no_contrast_groups))
+        all.group.names <- rep(NA, nrow(no_contrast_groups))
+        for(g in 1:nrow(no_contrast_groups)){
+            factor1.idx <- which(covar.groups[,test.factors[1]] == no_contrast_groups[g,test.factors[1]])
+            factor2.idx <- which(covar.groups[,test.factors[2]] == no_contrast_groups[g,test.factors[2]])
+            group.idx <- intersect(factor1.idx, factor2.idx)
+            model <- lm(mean.mge[group.idx]~covar.groups[group.idx,contrast])
+            f <- summary(model)$fstatistic
+            p <- pf(f[1],f[2],f[3],lower.tail=F)
+            g.labels <- covar.groups[group.idx,contrast]
+            group.vals <- lapply(unique(g.labels), function(x) mean.mge[group.idx][which(g.labels == x)])
+            names(group.vals) <- unique(g.labels)
+            all.group.vals[[g]] <- group.vals
+            group.means <- sapply(group.vals, mean)
+            all.group.names[g] = paste0(paste(no_contrast_groups[g,], collapse = " "), "\n(p = ", signif(p, 2), ")")
+            results.table[g,] <- c(group.means, p)
+        }
+        names(all.group.vals) <- all.group.names
+        plot.grouped.boxes(all.group.vals, plot.grouping = "inner", print.vals = NA, ylab = "Expression")
+        mtext(names(common.expr)[tx], side = 3, cex = 2)
+        results.table <- cbind(no_contrast_groups, results.table)
+        rownames(results.table) <- NULL    
+        results[[tx]] <- results.table
+        cat("\n\n")
+    }
+    return(results)
+}
+
+treat_int <- function(int.factors = c("Diet", "Treatment")){
+    int.locale <- match(int.factors, colnames(groups))
+    no_int_groups <- unique(groups[,-int.locale,drop=FALSE])
+    int_groups <- unique(groups[,int.locale,drop=FALSE])
+    
+    test.factors <- colnames(no_int_groups)
+    results <- vector(mode = "list", length = length(tissue.expr))
+    names(results) <- names(tissue.expr)
+
+    for(tx in 1:length(tissue.expr)){
+        cat("####", names(tissue.expr)[tx], "\n")
+        interaction.p <- rep(NA, nrow(no_int_groups))
+        names(interaction.p) <- no_int_groups[,1]
+
+        tx.mge <- pop.mge[[tx]]
+        mean.mge <- rowMeans(tx.mge, na.rm = TRUE)
+        
+        par(mfrow = c(1,2))
+        for(g in 1:nrow(no_int_groups)){
+            group.idx <- which(covar.groups[,test.factors] == no_int_groups[g,test.factors])
+            
+            group.mge <- mean.mge[group.idx]
+            factor1 <- covar.groups[group.idx,int.factors[1]]
+            factor2 <- covar.groups[group.idx,int.factors[2]]
+            model <- lm(group.mge~as.factor(factor1)*as.factor(factor2))
+            #summary(model)
+
+            comp.idx <- apply(int_groups, 1, 
+                function(x) intersect(which(covar.groups[group.idx,colnames(int_groups)[1]] == x[1]), 
+                which(covar.groups[group.idx,colnames(int_groups)[2]] == x[2])))
+            group.names <- apply(int_groups, 1, function(x) paste(x, collapse = "_"))
+            group.vals <- lapply(comp.idx, function(x) group.mge[x])
+            group.means <- sapply(group.vals, mean)
+            group.se  <- sapply(group.vals, function(x) sd(x))
+            names(group.vals) <- names(group.means) <- names(group.se) <- group.names
+
+            ylim <- c(min(group.means-group.se), max(group.means+group.se))
+
+            int.p <- summary(model)$coefficients[4,"Pr(>|t|)"] 
+            interaction.p[g] <- int.p
+
+            interaction.plot(factor1, factor2, group.mge, 
+                main = paste0(no_int_groups[g,1], " (p = ", signif(int.p, 2), ")"),
+                ylim = ylim)
+            segments(2:1, group.means[1:2]-group.se[1:2], 2:1, group.means[1:2]+group.se[1:2])
+            segments(1:2, group.means[3:4]-group.se[3:4], 1:2, group.means[3:4]+group.se[3:4])
+            
+            #interaction.plot(as.factor(factor2), as.factor(factor1), expr)   
+        }
+        mtext(names(common.expr)[tx], side = 3, outer = TRUE, line = -1.5)
+        results[[tx]] <- interaction.p
+        
+        cat("\n\n")
+    }
+    invisible(results)
+}
+```
+
+### Effects of Diet on Expression {.tabset .tabset-fade .tabset-pills}
+
+The following figures show the effect of Diet on expression.
+
+```{r diet_effect, fig.height = 4, fig.width = 8, results = "asis"}
+diet.effect.tables <- treat_effect("Diet")
+```
+
+### Effects of Metformin Treatment on Expression {.tabset .tabset-fade .tabset-pills}
+
+The following figures show the effect of metformin treatment on 
+expression of the composite transcript. 
+
+```{r met_effect, fig.height = 4, fig.width = 8, results = "asis"}
+met.effect.tables <- treat_effect("Treatment")
+```
+
+### Interaction Effects of Metformin and Diet {.tabset .tabset-fade .tabset-pills}
+
+```{r diet_met_int, fig.height = 4, fig.width = 8, results = "asis"}
+treat_int(c("Diet", "Treatment"))
+```
+
+
+### Interaction Effects of Sex and Diet {.tabset .tabset-fade .tabset-pills}
+
+```{r sex_diet_int, fig.height = 4, fig.width = 8, results = "asis"}
+treat_int(int.factors = c("Sex", "Diet"))
+```
+
+### Interaction Effects of Sex and Metformin {.tabset .tabset-fade .tabset-pills}
+
+```{r sex_met_int, fig.height = 4, fig.width = 8, results = "asis"}
+treat_int(int.factors = c("Sex", "Treatment"))
+```

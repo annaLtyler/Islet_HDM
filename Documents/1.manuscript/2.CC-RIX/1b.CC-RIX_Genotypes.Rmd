@@ -31,10 +31,15 @@ if(!file.exists(results.dir)){dir.create(results.dir)}
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
+
+genotypes <- c("MRCA", "sequenced")
+genotypes <- genotypes[1] #use MRCA genotypes
 ```
 
-```{r get_args}
+```{r set_filenames}
 annot.file <- file.path(data.dir, "final_sample_annotations.csv") 
+
+#files that we will generate
 genoprobs.file <- file.path(results.dir, "Genoprobs.RDS")
 kinship.file <- file.path(results.dir, "Kinship.RDS")
 map.file <- file.path(results.dir, "Map.RDS")
@@ -52,9 +57,87 @@ annot <- read.csv(annot.file)
 manifest <- read.csv(file.path(data.dir, "Original_Samples_Manifest.csv"))
 ```
 
-Read genotype data from \url{https://github.com/rqtl/qtl2data/tree/main/CC}
 
-```{r read_genotype_data}
+## CC genotypes
+
+In this workflow, we used the `r genotypes` genotypes.
+
+I downloaded the CC genotypes from the UNC website:
+http://csbio.unc.edu/CCstatus/CCGenomes/#genotypes
+
+I downloaded the Most Recent Common Ancestor file. 
+This has marker names from the mega muga. I downloaded the
+mega muga marker map from the Jackson Laboratory 
+[resource for CC/DO mice](https://www.jax.org/research-and-faculty/genetic-diversity-initiative/tools-data/diversity-outbred-reference-data)
+
+```{r MRCA_genotypes, warning = FALSE}
+
+if(genotypes == "MRCA"){
+    cc.geno <- readRDS(here("Data", "CC-RIX", "MRCA10_modelprobs_trim.rds"))
+    marker.info.file <- here("Data", "CC-RIX", "mm_uwisc_v1.csv")
+    marker.info <- read.csv(marker.info.file)
+
+    #convert the map and the genoprobs into a qtl2 object
+    cross_obj <- array2qtl2(cc.geno, marker.info, chr = c(1:19, "X"), chr.col = "chr", 
+        pos.col = "bp_mm10", crosstype = "risib8")
+
+    cc.genoprobs <- cross_obj$genoprobs
+
+    map <- cross_obj$map
+    saveRDS(map, map.file)
+
+    K <- calc_kinship(cc.genoprobs, "loco")
+    saveRDS(K, kinship.file)
+}
+```
+
+Or read genotype data from \url{https://github.com/rqtl/qtl2data/tree/main/CC}
+if specified.
+
+```{r sequenced_genotypes}
+
+if(genotypes == "sequenced"){
+    if(!file.exists(map.file)){
+        file <- paste0("https://raw.githubusercontent.com/rqtl/", "qtl2data/master/CC/cc.zip")
+        cc <- read_cross2(file)
+        map <- map
+        saveRDS(map, map.file)
+        
+        cc.official <- rownames(cc$geno[[1]])
+        cc.alias <- sapply(strsplit(cc.official, "/"), function(x) x[1])
+        write.table(cbind(cc.official, cc.alias), here("Data", "CC_names.txt"), sep = "\t", 
+            quote = FALSE, row.names = FALSE, col.names = FALSE)
+        
+        cc.genoprobs <- calc_genoprob(cc, cores = cores)    
+        new.genoprobs <- cc.genoprobs
+
+        #add strains 83 and 84 to the genoprobs 
+        new.strains <- c("CC083", "CC084")
+        new.strain.idx <- match(new.strains, rownames(cc.geno))
+        for(i in 1:length(cc.genoprobs)){
+            chr.markers <- dimnames(cc.genoprobs[[i]])[[3]]
+            common.markers <- intersect(chr.markers, dimnames(cc.geno)[[3]])
+            orig.idx <- match(common.markers, dimnames(cc.genoprobs[[i]])[[3]])
+            new.idx <- match(common.markers, dimnames(cc.geno)[[3]])
+            new.chr <- abind(cc.genoprobs[[i]][,,orig.idx], cc.geno[new.strain.idx,,new.idx], along = 1)
+            new.genoprobs[[i]] <- new.chr
+        }
+
+        #overwrite the original objecct
+        cc.genoprobs <- new.genoprobs
+
+        K <- calc_kinship(new.genoprobs, "loco")
+        saveRDS(K, kinship.file)
+    }else{
+        map <- readRDS(map.file)
+        K <- readRDS(kinkship.file)
+    }
+}
+```
+
+
+```{r read_genotype_data, eval = FALSE}
+#original code from this workflow. switching to MRCA genotypes
 all.var <- ls()
 cc.data.loaded <- as.logical(length(which(all.var == "cc")))
 
@@ -68,8 +151,23 @@ if(!cc.data.loaded){
 map <- cc$pmap
 saveRDS(map, map.file)
 cc.genoprobs <- calc_genoprob(cc, cores = 4)
+
 ```
 
+```{r, eval = FALSE}
+#test known marker 
+#the marker at chr 4, 107159244 bp
+#should have E genotypes for strains
+#CC051, CC059, CC012, and CC002
+
+marker.chr = 4
+marker.pos = 107159244
+test.strains <- c("CC051", "CC059", "CC012", "CC002")
+nearest.geno <- pull_genoprobpos(cc.genoprobs, map = map, chr = marker.chr, pos = marker.pos)
+strain.idx <- sapply(test.strains, function(x) grep(x, rownames(nearest.geno)))
+round(nearest.geno[strain.idx,])
+
+```
 
 ```{r get_geno_fun}
 get_rix_geno <- function(rix.strain, cc.genoprobs, sex){
@@ -131,9 +229,8 @@ for(ch in 1:length(cc.genoprobs)){
 }
 attr(cc.rix.genoprobs, "alleles") <- colnames(cc.rix.genoprobs[[1]])
 
-if(!file.exists(genoprobs.file) || overwrite.files){
-    saveRDS(cc.rix.genoprobs, genoprobs.file)
-}
+saveRDS(cc.rix.genoprobs, genoprobs.file)
+
 ```
 
 ## Allele Frequencies {.tabset .tabset-fade .tabset-pills}
@@ -150,11 +247,13 @@ for(ch in 1:length(cc.rix.genoprobs)){
     layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.2))
     ymax <- max(c(0.5, max(freq.mat)))
     
+    common.markers <- intersect(rownames(freq.mat), names(map[[ch]]))
+
     par(mar = c(4,4,4,0))
     plot.new()
     plot.window(xlim = c(1,max(map[[ch]])), ylim = c(0, ymax))
     for(a in 1:ncol(chr.geno)){
-        points(x = map[[ch]], y = freq.mat[,a], col = CCcolors[a], type = "l", lwd = 3)
+        points(x = map[[ch]][common.markers], y = freq.mat[common.markers,a], col = CCcolors[a], type = "l", lwd = 3)
     }
     axis(1);axis(2)
     mtext("Position (Mb)", side = 1, line = 2.5)
@@ -183,6 +282,6 @@ if(!file.exists(kinship.file) || overwrite.files){
 
 The kinship matrix has the following structure.
 
-```{r kin_heat}
+```{r kin_heat, fig.width = 7, fig.height = 7}
 pheatmap(K[[1]])
 ```

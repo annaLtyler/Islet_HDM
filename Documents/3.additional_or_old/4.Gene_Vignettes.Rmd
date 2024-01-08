@@ -17,6 +17,7 @@ genes in collaboration with Jeff Harder who is working with the
 three bears data.
 
 ```{r load_code}
+rm(list = ls())
 is.interactive = FALSE
 #is.interactive = TRUE
 library("here")
@@ -34,13 +35,14 @@ load_libraries(all.packages, personal.library = TRUE)
 tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
 gene.cols <- categorical_pal(8)
 
-jeff.genes <- c("Pnpla2", "Mogat2", "Hadha", "Cpt2", "Capn3")
+jeff.genes <- c("Pnpla2", "Mogat2", "Hadha", "Cpt2", "Capn3", "Ccl2", "Prkaa1", "Prkaa2")
+
 ```
 
 
 ```{r load_data}
 exp.name = "tissue_together-_-complete_mediation-germline_kinship"
-tissue.loadings <- readRDS(here("Results", "High_Dim_Med", exp.name, "Loadings_Transcripts_0.RDS"))
+tissue.loadings <- readRDS(here("Results", "DO", "High_Dim_Med_no_MGE", exp.name, "Loadings_Transcripts_0.RDS"))
 ```
 
 
@@ -78,6 +80,8 @@ for(tx in 1:length(tissue.names)){
     loading.neg.idx <- which(gene.loading.table[,tx] < 0)
 
     if(length(loading.pos.idx) > 0){
+        #pos.gene.perc <- sapply(gene.loading.table[loading.pos.idx,tx], function(x) c(length(which(tissue.loadings[[tx]] >= x)),length(tissue.loadings[[tx]])))
+        #rownames(pos.gene.perc) <- c("rank", "total")
         pos.gene.perc <- 1 - sapply(gene.loading.table[loading.pos.idx,tx], function(x) length(which(tissue.loadings[[tx]] >= x))/length(tissue.loadings[[tx]]))
         loading.percentile[loading.pos.idx,tx] <- pos.gene.perc
     }
@@ -88,7 +92,6 @@ for(tx in 1:length(tissue.names)){
     }
 
 }
-
 pheatmap(loading.percentile, display_numbers = TRUE, cluster_cols = FALSE, cluster_rows = FALSE,
     main = "Loading percentile")
 ```

@@ -20,8 +20,8 @@ on running the data parsing workflows for the CC-RIX.
 Here we fit a linear model to each measured transcript 
 that includes sex, diet, treatment, and the corresponding
 imputed transcript (local genetic effect). This will tell 
-us the contribution of each of these factors to the measured 
-gene expression. 
+us the contribution of each of these factors to the 
+measured gene expression. 
 
 The imputed gene expression, is our best guess at the 
 genetic contribution to the level of each transcript.
@@ -55,7 +55,7 @@ is.interactive <- FALSE
 This report shows results for `r tissue.name` tissue.
 
 ## Load data and code
-
+n
 ```{r source_code}
 library("here")
 all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
@@ -70,11 +70,18 @@ needed.packages <- c("pheatmap", "qtl2", "RColorBrewer",
     "biomaRt", "stringr")
 load_libraries(needed.packages, personal.library = TRUE)
 
-load_latest_cape(here("Code", "cape"))
-
+#these are hard-coded so as not to interfere with the 
+#HDM manuscript
+load_latest_cape("~/Documents/git_repositories/cape")
 #load query cape
-query.fun <- list.files(here("Code", "query_cape"), pattern = ".R", full.names = TRUE)
+query.fun <- list.files("~/Documents/git_repositories/query_cape", pattern = ".R", full.names = TRUE)
 for(j in 1:length(query.fun)){source(query.fun[j])}
+```
+
+```{r set_dir}
+data.dir <- here("Data", "CC-RIX") #where original data are stored
+data.results.dir <- here("Results", "CC-RIX", "Data") #where parsed data are stored
+results.dir <- here("Results", "CC-RIX", "Gene_Expression_Effects") #where results from this workflow are stored
 ```
 
 
@@ -84,7 +91,6 @@ Get the expression for the specified tissue.
 ```{r read_data}
 all.var <- ls()
 data.loaded <- as.logical(length(which(all.var == "expr")))
-data.dir <- here("Data", "CC-RIX")
 
 if(!data.loaded){
     annot <- read.csv(file.path(data.dir, "final_sample_annotations.csv"))
@@ -95,18 +101,13 @@ if(!data.loaded){
     chem.mat <- read.csv(file.path(data.dir, "Blood.Chemistries.Summarized.csv"), row.names = 1)
     groups <- read.csv(file.path(data.dir, "Groups.csv"), row.names = 1)
     group.def <- colnames(groups)
-    imp.expr.files <- get.files(here("Data", "imputed"), want = c("CC-RIX", "imputed_transcriptome_local", "RDS"), full.names = TRUE)
+    imp.expr.files <- get.files(here("Results", "CC-RIX" "Imputed_Expression"), want = c("CC-RIX", "imputed_transcriptome_local", "RDS"), full.names = TRUE)
     file.locale <- grep(tissue.name, imp.expr.files, ignore.case = TRUE)
     imp.cc.expr <- readRDS(imp.expr.files[file.locale])
 
-    gene.info.file <- here("Data", "gene_info.RDS")
-    if(!file.exists(gene.info.file)){
-        all.ensembl.ids <- Reduce("union", lapply(tissue.expr, colnames))
-        gene.info <- get_standard_gene_info(all.ensembl.ids)
-        saveRDS(gene.info, gene.info.file)
-    }else{
-        gene.info <- readRDS(gene.info.file)
-    }
+    gene.info.file <- here("Data", "general", "mouse_gene_info.txt")
+    gene.info <- read.delim(gene.info.file)
+    
 }
 ```
 
@@ -798,14 +799,14 @@ Expand the kinship matrix.
 expanded.K <- expand_K(cc.K, rownames(pheno.mat), manifest)
 
 if(cape_type == "query"){
-    results.dir <- here("Results", "CAPE", "metformin_interaction", paste0(tissue.name, "_query"))
+    cape.dir <- here("Results", "CAPE", "metformin_interaction", paste0(tissue.name, "_query"))
 }else{
-    results.dir <- here("Results", "CAPE", "metformin_interaction", tissue.name)
-    if(!file.exists(results.dir)){dir.create(results.dir)}
+    cape.dir <- here("Results", "CAPE", "metformin_interaction", tissue.name)
+    if(!file.exists(cape.dir)){dir.create(cape.dir)}
 }
 
 #save this in our results folder
-saveRDS(expanded.K, file.path(results.dir, "cross_kinship.RDS"))
+saveRDS(expanded.K, file.path(cape.dir, "cross_kinship.RDS"))
 
 ```
 
@@ -813,8 +814,8 @@ Run cape
 
 ```{r run_cape}
 
-finished_run <- file.exists(file.path(results.dir, "Variant_Influences_Interactions.csv"))
-results_file <- file.path(results.dir, "cross.RDS")
+finished_run <- file.exists(file.path(cape.dir, "Variant_Influences_Interactions.csv"))
+results_file <- file.path(cape.dir, "cross.RDS")
 
 if(cape_type == "query"){
     query_geno <- cape_geno[rownames(cape_pheno$pheno),,]
@@ -825,8 +826,8 @@ if(cape_type == "query"){
             query_genotype = query_allele,
             results_file = "cross.RDS", p_or_q = 0.05, n_cores = 4, 
             initialize_only = FALSE, verbose = TRUE, run_parallel = FALSE, 
-            param_file = file.path(results.dir, "cape.parameters.yml"), 
-            yaml_params = NULL, results_path = results.dir, plot_pdf = TRUE)
+            param_file = file.path(cape.dir, "cape.parameters.yml"), 
+            yaml_params = NULL, results_path = cape.dir, plot_pdf = TRUE)
     }else{
         final_obj <- readRDS(results_file)
     }
@@ -835,8 +836,8 @@ if(cape_type == "query"){
         final_obj <- run_cape(cape_pheno, cape_geno, 
             results_file = "cross.RDS", p_or_q = 1e-4, n_cores = 4, 
             initialize_only = FALSE, verbose = TRUE, run_parallel = FALSE, 
-            param_file = file.path(results.dir, "cape.parameters.yml"), 
-            yaml_params = NULL, results_path = results.dir, 
+            param_file = file.path(cape.dir, "cape.parameters.yml"), 
+            yaml_params = NULL, results_path = cape.dir, 
             plot_pdf = TRUE)
     }else{
     final_obj <- readRDS(results.file)
@@ -847,18 +848,18 @@ if(cape_type == "query"){
 ```{r plot_variant_effects}
 if(cape_type == "query"){
 
-    #pdf(file.path(results.dir, "Variant_Influences.pdf"), width = 10, height = 7)
+    #pdf(file.path(cape.dir, "Variant_Influences.pdf"), width = 10, height = 7)
     #plot_variant_influences_query(final_obj, cape_geno, p_or_q = 0.01)
     #dev.off()
 
-    pdf(file.path(results.dir, "Variant_Effects.pdf"), width = 10, height = 7)
+    pdf(file.path(cape.dir, "Variant_Effects.pdf"), width = 10, height = 7)
     plot_variant_effects_query(final_obj, cape_geno, 
     pheno_type = "norm_pheno", p_or_q = 0.01, scale_coord = 1e6, 
     verbose = FALSE)
     dev.off()
 
 }else{
-    pdf(file.path(results.dir, "Variant_Effects.pdf"), width = 10, height = 7)
+    pdf(file.path(cape.dir, "Variant_Effects.pdf"), width = 10, height = 7)
     plot_variant_effects(final_obj, cape_geno, 
     pheno_type = "norm_pheno", p_or_q = 0.01, scale_coord = 1e6, 
     verbose = FALSE)

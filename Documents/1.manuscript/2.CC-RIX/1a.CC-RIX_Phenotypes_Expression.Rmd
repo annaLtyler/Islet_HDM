@@ -140,6 +140,7 @@ for(i in 1:length(expr)){
     rownames(expr[[i]]) <- expr.mouse.info.table[,1]
 
     #also save adjusted expression
+    #adjust by sex, diet, treatment, and timepoint (age)
     expr.covar <- dummy_covar(expr.mouse.info.table[,c("Sex", "Diet", "Treatment", "Timepoint")])
     adj.expr[[i]] <- adjust(expr[[i]], expr.covar)
 }

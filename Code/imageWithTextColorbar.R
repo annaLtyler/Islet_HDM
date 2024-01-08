@@ -7,7 +7,7 @@
 #exp.steepness = 1; global.color.scale = FALSE; global.min = NULL; global.max = NULL 
 #axis.line = -3; use.pheatmap.colors = TRUE
 
-imageWithTextColorbar <- function(mat, orientation = c("h", "v"), 
+imageWithTextColorbar <- function(mat, x = NULL, y = NULL, orientation = c("h", "v"), 
 cex = 0.5, split.at.vals = FALSE, split.points = 0, 
 col.scale = c("green", "purple", "orange", "blue", "gray"), light.dark = "f", 
 class.mat = NULL, grad.dir = c("high", "low", "middle", "ends"), 
@@ -17,7 +17,6 @@ axis.line = 0, use.pheatmap.colors = FALSE, round.nearest = 1,
 ax.min = NULL, ax.max = NULL, n.ax.ticks = NULL, hadj = NA, padj = NA, 
 bounding.box = TRUE, bar.lwd = 1){
 
-	
 		require(grid)
 	
 		#if(length(light.dark) < length(col.scale)){light.dark <- rep(light.dark, length(col.scale))}
@@ -40,13 +39,14 @@ bounding.box = TRUE, bar.lwd = 1){
             mat.min <- floor(min(mat, na.rm = TRUE)/round.nearest)*round.nearest
         }
 		
-        if(orientation == "h"){
-            plot.window(xlim = c(min(mat, na.rm = TRUE), max(mat, na.rm = TRUE)), ylim = c(0,1))
-            axis.side = 1
-            }else{
-            plot.window(ylim = c(min(mat, na.rm = TRUE), max(mat, na.rm = TRUE)), xlim = c(0,1))	
-            axis.side = 2
-            }
+		if(orientation == "h"){
+			plot.window(xlim = c(min(mat, na.rm = TRUE), max(mat, na.rm = TRUE)), ylim = c(0,1))
+			axis.side = 1
+			}else{
+			plot.window(ylim = c(min(mat, na.rm = TRUE), max(mat, na.rm = TRUE)), xlim = c(0,1))	
+			axis.side = 2
+		}
+	
 
 		end.fudge.factor = 10^-10
 
@@ -221,9 +221,11 @@ bounding.box = TRUE, bar.lwd = 1){
 
 
         num.mat <- as.matrix(as.numeric(col.key[,1]), ncol = 1)
+
         if(orientation == "h"){
 			plot(x = num.mat[,1], y = rep(1, nrow(num.mat)), col = col.key[,2], 
 			type = "h", axes = FALSE, xlab = "", ylab = "", lwd = bar.lwd)
+
             }else{
 	            # Original
 				plot.new()

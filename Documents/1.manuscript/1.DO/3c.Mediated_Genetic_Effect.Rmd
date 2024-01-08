@@ -1,0 +1,219 @@
+---
+title: "mediated genetic effect"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+bibliography: hdm.bib 
+---
+
+## Introduction
+
+The purpose of this workflow is to calculate mediated 
+genetic effect in the DO mice and compare this measure
+to transcript loadings calculated in 
+3b.High_Dimensional_Mediation.Rmd.
+
+```{r setup}
+rm(list = ls()) #clear out R workspace
+
+#is.interactive = TRUE
+library("here")
+
+parsed.data.dir <- here("Results", "DO", "Data")
+
+exp.name = "tissue_together-_-complete_mediation-germline_kinship"
+prev.results.dir <- here("Results", "DO", "High_Dim_Med_no_MGE", exp.name)
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+
+tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("pheatmap", "gprofiler2", "RColorBrewer", "GEOquery", "limma", 
+    "vioplot", "pdftools")
+load_libraries(all.packages, personal.library = TRUE)
+```
+
+```{r load_data}
+transcript_loadings <- readRDS(file.path(prev.results.dir, "Loadings_Transcripts_0.RDS"))
+tissue.names <- names(transcript_loadings)
+
+model_scores <- readRDS(file.path(prev.results.dir, "Model_Scores_0.RDS"))
+
+#These imputed transcripts are the fitted values from fit1 
+#with the nearest marker and a kinship correction
+#created by 3a.Imputation.Rmd
+imp.files <- list.files(here("Results", "DO", "Imputed_Transcriptomes"), pattern = "Local", full.names = TRUE)
+tissue.imp.gen <- lapply(imp.files, readRDS)
+local.var <- lapply(tissue.imp.gen, function(x) apply(x, 2, var))
+
+#also read in distal components of heritability
+#created by 3b.Imputation.Rmd
+distal.files <- list.files(here("Results", "DO", "Imputed_Transcriptomes"), pattern = "Distal", full.names = TRUE)
+distal.var <- lapply(distal.files, readRDS)
+names(distal.var) <- names(tissue.imp.gen) <- tissue.names
+
+#trait correlation files
+trait.cor.files <- list.files(here("Results", "DO", "Transcriptomes"), 
+    pattern = "Maximum_Trait_Correlation", full.names = TRUE) #generated in 2a.Kinship_Expression_Traits.Rmd
+trait.cor <- lapply(trait.cor.files, readRDS)
+names(trait.cor) <- tissue.names
+```
+
+## Individual-level MGE
+
+We can calculate individual-level MGE for each transcript
+in each individual mouse. This tells us for each individual
+mouse how much does its genotype a given locus affect its
+phenotype by affecting transcription. 
+
+For example, the gene Wfdc21 has a positive loading, which
+means that it's expression is positively associated with 
+phenotype score. This means that any local allele that 
+increases the expression of Wfdc21 with have a positive 
+effect on phenotype score. Conversely, any allele that 
+reduces expresionof Wfdc21 will have a negative effect on
+phenotype score. 
+
+If the CAST allele has a positive effect on Wfdc21 expression,
+an animal that is homozygous for CAST at the locus closest to
+Wfdc21 will have a positive MGE at that locus. The CAST allele
+increases the expression of Wfdc1, which increases phenotype 
+score. 
+
+MGE can then be used as a kind of polygenic risk score. Across
+the whole genome it tells us how each locus affects local 
+transcription and how that transcription affects phenotype. By
+summing up the values across the genome, we should be able to 
+get a sense of the risk of obesity in an animal based on the 
+effects of its local eQTLs.
+
+To calculate individual-level MGE, we multiply locally imputed
+gene expression by transcript loading. 
+
+```{r ind_mge}
+tissue_ind_mge <- vector(mode = "list", length = length(tissue.names))
+names(tissue_ind_mge) <- tissue.names
+
+for(tx in 1:length(transcript_loadings)){
+  tx.loadings <- transcript_loadings[[tx]]
+  tx.imp <- tissue.imp.gen[[tx]]
+  common.transcripts <- intersect(rownames(tx.loadings), colnames(tx.imp))
+  ind.mge <- tx.loadings[common.transcripts,1] * tx.imp[,common.transcripts]
+  tissue_ind_mge[[tx]] <- ind.mge
+}
+```
+
+For each individual we calculate the sum of the MGE scores 
+across the genome to give us a sort of polygenic risk score
+based on the combined effect of the eQTLs and the transcript
+effects on phenotype score. This is not really a polygenic 
+risk score. What should we call it? 
+  * polytranscriptogenic risk score (PtgRS)
+  * eQTL risk score (eQRS)
+
+The figure below shows how this PtgRS correlates with phenotype
+score in each of the tissues. It is not correlated at all!
+This suggests that even within the population in which the
+model is fit, there is no relationship between local eQTLs
+and phenotype.
+
+When we fit the model, we removed the local effects from 
+the gene expression before kernelizing. This separates the
+acute local regulation in gene expression from the rest of 
+the effects on gene expression, which include distal effects,
+environmental effects, and developmental/life-history effects.
+
+We show here that acute local effects on gene expression across
+the whole transcriptome are not correlated with phenotype. This
+does not rule out the possibility that 
+
+```{r mge_pred, fig.height = 8, fig.width = 8}
+eQRS <- lapply(tissue_ind_mge, function(x) rowSums(x))
+
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+  common.ind <- intersect(names(eQRS[[tx]]), rownames(model_scores[[tx]]))
+  plot.with.model(eQRS[[tx]][common.ind], model_scores[[tx]][common.ind,"Outcome"],
+  xlab = "eQRS", ylab = "Phenotype Score", main = tissue.names[tx])
+}
+```
+
+
+## Population-level MGE
+
+We can also calculate 
+We calculated two types of mediated genetic effect (MGE):
+local and distal.
+
+Local MGE is the product of a transcript's loading and 
+the variance explained by the *local marker*. This tells
+us the phenotypic effects of the realized transcript 
+variation in the population based on local genotype. 
+
+Distal MGE is the product of a transcript's loading 
+and the variance explained by the 
+*distal component of heritability*. This tells
+us the phenotypic effects of the realized transcript 
+variation in the population based on the full genome.
+Transcripts with a large distal heritability component
+will have similar abundance in animals that are more
+related on average, independent of the local genotype
+near the gene. If these transcripts have high loadings, 
+they will have large distal MGE. 
+
+
+```{r load_herit}
+#calculate the variance explained by the distal component for each transcript
+dist.var.exp <- lapply(distal.var, function(x) round(x[,"residual_variance"]*x[,"residual_heritability"], 2))
+
+
+```
+
+```{r test, eval = FALSE}
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    common.tx <- intersect(names(local.var[[tx]]), names(dist.var.exp[[tx]]))
+    plot(local.var[[tx]][common.tx], dist.var.exp[[tx]][common.tx])
+}
+```
+
+```{r calc_pop_mge}
+#calculate a population-level MGE for each transcript
+#using the variance explained by local genotype
+
+pop.local.mge.file <- file.path(prev.results.dir, paste0("Population_Local_MGE_", mge.name, "_", adjust_numeral, ".RDS"))
+if(!file.exists(pop.local.mge.file)){
+    pop.local.MGE <- vector(mode = "list", length = length(tissue.names))
+    names(pop.local.MGE) <- tissue.names
+    for(tx in 1:length(transcript_loadings)){
+        tx.r2 <- apply(tissue.imp.gen[[tx]], 2, var)
+        common.transcripts <- intersect(names(tx.r2), rownames(transcript_loadings[[tx]]))
+        pop.local.MGE[[tx]] <- tx.r2[common.transcripts]*transcript_loadings[[tx]][common.transcripts,1]
+    }
+    saveRDS(pop.local.MGE, pop.local.mge.file)
+}else{
+    pop.local.MGE <- readRDS(pop.local.mge.file)
+}
+
+
+pop.distal.mge.file <- file.path(prev.results.dir, paste0("Population_Distal_MGE_", mge.name, "_", adjust_numeral, ".RDS"))
+if(!file.exists(pop.distal.mge.file)){
+    pop.distal.MGE <- vector(mode = "list", length = length(tissue.names))
+    names(pop.distal.MGE) <- tissue.names
+    for(tx in 1:length(transcript_loadings)){
+        common.transcripts <- intersect(names(dist.var.exp[[tx]]), rownames(transcript_loadings[[tx]]))
+        pop.distal.MGE[[tx]] <- dist.var.exp[[tx]][common.transcripts]*transcript_loadings[[tx]][common.transcripts,1]
+    }
+    saveRDS(pop.distal.MGE, pop.distal.mge.file)
+}else{
+    pop.distal.MGE <- readRDS(pop.distal.mge.file)
+}
+```

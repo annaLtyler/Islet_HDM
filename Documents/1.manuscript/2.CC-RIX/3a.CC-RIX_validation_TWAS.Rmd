@@ -11,96 +11,36 @@ output:
 ---
 
 ## Introduction
-The purpose of this workflow is to use data from the CC-RIX for 
-validation of hypothesese developed in the DO. 
+The purpose of this workflow is to validate TWAS findings
+fron the DO in the CC-RIX.
 
-The CCA analysis in the DO found that a composite trait 
-and composite transcript co-mapped to a locus on chromosome X. The 
-composite transcript mediated the effect of the locus on the composite 
-trait. Through multiple independent methods we prioritized Sash3 as the 
-causal gene at the locus. Sash3 gene expression was positively correlated 
-with the composite trait and mediated the effect of the locus on the 
-composite trait. All effects through this chain were weak, but 
-consistently pointed to Sash3. 
+To do this, we will use the TWAS results from the DO
+generated in 3a.Imputation.Rmd, the imputed gene expression
+for the CC-RIX from 2.Impute_CC-RIX_gene_expression.Rmd,
+and the CC-RIX traits. 
 
-Here we use the CC-RIX data to test whether composite transcripts
-or individual genes have similar effects in the DO and in the 
-CC-RIX.
+We will check to see whether the TWAS results from the DO
+are also significant in the CC-RIX.
 
-The data from the CC-RIX are unfortuantely very different from the DO
-data, so instead of comparing things directly, we just look for 
-correlations with transcripts and composite transcripts to all 
-individual traits for a general sense of how the transcripts relate
-to traits in this different population.
-
-The allele frequencies are a mess, so we won't be able to do any 
-mapping in the CC-RIX directly. 
-
-We may have to shift the focus of the validation to something that
-takes advantage of the data in the CC-RIX, namely different diets
-and treatment with metformin. Perhaps high-dimensional mediation
-in the CC-RIX.
-
-This workflow also saves several processed files for use in other
-workflows. The files are as follows:
-    
-1. CC_RIX_Tissue_Annotations.RDS - Contains annotation data for 
-    gene expression measurements in the CC-RIX. There are three
-    elements of the list, one for each of the three tissues: 
-    liver, adipose, and skeletal muscle. Each element contains a 
-    table with sample.id, climb.id, sex, age, strain, diet, treatment,
-    tissue, and RNAseq batch.
-
-3. CC-RIX_Groups.RDS - A matrix of the unique groupings of CC-RIX mice
-    based on sex, diet, and treatment.
-
-2. CC-RIX_BW.RDS - Contains dimension-reduced body weights for 
-    each mouse and is labeled with a JMUS mouse ID. These body
-    weights are smoothed estimates of the body weight closest 
-    to the time of sacrifice of eacn animal. The smoothing is
-    to iron out measurement errors. The time point gives us a body
-    weight closes to the time of gene expression measurement.
-
-3. CC-RIX_chem.RDS - Contains a matrix of blood chemistries by individual
-    mouse. The chemistry measurements are binned into an early timepoint (_1)
-    and a late timepoint (_2). Each mouse had two collections of blood, and
-    they were generally at an early time point and a late time point. However,
-    the measurements were not at exactly the same age for each mice, so here
-    we group the measurements into early (< 30 weeks) and late (> 30 weeks).
+We will also perform TWAS independently in the CC-RIX and
+look for overlap with results from the DO.
 
 
 ```{r load_code}
+rm(list = ls()) #clear R workspace
+
 is.interactive = FALSE
 #is.interactive = TRUE
 library("here")
 
-
-#set whether to set genes by hand, use a CT from the CCA study, or use loadings from the high-dimensional mediation
-#manual.CT.Med <- "manual"; gene.name = "Aldh2"; exp.name = "imputed_local"
-
-#manual.CT.Med <- "manual"; gene.name <- c("Ifi44","Trim30a","Usp18","Ifit1","Ifit3","Oasl2","Rtp4","Irf7","Cxcl10","Ube2l6","Rnf213","Bst2","Stat1","Isg15","Lgals3bp","Rnf213","Parp12","Samd9l","Apol9a","Gbp2","Irgm2","Xaf1","Ifi205","Ifi203","Stat2","Ifih1","Oas1g","Apol9b","Sp100","Gbp6","Ddx58","Gbp3","Ifi204","Tor3a","Dtx3l","Oas1b","Ccl5","Parp14","Agrn","Tgtp1","Cmpk2","Nell2","Eif2ak2")
-
-#manual.CT.Med <- "manual"; gene.name <- c("Wfdc21"); exp.name = "imputed_local"
-
-#manual.CT.Med = "CT"; tissue.name <- "Adipose"; CT <- 1; exp.name = "imputed_local"
-
-#manual.CT.Med = "Med"; tissue.name <- "Adipose"; exp.name = "tissue_together-local_imp-_-complete_mediation" #exp.name tells which Mediation results folder to look in for the transcript loadings
-
-manual.CT.Med = "Med"; tissue.name <- "Adipose"; exp.name = "tissue_together-_-complete_mediation-germline_kinship" #exp.name tells which Mediation results folder to look in for the transcript loadings
-
-use.cc.imputed.transcriptome = FALSE
-
 data.dir <- here("Data", "CC-RIX")
-results.dir <- here("Results", "CCA_Clusters", "Validation")
+cc.parsed.data.dir <- here("Results", "CC-RIX", "Data")
+twas.results.dir <- here("Results", "DO", "Imputed_Transcriptomes")
+results.dir <- here("Results", "CC-RIX", "Validation")
 if(!file.exists(results.dir)){dir.create(results.dir)}
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
-
-gene.info <- read.delim(here("Data", "general", "mouse_gene_info.txt"))
-
-use.imputed <- as.logical(length(grep("imputed", exp.name))) #only matters for CT method
-
 ```
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
@@ -108,92 +48,469 @@ all.packages <- c("pheatmap", "qtl2", "gprofiler2")
 load_libraries(all.packages, personal.library = TRUE)
 ```
 
-The following code chunk is where the object of the analysis is set.
-The analysis can either look at an individual gene, or a few genes 
-set by hand, or it can read in results from the DO study, and pull
-out a specified composite transcript to analyze. These parameters
-are all set below. After setting the manual or CT parameter, set
-the corresponding parameters in the appropriate if chunk.
 
-```{r set_param}
+```{r read_data, warning = FALSE}
+gene.info <- read.delim(here("Data", "general", "mouse_gene_info.txt"))
 
-if(manual.CT.Med == "manual"){
-    gene.weights <- rep(1, length(gene.name)) #set weights here
+imp.files <- list.files(here("Results", "CC-RIX", "Imputed"), pattern = "Imputed", full.names = TRUE)
+imp.expr <- lapply(imp.files, readRDS)
+tissue.names <- sapply(strsplit(gsub(".RDS", "", basename(imp.files)), "_"), function(x) x[3])
+names(imp.expr) <- tissue.names
 
-    #convert to ensembl ID
-    #gene.id.table <- gconvert(gene.name, organism = "mmusculus")
-    #gene.id <- gene.id.table[,"target"]    
-    #gene.id <- "ENSMUSG00000031101"
-    gene.id <- gene.info[match(gene.name, gene.info[,"external_gene_name"]),"ensembl_gene_id"]
+twas.table <- read.csv(file.path(twas.results.dir, "TWAS_results.csv"))
 
-    #create a weighted vector for the gene(s)    
-    expr.vector  <- rep(1, length(gene.id))
-    names(expr.vector) <- gene.id
+annot <- read.csv(file.path(data.dir, "final_sample_annotations.csv"))
+manifest <- as.matrix(read.csv(file.path(data.dir, "Original_Samples_Manifest.csv")))
+covar <- read.csv(file.path(cc.parsed.data.dir, "Covar.csv"), row.names = 1)
+bw <- read.csv(file.path(cc.parsed.data.dir, "Weight.Summarized.csv"), header = TRUE, row.names = 1)
+chem.mat <- read.csv(file.path(cc.parsed.data.dir, "Blood.Chemistries.Summarized.csv"), row.names = 1)
+groups <- read.csv(file.path(cc.parsed.data.dir, "Groups.csv"), row.names = 1)
+group.def <- colnames(groups) 
 
-    label.text <- paste(gene.name, "expression")
-}
+#adjust body weight and chemistries for covariates
+dcovar <- dummy_covar(covar)
+orsam.id <- paste0(rownames(covar), "-1")
+mus.id <- t(sapply(orsam.id , function(x) get_mouse_info(x, manifest, "Orsam.Lot")))
+rownames(dcovar) <- mus.id[,"Barcode.1"]
+adj.bw <- adjust(as.matrix(bw), dcovar)
+num.chem <- apply(as.matrix(chem.mat[,5:ncol(chem.mat)]), 2, as.numeric)
+rownames(num.chem) <- chem.mat[,"Mouse.ID"]
+adj.chem <- adjust(num.chem, dcovar)
 
-if(manual.CT.Med == "CT"){
-    #set tissue, CT, and region from DO study to analyze
-    #doing this by hand now, but maybe can automate later.
+common.ind <- intersect(rownames(num.chem), rownames(bw))
+clin.pheno <- cbind(adj.bw[common.ind,,drop=FALSE], adj.chem[common.ind,])
+#clin.pheno <- cbind(bw[common.ind,,drop=FALSE], num.chem[common.ind,])
+#pheatmap(cor(clin.pheno, use = "pairwise.complete.obs"))
+```
 
-    #read expression data to get transcript names
-    if(use.imputed){
-        do.expr <- readRDS(here("Data", "imputed", paste0("Adjusted_Expression_DO_", exp.name, ".RDS")))
-    }else{
-        do.expr <- readRDS(here("Data", "Adjusted_Expression.RDS"))
-    }
+```{r expand_imputed}
 
-    #read CT data
-    boot.CCA.results <- readRDS(here("Results", "CCA_Clusters", exp.name, "Aggregate.Results.RDS"))
-    boot.CCA.names <- readRDS(here("Results", "CCA_Clusters", exp.name, "Trait.Expression.Names.RDS"))
-    tissue.idx <- which(names(boot.CCA.results) == tissue.name)
-    expr.vector <- boot.CCA.results[[tissue.idx]]$u[,CT]
-    names(expr.vector) <- boot.CCA.names[[tissue.idx]]$X[[2]]
+#expanded CC-RIX imputed expression matrices for autosomes 
+#generated by CC_Imputation_Check.Rmd
 
-    label.text <- paste(tissue.name, "CT", CT)
-}
+#expand imputed expression to all individuals in the data set
+tissue.expr <- vector(mode = "list", length = length(imp.expr))
+names(tissue.expr) <- names(imp.expr)
+for(tx in 1:length(tissue.expr)){
+    #get expression for each animal
+    u_ind <- unique(annot[,"climb.id"])
+    unique.info <- t(sapply(u_ind, function(x) get_mouse_info(x, manifest, "CLIMB.ID")))
+    ind_strains <- gsub(" x ", "_", gsub(" X ", "_", unique.info[,"User.Defined.Strain"]))
+    strain.idx <- match(ind_strains, rownames(imp.expr[[tx]]))
+    expanded.mat <- imp.expr[[tx]][strain.idx,]
+    rownames(expanded.mat) <- unique.info[,"Barcode.1"]
+    tissue.expr[[tx]] <- expanded.mat
 
-if(manual.CT.Med == "Med"){
-    tissue.loadings <- readRDS(here("Results", "High_Dim_Med_with_MGE", exp.name, "Population_Local_MGE_local_imp_0.RDS"))
-    tissue.idx <- which(names(tissue.loadings) == tissue.name)
-    expr.vector <- tissue.loadings[[tissue.idx]]
-    #names(expr.vector) <- gene.info[match(names(expr.vector), gene.info[,"external_gene_name"]),1]
-    label.text <- "Mediation"
+    #plot(sort(tissue.expr[[tx]][,1]))
 }
 ```
 
-Gene expression in this analysis was set to analyze `r label.text`.
+## Validate DO TWAS
 
-```{r read_data}
-all.var <- ls()
-data.loaded <- as.logical(length(which(all.var == "expr")))
+For each TWAS hit identified in the DO, we look for significance
+in the CC-RIX. We don't have the same phenotypes in the CC-RIX, so
+we will look at all of them and do the best we can.
 
-if(!data.loaded){
-    annot <- read.csv(file.path(data.dir, "final_sample_annotations.csv"))
-    genoprobs <- readRDS(file.path(data.dir, "Genoprobs.RDS")) #created by 3.5.CC-RIX_genotypes.Rmd
-    K <- readRDS(file.path(data.dir, "Kinship.RDS"))
-    map <- readRDS(file.path(data.dir, "Map.RDS"))
-    manifest <- as.matrix(read.csv(file.path(data.dir, "Original_Samples_Manifest.csv")))
-    covar <- read.csv(file.path(data.dir, "Covar.csv"), row.names = 1)
-    bw <- read.csv(file.path(data.dir, "Weight.Summarized.csv"), header = TRUE, row.names = 1)
-    chem.mat <- read.csv(file.path(data.dir, "Blood.Chemistries.Summarized.csv"), row.names = 1)
-    groups <- read.csv(file.path(data.dir, "Groups.csv"), row.names = 1)
-    group.def <- colnames(groups)
+The steps are the following:
 
-   if(use.cc.imputed.transcriptome){
-        #expanded CC-RIX imputed expression matrices for autosomes 
-        #generated by CC_Imputation_Check.Rmd
-        expr.files <- list.files(here("Data", "imputed"), pattern = "Expanded", 
-            full.names = TRUE)
-        tissue.expr <- lapply(expr.files, readRDS)
-        names(tissue.expr) <- gsub(".RDS", "", gsub("Expanded_Imputed_CC-RIX_Expression_", "", basename(expr.files)))
-    }else{
-        tissue.expr <- readRDS(file.path(data.dir, "Expression.by.Tissue.RDS"))
+1. Identify the significant TWAS hits from the DO in 
+    each tissue.
+2. Correlate the imputed expression in the CC-RIX for
+    each of these genes with each of the traits in the
+    CC-RIX.
+3. Shuffle the labels on the phenotype and recompute 
+    the correlations. Compare the maximum correlation 
+    for each transcript with the maximum seen in the
+    permutations.
+
+The plot below shows the null distribution of the maximum
+correlation for each imputed transcript compared with the 
+actual maximum correlation for each imputed transcript.
+
+It looks as if the TWAS results are replicating? This 
+doesn't seem right. 
+
+
+```{r validate}
+#clin.pheno has already been adjusted for covariates
+#tissue.expr is the expanded matrix of imputed expression
+#corresponding to each individual
+clin.pheno <- apply(clin.pheno, 2, rankZ)
+nperm = 100
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    tx.idx <- grep(tissue.names[tx], twas.table[,"Tissue"], ignore.case = TRUE)
+    tx.twas <- twas.table[tx.idx,]
+    tx.id <- tx.twas[,"gene.id"]
+
+    common.tx <- intersect(colnames(tissue.expr[[tx]]), tx.id)
+    twas.imp.expr <- tissue.expr[[tx]][,common.tx]
+    not.na <- which(apply(twas.imp.expr, 2, function(x) !all(is.na(x))))
+    twas.imp.expr <- twas.imp.expr[,not.na]
+
+    common.ind <- intersect(rownames(twas.imp.expr), rownames(clin.pheno))
+    trait.expr.cor <- apply(clin.pheno[common.ind,], 2, 
+        function(x) apply(twas.imp.expr[common.ind,], 2, 
+        function(y) cor(x,y, use = "pairwise.complete.obs")))
+    
+    #shuffle the individual labels on the phenotypes
+    null.cor <- matrix(NA, nrow = nperm, ncol = ncol(clin.pheno))
+    for(p in 1:nperm){
+        rnd.ind <- sample(common.ind)
+        rnd.pheno <- clin.pheno[common.ind,]
+        rownames(rnd.pheno) <- rnd.ind
+        rnd.trait.expr.cor <- apply(rnd.pheno[common.ind,], 2, 
+            function(x) apply(twas.imp.expr[common.ind,], 2, 
+            function(y) cor(x,y, use = "pairwise.complete.obs")))
+        null.cor[p,] <- apply(rnd.trait.expr.cor, 2, function(x) max(abs(x)))
     }
- 
+    null.max <- as.vector(null.cor)
+    obs.max <- apply(trait.expr.cor, 2, function(x) max(abs(x)))
+    null.dens <- density(null.max)    
+    obs.dens <- density(obs.max)
+    xlim = c(min(c(null.dens$x, obs.dens$x)), max(c(null.dens$x, obs.dens$x)))
+    ylim = c(min(c(null.dens$y, obs.dens$y)), max(c(null.dens$y, obs.dens$y)))
+    plot(density(null.max), xlim = xlim, ylim = ylim, main = tissue.names[tx])
+    points(density(obs.max), col = "red", type = "l")
+    legend("topright", lty = 1, col = c("black", "red"), legend = c("Null", "Observed"))
+    #pheatmap(trait.expr.cor)
+}
+mtext("TWAS hits from DO", side = 3, outer = TRUE, line = 2.5)
+```
+
+What if we just select random transcripts, not the TWAS hits from the
+DO? In the figures below we took random genes that were not TWAS hits
+and did the same procedure as above. Weirdly, they look as, or even more
+significant, than the TWAS hits above. There is something weird going on
+here.
+
+```{r rnd_transcripts}
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    tx.idx <- grep(tissue.names[tx], twas.table[,"Tissue"], ignore.case = TRUE)
+    neg.genes <- setdiff(gene.info[,"ensembl_gene_id"], twas.table[tx.idx,"gene.id"])
+    rnd.id <- sample(neg.genes, length(tx.idx))
+    
+    common.tx <- intersect(colnames(tissue.expr[[tx]]), rnd.id)
+    twas.imp.expr <- tissue.expr[[tx]][,common.tx]
+    not.na <- which(apply(twas.imp.expr, 2, function(x) !all(is.na(x))))
+    twas.imp.expr <- twas.imp.expr[,not.na]
+
+    common.ind <- intersect(rownames(twas.imp.expr), rownames(clin.pheno))
+    trait.expr.cor <- apply(clin.pheno[common.ind,], 2, 
+        function(x) apply(twas.imp.expr[common.ind,], 2, 
+        function(y) cor(x,y, use = "pairwise.complete.obs")))
+    
+    #shuffle the individual labels on the phenotypes
+    null.cor <- matrix(NA, nrow = nperm, ncol = ncol(clin.pheno))
+    for(p in 1:nperm){
+        rnd.ind <- sample(common.ind)
+        rnd.pheno <- clin.pheno[common.ind,]
+        rownames(rnd.pheno) <- rnd.ind
+        rnd.trait.expr.cor <- apply(rnd.pheno[common.ind,], 2, 
+            function(x) apply(twas.imp.expr[common.ind,], 2, 
+            function(y) cor(x,y, use = "pairwise.complete.obs")))
+        null.cor[p,] <- apply(rnd.trait.expr.cor, 2, function(x) max(abs(x)))
+    }
+    null.max <- as.vector(null.cor)
+    obs.max <- apply(trait.expr.cor, 2, function(x) max(abs(x)))
+    null.dens <- density(null.max)    
+    obs.dens <- density(obs.max)
+    xlim = c(min(c(null.dens$x, obs.dens$x)), max(c(null.dens$x, obs.dens$x)))
+    ylim = c(min(c(null.dens$y, obs.dens$y)), max(c(null.dens$y, obs.dens$y)))
+    plot(density(null.max), xlim = xlim, ylim = ylim, main = tissue.names[tx])
+    points(density(obs.max), col = "red", type = "l")
+    legend("topright", lty = 1, col = c("black", "red"), legend = c("Null", "Observed"))
+    #pheatmap(trait.expr.cor)
+}
+mtext("Randomly selected non-TWAS hits", side = 3, outer = TRUE, line = -1.5)
+```
+
+So for some reason, the locally imputed gene expression in the CC-RIX
+is very highly correlated with the adjusted traits. Have we introduced
+that correlation somehow? What is the correlation between traits and 
+measured transcripts? The plots below show that randomly selected 
+measured transcripts are also highly correlated with the traits.
+But that does make more sense than the imputed transcripts being
+correlated.
+
+```{r measured}
+#small subset of randomly selected measured transcripts
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    tx.expr <- measured.expr[[tx]]
+    rnd.id <- sample(colnames(tx.expr), 500)
+    
+    rnd.expr <- tx.expr[,rnd.id]
+    not.na <- which(apply(rnd.expr, 2, function(x) !all(is.na(x))))
+    rnd.expr <- rnd.expr[,not.na]
+
+    common.ind <- intersect(rownames(rnd.expr), rownames(clin.pheno))
+    trait.expr.cor <- apply(clin.pheno[common.ind,], 2, 
+        function(x) apply(rnd.expr[common.ind,], 2, 
+        function(y) cor(x,y, use = "pairwise.complete.obs")))
+    
+    #shuffle the individual labels on the phenotypes
+    null.cor <- matrix(NA, nrow = nperm, ncol = ncol(clin.pheno))
+    for(p in 1:nperm){
+        rnd.ind <- sample(common.ind)
+        rnd.pheno <- clin.pheno[common.ind,]
+        rownames(rnd.pheno) <- rnd.ind
+        rnd.trait.expr.cor <- apply(rnd.pheno[common.ind,], 2, 
+            function(x) apply(rnd.expr[common.ind,], 2, 
+            function(y) cor(x,y, use = "pairwise.complete.obs")))
+        null.cor[p,] <- apply(rnd.trait.expr.cor, 2, function(x) max(abs(x)))
+    }
+    null.max <- as.vector(null.cor)
+    obs.max <- apply(trait.expr.cor, 2, function(x) max(abs(x)))
+    null.dens <- density(null.max)    
+    obs.dens <- density(obs.max)
+    xlim = c(min(c(null.dens$x, obs.dens$x)), max(c(null.dens$x, obs.dens$x)))
+    ylim = c(min(c(null.dens$y, obs.dens$y)), max(c(null.dens$y, obs.dens$y)))
+    plot(null.dens, xlim = xlim, ylim = ylim, main = tissue.names[tx])
+    points(obs.dens, col = "red", type = "l")
+    legend("topright", lty = 1, col = c("black", "red"), legend = c("Null", "Observed"))
+    #pheatmap(trait.expr.cor)
+}
+mtext("Randomly selected measured transcripts hits", side = 3, outer = TRUE, line = -1.5)
+
+```
+
+
+What about TWAS imputed transcripts vs. non-TWAS imputed transcripts?
+
+```{r t_v_t}
+
+```
+
+Do the CC-RIX have enough LD that each marker represents the whole animal,
+so the imputed transcripts and the phenotypes are being generated by the 
+same thing, i.e. the whole genome?
+
+We calculated the correlations between pairs of individuals in phenotype
+space, and expression space. We compared these to each other and to the
+overall kinship matrix. They are ever so slightly positively correlated,
+but I don't think this would result in the high imputed transcript-trait 
+correlations we are seeing.
+
+```{r investigation}
+genoprobs <- readRDS(here("Results", "CC-RIX", "Genotypes", "Genoprobs.RDS"))
+expanded.geno <- match_geno_pheno(genoprobs, mouse.pheno.id = rownames(clin.pheno), manifest)
+common.ind <- lapply(tissue.expr, 
+    function(x) Reduce("intersect", list(rownames(x), rownames(clin.pheno), 
+    rownames(expanded.geno[[1]]))))
+
+pheno.ind.cor <- cor(t(clin.pheno[common.ind,]), use = "pairwise.complete.obs")
+pheatmap(pheno.ind.cor)
+
+expr.ind.cor <- lapply(tissue.expr, function(x) cor(t(x[common.ind,]), use = "pairwise.complete.obs"))
+
+geno.ind.cor <- calc_kinship(expanded.geno, "overall", cores = 4)
+
+par(mfrow = c(2,2))
+plot.with.model(as.vector(pheno.ind.cor), as.vector(expr.ind.cor[[1]]), report = "cor.test",
+    xlab = "Phenotype Correlations", ylab = "Expression Correlations")
+plot.with.model(as.vector(pheno.ind.cor), as.vector(geno.ind.cor), report = "cor.test",
+    xlab = "Phenotype Correlations", ylab = "Kinship")
+plot.with.model(as.vector(geno.ind.cor), as.vector(expr.ind.cor[[1]]), report = "cor.test",
+    xlab = "Kinship", ylab = "Expression Correlations")
+```
+
+What if we collapse the phenotypes into means by genotype, rather 
+than expanding the gene expression?
+
+```{r collapse_pheno}
+#make strain groups for all the individuals with phenotypes.
+u_strain <- rownames(imp.expr[[1]])
+pheno.strain <- mus.id[match(rownames(clin.pheno), mus.id[,"Barcode.1"]),"User.Defined.Strain"]
+strain.name <- gsub(" x ", "_", gsub(" X ", "_", pheno.strain))
+strain.idx <- lapply(u_strain, function(x) which(strain.name == x))
+
+mean.pheno <- t(sapply(strain.idx, function(x) colMeans(clin.pheno[x,,drop=FALSE], na.rm = TRUE)))
+rownames(mean.pheno) <- u_strain
+
+mean.pheno.cor <- vector(mode = "list", length = length(imp.expr))
+for(tx in 1:length(imp.expr)){
+    tx.expr <- imp.expr[[tx]]
+    not.na <- which(apply(tx.expr, 2, function(x) !all(is.na(x))))
+    tx.expr <- tx.expr[,not.na]
+    trait.trans.cor <- apply(mean.pheno, 2, 
+        function(x) apply(tx.expr, 2, 
+        function(y) cor(x,y, use = "pairwise.complete.obs", method = "spearman")))
+    max.cor <- apply(trait.trans.cor, 1, function(x) max(x, na.rm = TRUE))
 }
 ```
+
+## CC-RIX TWAS
+
+Correlate each imputed transcript with each of the traits.
+
+
+```{r twas}
+
+imp.cor.file <- file.path(results.dir, "TWAS_imputed_expr_trait_cor.RDS")
+
+if(!file.exists(imp.cor.file)){
+    max.imp.cor <- vector(mode = "list", length = length(tissue.expr))
+    names(max.imp.cor) <- tissue.names
+
+    for(tx in 1:length(tissue.expr)){
+        tx.imp <- tissue.expr[[tx]]
+        common.ind <- intersect(rownames(tx.imp), rownames(clin.pheno))
+        imp.max.cor <- apply(tx.imp[common.ind,], 2, 
+            function(x) apply(clin.pheno[common.ind,], 2, 
+            function(y) cor(x, y, use = "pairwise.complete.obs")))
+        #hist(imp.max.cor)    
+        max.imp.cor[[tx]] <- imp.max.cor
+    }
+    saveRDS(max.imp.cor, imp.cor.file)
+}else{
+    max.imp.cor <- readRDS(imp.cor.file)
+}
+
+```
+
+Run permutations to calculate null distributions for the
+correlations.
+
+```{r perm, fig.width = 10, fig.height = 4}
+nperm = 10
+
+cor.perm.file <- file.path(results.dir, "TWAS_imputed_expr_trait_cor_perm.RDS")
+
+if(!file.exists(cor.perm.file)){
+    perm.imp.cor <- vector(mode = "list", length = length(tissue.expr))
+    names(perm.imp.cor) <- tissue.names
+
+    for(tx in 1:length(tissue.expr)){
+        tx.imp <- tissue.expr[[tx]]
+        common.ind <- intersect(rownames(tx.imp), rownames(num.chem))
+        perm.list <- vector(mode = "list", length = nperm)
+        for(p in 1:nperm){
+            print(p)
+            perm.ind <- sample(common.ind)
+            perm.list[[p]] <- apply(tx.imp[common.ind,], 2, 
+                function(x) apply(clin.pheno[perm.ind,], 2, 
+                function(y) cor(x, y, use = "pairwise.complete.obs")))
+            #hist(perm.list[[p]])
+        }
+        perm.imp.cor[[tx]] <- perm.list
+    }
+    saveRDS(perm.imp.cor, cor.perm.file)
+}else{
+    perm.imp.cor <- readRDS(cor.perm.file)
+}
+
+
+#calculate sigificant correlations for imputed transcripts
+#pdf("~/Desktop/twas.pdf", width = 10, height = 4)
+sig.tx <- vector(mode = "list", length = length(tissue.names))
+names(sig.tx) <- tissue.names
+for(tx in 1:length(tx.local.imp)){
+    tx.max.cor <- max.imp.cor[[tx]]
+    tx.perm.cor <- perm.imp.cor[[tx]]
+
+    par(mfrow = c(3,4))
+    for(tr in 1:nrow(tx.max.cor)){
+        obs.dist <- tx.max.cor[tr,which(!is.na(tx.max.cor[tr,]))]
+        null.dist <- unlist(lapply(tx.perm.cor, function(x) x[tr,which(!is.na(x[tr,]))]))
+        obs.dens <- density(obs.dist)
+        null.dens <- density(null.dist)
+        xlim <- c(min(c(obs.dens$x, null.dens$x)), max(c(obs.dens$x, null.dens$x)))
+        ylim <- c(min(c(obs.dens$y, null.dens$y)), max(c(obs.dens$y, null.dens$y)))
+        plot(obs.dens, lty = 1, type = "l", xlim = xlim, ylim = ylim, main = rownames(tx.max.cor)[tr])
+        points(null.dens, lty = 1, type = "l", col = "red")
+    }
+    par(mar = c(4,0,4,4))
+    plot.new()
+    plot.window(xlim = c(0,1), ylim = c(0,1))
+    legend(0, 1, col = c("black", "red"), lty = 1, legend = c("observed", "null"))
+
+    emp.p <- calc.emp.p(unlist(tx.max.cor), unlist(tx.perm.cor))
+    #qqunif.plot(emp.p)
+
+    #Manhattan plot
+    emp.p.names <- sapply(strsplit(names(emp.p), ".", fixed = TRUE), function(x) x[1])
+    tx.idx <- match(emp.p.names, gene.info[,"ensembl_gene_id"])
+    tx.table <- cbind(gene.info[tx.idx,c(1,2,4,5)], emp.p)
+    tx.table$chr[which(tx.table$chr == "X")] <- 20
+    sorted.table <- sort.by.then.by(tx.table, c(3,4), c("n", "n"))
+    not.na <- which(apply(sorted.table, 1, function(x) !all(is.na(x))))
+    sorted.table <- sorted.table[not.na,]
+
+    
+    neg.log.p <- -log10(sorted.table[,"emp.p"])
+    max.p <- max(neg.log.p[which(is.finite(neg.log.p))])
+    neg.log.p[which(!is.finite(neg.log.p))] <- max.p + 1
+    ymax <- max(neg.log.p)
+    
+    layout.mat <- matrix(1:20, nrow = 1)
+    layout(layout.mat)
+    for(ch in 1:20){
+        chr.idx <- which(sorted.table$chr == ch)
+        par(mar = c(4,0,4,0))
+        plot(neg.log.p[chr.idx], type = "h", ylim = c(0, ymax), axes = FALSE,
+            xlab = "")
+        mtext(ch, side = 1, line = -1)
+        abline(h = max.p, col = "red")
+    }
+    mtext(tissue.names[tx], side = 3, line = -2, outer = TRUE) 
+    sig.tx[[tx]] <- sorted.table[which(neg.log.p > max.p),]
+}
+#dev.off()
+
+twas.tissue <- lapply(1:length(sig.tx), function(x) rep(tissue.names[x], nrow(sig.tx[[x]])))
+twas.table <- cbind(Reduce("rbind", sig.tx), unlist(twas.tissue))
+```
+
+
+The table of significant TWAS hits is below.
+
+```{r twas_table}
+colnames(twas.table)[5:6] <- c("p_value", "TWAS_tissue") 
+datatable(twas.table)
+```
+
+```{r test, eval = FALSE}
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    imp.tx <- sapply(strsplit(names(max.imp.cor[[tx]]), ".", fixed = TRUE), function(x) x[1])
+    names(max.imp.cor[[tx]]) <- imp.tx
+    common.tx <- intersect(imp.tx, names(trait.cor[[tx]]))
+    
+    plot.with.model(trait.cor[[tx]][common.tx], abs(max.imp.cor[[tx]][common.tx]),
+        xlab = "Trait Correlation", ylab = "Imputed Trait Correlation",
+        main = tissue.names[tx], report = "cor.test")
+}
+
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    imp.tx <- sapply(strsplit(names(max.imp.cor[[tx]]), ".", fixed = TRUE), function(x) x[1])
+    names(max.imp.cor[[tx]]) <- imp.tx
+    
+    local.var <- tx.distal.herit[[tx]][,"local_var"]
+    common.tx <- intersect(names(max.imp.cor[[tx]]), names(local.var))
+    plot.with.model(local.var[common.tx], abs(max.imp.cor[[tx]][common.tx]),
+        xlab = "Local Variance Explained", ylab = "Imputed Trait Correlation",
+        main = tissue.names[tx], report = "cor.test")
+}
+
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    imp.tx <- sapply(strsplit(names(max.imp.cor[[tx]]), ".", fixed = TRUE), function(x) x[1])
+    names(max.imp.cor[[tx]]) <- imp.tx
+    distal.var <- tx.distal.herit[[tx]][,"residual_variance"]
+    common.tx <- intersect(names(max.imp.cor[[tx]]), names(distal.var))
+    plot.with.model(distal.var[common.tx], abs(max.imp.cor[[tx]][common.tx]),
+        xlab = "Distal Variance Explained", ylab = "Imputed Trait Correlation",
+        main = tissue.names[tx], report = "cor.test")
+}    
+
+```
+
+
+
+########
 
 
 ## Gene Expression and Blood Chemistry {.tabset .tabset-fade .tabset-pills}
@@ -380,7 +697,7 @@ for(i in 1:length(all.chem.expr.cor)){
 
 ### Tissues and Chemistries Separated by Group {.tabset .tabset-fade .tabset-pills}
 
-```{r cor_by_chem_by_group, fig.width = 9, fig.height = 4, results = "asis"}
+```{r cor_by_chem_by_group, fig.width = 9, fig.height = 7, results = "asis"}
 
 for(i in 1:length(all.chem.expr.cor)){
     cat("####", names(all.chem.expr.cor)[i], "\n")

@@ -44,7 +44,7 @@ library("here")
 
 exp.name = "tissue_together-_-complete_mediation-germline_kinship"
 
-prev.results.dir <- here("Results", "High_Dim_Med", exp.name)
+prev.results.dir <- here("Results", "DO", "High_Dim_Med_no_MGE", exp.name)
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}

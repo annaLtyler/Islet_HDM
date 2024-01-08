@@ -27,13 +27,14 @@ plot_with_marginal_hist <- function(x,y, breaksx = 100, breaksy = 100, xhist_pro
         plot(x,y, xlab = xlab, ylab = ylab, xlim = xlim, ylim = ylim, cex = cex, 
             main = main)
     }
+    plot.dim <- par("usr")
     par(mar = c(0,4,4,0))
     hist(x, axes = FALSE, breaks = breaksx, main = "", ylab = "")
-    #axis(2)
-    par(mar = c(4,0,4,4))
+    #axis(1)
+    par(mar = c(4,0,0,4))
     bars <- hist(y, breaks = breaksy, plot = FALSE)
     barplot(bars$density, horiz = TRUE, axes = FALSE)
-    #axis(1)
+    #axis(2)
 
     if(with.model){
         if(report == "lm"){
