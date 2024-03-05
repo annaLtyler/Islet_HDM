@@ -4,7 +4,7 @@
 
 plot.hexbin.as.plot <- function(x, y, xlab, ylab, main, 
     min.cex = 1, max.cex = 3, n.bins = 10, count.scale.fun = NULL,
-    legend.pos = "topright", round.legend = NULL, use.pheatmap.colors = TRUE, 
+    legend.pos = "topright", round.legend = 10, use.pheatmap.colors = TRUE, 
     col.scale = "blue", grad.dir = "high", col.fun = c("linear", "exponential"), 
     exp.steepness = 1){
 

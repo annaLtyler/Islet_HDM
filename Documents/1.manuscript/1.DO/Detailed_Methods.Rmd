@@ -1,0 +1,85 @@
+---
+title: "Detailed Methods for High Dimensional Mediation for Massively Polygenic Traits"
+author: J. Matthew Mahoney and Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+
+## Mice
+
+## Trait measurements
+
+## Trait selection
+
+We filtered the measured traits in this study to a set of 
+relatively non-redundant measures that were well-represented
+in the population (having at least XXX individuals), and spanned 
+multiple aspects of metabolic disease. A complete description of
+trait filtering can be found in File XXX (1b.Trait_Selection.Rmd).
+
+We took two approaches for traits with multiple redundant measurements,
+for example logintudinal body weights. In the case of longitudinal 
+measurements, we used the final measurement, as this was the closest
+physiological measurement to the measurement of gene expression, which
+was done at the end of the experiment. The labels for these traits are 
+have the word "Final" appended to their name. For traits with multiple 
+highly related measurements, such as cholesterol, we used the first
+principal component of the group of measurements. For example, we used 
+the first principal component of all LDL measurements as the measurement 
+of LDL. For each set of traits, we ensured the first principal component 
+had the correct sign by correlating it with the average of the traits. 
+For correlation coefficients (R) less than 0, we multiplied the principal 
+component by -1. The labels for these traits have the term "PC1" appended 
+to their name.
+
+## RNA Sequencing
+
+RNA sequencing was performed as described earlier [cite]. Briefly,...
+
+## Processing of RNA sequencing data
+
+We used the Expectation-Maximization algorithm for Allele Specific Expression 
+(EMASE) [cite] to quantify multi-parent allele-specific and total expression from 
+RNA-seq data for each tissue. EMASE was performed by the Genotype by RNA-seq 
+(GBRS) software package (https://gbrs.readthedocs.io/en/latest/). In the 
+process, R1 and R2 FASTQ files were combined and aligned to a hybridized (8-way) 
+transcriptome generated for the 8 DO founder strains as single-ended reads. GBRS 
+was also used to reconstruct the mouse genotype probabilities along ~69K markers, 
+which was used for confirming genotypes in the quality control (QC) process.
+For the QC process, we used a Euclidean distances method (developed by Greg 
+Keele - Churchill Lab) to compare the GBRS genotype probabilities between the 
+tissues and the genotype probabilities array for all mice. The counts matrix for 
+each tissue was processed to filter out transcripts with less than one read for 
+at least half of the samples. RNA-seq batch effects were removed by regressing 
+out batch as a random effect and considering sex and generation as fixed effects 
+using lme4 R package. RNA-Seq counts were normalized relative to total read counts 
+using the variance stabilizing transform (VST) as implemented in DESeq2 and using 
+rank normal score.
+
+We used R/qtl2 [cite] to perform eQTL analysis. We used the rank normal score 
+data and used sex and DO generation as additive covariates. We also used kinship
+as a random effect. We used permutations to find a LOD threshold of 8 for 
+significant QTLs which corresponded to a $p$ value of 0.05. 
+
+To assess whether eQTL were shared across tissues, we compared eQTLs for 
+each transcript across tissues. Significant eQTLs within 4Mb of each other 
+were considered overlapping. We considered local and distal eQTLs separately.
+
+To estimate local and distal heritability of each transcript, we scaled each
+normalized transcript to have a variance of 1. We then modeled this transcript
+with the local genotype using the fit1() function in R/qtl with a kinship 
+correction. We used the resulting model to predict the transcript values. 
+The variance of the predicted transcript its local heribatility. We then 
+estimated the heritability of the residual of the model fit. The variance
+of the residual multiplied by its heritability is the distal heritability 
+of the transcript. 
+
+We compared local and distal estimates of heritability to measures of trait
+relevance for each transcript. Trait relevance, was the Pearson correlation
+(R) between the transcript and the trait.

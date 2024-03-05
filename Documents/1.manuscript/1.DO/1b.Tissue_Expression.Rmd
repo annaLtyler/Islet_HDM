@@ -37,7 +37,7 @@ Detailed descriptions of mouse handling, phenotype gathering,
 and initial data processing can be found elsewhere. 
 
 Here we focus exclusively on the transcriptomic data from
-five tissues: adipose, heart, islet, liver, and skeletal 
+five tissues: adipose, islet, liver, and skeletal 
 muscle.
 
 I downloaded the following data from the 
@@ -54,9 +54,6 @@ The initial results from Isabela are in
 Results > Isabelas_Results. They are also stored in a Dropbox 
 folder that Gary shared with me. 
 
-There is a transcriptome from the heart, but we are not 
-using those data for this paper. 
-
 ### Transcriptome Decomposition
 
 The following plot shows the PCA for the transcriptomes
@@ -70,7 +67,7 @@ generation.
 
 ```{r here, message = FALSE, warning = FALSE}
 library(here)
-results.dir <- here("Results", "Transcriptomes")
+results.dir <- here("Results", "DO", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
 data.results.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
 if(!file.exists(data.results.dir)){dir.create(data.results.dir)}
@@ -135,7 +132,8 @@ if(remove.pseudogenes){
 
     pred.idx <- grep("predicted", one.gene.info[,"description"], ignore.case = TRUE)
     pseudo.idx <- grep("pseudogene", one.gene.info[,"description"], ignore.case = TRUE)
-    remove.idx <- Reduce("union", list(pred.idx, pseudo.idx))
+    riken.idx <- grep("riken", one.gene.info[,"description"], ignore.case = TRUE)
+    remove.idx <- Reduce("union", list(pred.idx, pseudo.idx, riken.idx))
 
     remove.gene.id <- one.gene.info[remove.idx, "ensembl_gene_id"]
     keep.gene.id <- setdiff(colnames(tissue.data[[tx]]$data$norm), remove.gene.id)
@@ -240,8 +238,7 @@ how well correlated are the levels of expression?
 
 The following plot shows pairwise correlations for the
 average expression value for each transcript common 
-to all tissues. Again, heart and skeletal muscle are 
-the most highly correlated. 
+to all tissues. 
 
 ```{r gene_levels}
 #calculate average expression for all transcripts
@@ -500,7 +497,8 @@ rownames(eqtl.count.table) <- c("Total", "Distal", "Local")
 #barplot(eqtl.table, beside = TRUE)
 layout(matrix(c(1,2), nrow = 1), widths = c(1,0.2))
 par(mar = c(4,4,4,1))
-barplot(eqtl.count.table[c("Local", "Distal"),], col = c("#d95f02", "#1b9e77"))
+barplot(eqtl.count.table[c("Local", "Distal"),], col = c("#d95f02", "#1b9e77"),
+  ylab = "eQTL Count")
 par(mar = c(4,0,4,1))
 plot.new()
 plot.window(xlim = c(0,1), ylim = c(0,1))

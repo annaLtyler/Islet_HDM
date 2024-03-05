@@ -215,28 +215,95 @@ plot.with.model(glu.mat[,"glu_final"], glu.diff, report = "cor.test",
 ```
 
 ```{r ins_hist, eval = FALSE}
-sex.order <- rev(order(as.numeric(as.factor(covar[,1]))))
-glu <- num.pheno[sex.order, "glu_final"]
-weight <- num.pheno[sex.order, "weight_final"]
-sex <- as.numeric(as.factor(covar[sex.order,1]))
+glu <- num.pheno[, "glu_final"]
+weight <- num.pheno[, "weight_final"]
+sex <- as.numeric(as.factor(covar[,1]))
 not.outlier <- which(glu < 800)
 
 pdf("~/Desktop/glucose_weight.pdf", height = 4, width = 4)
-hist_with_points(glu[not.outlier], 
-  col = sex[not.outlier]+2, xlab = "Fasting Glucose (mg/dL)",
-  main = "", xaxis.at = seq(0, 400, 100), ylab = "Count")
-  legend("topright", legend = c("Female", "Male"), pch = 16, col = unique(sex+2))
-glucose.ranges <- c(99, 125) #from https://www.healthline.com/health/diabetes/fasting-glucose-normal-range#nondiabetic-levels
+
+#as densities
+f.locale <- which(sex == 1)
+m.locale <- which(sex == 2)
+f.dens <- density(glu[intersect(f.locale, not.outlier)])
+m.dens <- density(glu[intersect(m.locale, not.outlier)])
+x.max <- max(c(f.dens$x, m.dens$x))
+y.max <- max(c(f.dens$y, m.dens$y))
+fcol <- rgb(126/256, 205/256, 97/256, alpha = 0.5)
+mcol <- rgb(74/256, 149/256, 224/256, alpha = 0.5)
+
+plot.new()
+plot.window(xlim = c(0, x.max), ylim = c(0, y.max))
+plot.poly.xy(poly.top.x = f.dens$x, poly.top.y = f.dens$y, poly.bottom.x = f.dens$x,
+  poly.bottom.y = rep(0, length(f.dens$y)), col = fcol)
+plot.poly.xy(poly.top.x = m.dens$x, poly.top.y = m.dens$y, poly.bottom.x = m.dens$x,
+  poly.bottom.y = rep(0, length(m.dens$y)), col = mcol)
+axis(1)
+axis(2)
+mtext("Fasting Glucose (mg/dL)", side = 1, line = 2.5)
+mtext("Density", side = 2, line = 2.5)
+
+#diabetic range from PMID
+#will need to find real values for this. They vary an unbelievable amount.
+glucose.ranges <- c(250, 300) 
+
 #abline(v = glucose.ranges)
+
+normal.col <- rgb(195/256, 235/256, 173/256)
+pre.col <- rgb(247/256, 220/256, 155/256)
+diab.col <- rgb(239/256, 171/256, 162/256)
+plot.dim = par("usr")
+plot.height <- plot.dim[4] - plot.dim[3]
+draw.rectangle(min(f.dens$x), glucose.ranges[1], 0, 0-(plot.height*0.035), fill = normal.col)
+draw.rectangle(glucose.ranges[1], glucose.ranges[2], 0, 0-(plot.height*0.035), fill = pre.col)
+draw.rectangle(glucose.ranges[2], max(m.dens$x), 0, 0-(plot.height*0.035), fill = diab.col)
+
+legend(225, 0.012, lwd = 10, col = c(fcol, mcol), legend = c("female", "male"), cex = 0.8)
+legend(225, 0.008, fill = c(normal.col, pre.col, diab.col), 
+  legend = c("normal", "pre-diabetes", "diabetes"), cex = 0.8)
 
 plot.with.model(weight[not.outlier], glu[not.outlier], xlab = "Weight (g)",
   ylab = "Fasting Glucose (mg/dL)", col = sex+2)
 
-hist_with_points(num.pheno[sex.order,"weight_final"], col = sex+2,
-  xlab = "Weight (g)", ylab = "Count", main = "")
-  legend("topright", legend = c("Female", "Male"), pch = 16, col = unique(sex+2))
+#as densities
+f.locale <- which(sex == 1)
+m.locale <- which(sex == 2)
+f.bw <- num.pheno[f.locale,"weight_final"]
+f.bw <- f.bw[which(!is.na(f.bw))]
+f.dens <- density(f.bw)
+m.bw <- num.pheno[m.locale,"weight_final"]
+m.bw <- m.bw[which(!is.na(m.bw))]
+m.dens <- density(m.bw)
+x.max <- max(c(f.dens$x, m.dens$x))
+y.max <- max(c(f.dens$y, m.dens$y))
+fcol <- rgb(126/256, 205/256, 97/256, alpha = 0.5)
+mcol <- rgb(74/256, 149/256, 224/256, alpha = 0.5)
 
-plot.with.model(num.pheno[sex.order,"food_ave"], num.pheno[sex.order,"weight_final"],
+plot.new()
+plot.window(xlim = c(0, x.max), ylim = c(0, y.max))
+plot.poly.xy(poly.top.x = f.dens$x, poly.top.y = f.dens$y, poly.bottom.x = f.dens$x,
+  poly.bottom.y = rep(0, length(f.dens$y)), col = fcol)
+plot.poly.xy(poly.top.x = m.dens$x, poly.top.y = m.dens$y, poly.bottom.x = m.dens$x,
+  poly.bottom.y = rep(0, length(m.dens$y)), col = mcol)
+axis(1)
+axis(2)
+mtext("Body Weight (g)", side = 1, line = 2.5)
+mtext("Density", side = 2, line = 2.5)
+
+#avg weight at 20 wks from https://www.jax.org/jax-mice-and-services/strain-data-sheet-pages/body-weight-chart-000664
+f.avg = 25.3; f.dev = 2.8
+m.avg = 34.2; m.dev = 2.9
+plot.dim <- par("usr")
+plot.height <- plot.dim[4] - plot.dim[3]
+draw.rectangle(f.avg - f.dev, f.avg + f.dev, 0, 0-(plot.height*0.035), fill = fcol)
+draw.rectangle(m.avg - m.dev, m.avg + m.dev, 0, 0-(plot.height*0.035), fill = mcol)
+
+legend(45, 0.08, lwd = 10, col = c(fcol, mcol), legend = c("female", "male"), cex = 0.8)
+legend(45, 0.05, fill = c(fcol, mcol), cex = 0.8,
+  legend = c("Avg. wt. (F)", "Avg. wt. (M)"))
+
+
+plot.with.model(num.pheno[,"food_ave"], num.pheno[,"weight_final"],
   ylab = "Weight (g)",
   xlab = "Avg Food Consumption (AU)", col = sex+2)
 
@@ -332,16 +399,14 @@ decreasing again.
 boxplot(tg.mat)
 ```
 
-There also isn't one dimenson of variation.
-Should we use all TG measurements? The first PC?
+I think it probably makes sense to use only the final TG 
+measurement. This will be the most advanced in terms of 
+metabolic disease, and will avoid complicated interpretation 
+of earlier timepoints or principal components.
 
-```{r tg_decomp}
-tg.decomp <- plot.decomp(tg.mat, plot.results = FALSE)
-barplot_with_num(round(tg.decomp$var.exp, 2), ylab = "Variance Explained")
-```
 
 ```{r add_tg}
-final.trait.mat <- cbind(final.trait.mat, tg.mat)
+final.trait.mat <- cbind(final.trait.mat, tg.mat[,"TG_final",drop=FALSE])
 ```
 
 
@@ -358,14 +423,14 @@ final.trait.mat <- cbind(final.trait.mat,
 
 ## Cholesterol
 
-The cholesterol measurements are highly correlated.
+The cholesterol measurements are positively correlated.
 
 
 ```{r chol}
 chol.traits <- c("HDL_3_2a", "HDL_2b", "Mid_Zone", "LDL_IVc", 
   "LDL_IVb", "LDL_IVa", "LDL_IIIb", "LDL_IIIa", "LDL_IIb", 
   "LDL_IIa", "LDL_I", "IDL_2", "IDL_1", "VLDL_sm", "VLDL_int", 
-  "VLDL_lg", "LDL_pk_diam")
+  "VLDL_lg")
 
 chol.mat <- num.pheno[,chol.traits]
 keep.rows <- which(apply(chol.mat, 1, function(x) !all(is.na(x))))
@@ -373,43 +438,55 @@ chol.mat <- chol.mat[keep.rows,]
 pheatmap(cor(chol.mat))
 ```
 
-There are two major axes of variation in this matrix,
-but eight total axes of variation across the individuals. 
+It probably makes sense to divide up the cholesterol 
+measurements by LDL, HDL, etc. For each set of 
+measurements, we will use the first PC to summarize
+the class as a whole. The variance explained by 
+each of these PC1s is shown below. For each class,
+we capture the vast majority of the variation.
 
-```{r chol_decomp, fig.width = 8, fig.height = 4, warning = FALSE}
-chol.decomp <- plot.decomp(chol.mat, plot.results = FALSE, pc = 8)
-barplot_with_num(round(chol.decomp$var.exp, 2), main = "PC Variance Explained",
-  ylab = "Variance Explained", text.srt = 45)
+We test whether each PC is correlated or anticorrelated
+with the average of the values. If it is anticorrelated
+we multipley the PC by -1 to make sure all PCs are 
+covarying as the measurements do.
+
+```{r chol_class}
+chol.class <- c("HDL", "LDL", "IDL", "VLDL")
+class.sep <- sapply(strsplit(chol.traits, "_"), function(x) x[1])
+class.idx <- lapply(chol.class, function(x) which(class.sep == x))
+names(class.idx) <- chol.class
+
+chol.pc.mat <- matrix(NA, nrow = nrow(chol.mat), ncol = length(chol.class))
+rownames(chol.pc.mat) <- rownames(chol.mat)
+colnames(chol.pc.mat) <- chol.class
+
+par(mfrow = c(2,2))
+for(i in 1:length(class.idx)){
+  class.vals <- chol.mat[,class.idx[[i]]]
+  class.decomp <- plot.decomp(class.vals, main = class.sep[i])
+  chol.pc <- class.decomp$u[,1]
+  class.avg <- rowMeans(class.vals)
+  #plot(chol.pc, class.avg)
+  avg.cor <- cor(chol.pc, class.avg)
+  if(avg.cor < 0){
+    chol.pc.mat[,i] <- chol.pc*-1
+  }else{
+    chol.pc.mat[,i] <- chol.pc
+  }
+}
 ```
 
-The PCs of the cholesterol matrix are correlated with the
-original measures in the following way. 
-The first PC captures variance mostly in the LDL and IDL measurements. 
-The second PC captures variance in the VLDL measurements. 
-The third PC is negatively correlated with LDL_pd_diam.
-The fourth PC is negatively correlated with HDL.
+All classes were positively correlated with each other
+as seen in the raw measurements. LDLs and IDLs were most
+positively correlated. 
 
-It looks as if the first four PCs capture the variance
-that is translatable to the traits. We will use the first
-four PCs of this matrix. 
+```{r class_cor}
+pheatmap(cor(chol.pc.mat), display_numbers = TRUE)
+```
 
-```{r chol_pc_cor}
 
-chol.pc <- chol.decomp$u
-pc.cor.mat <- matrix(NA, nrow = ncol(chol.pc), ncol = ncol(chol.mat))
-colnames(pc.cor.mat) <- colnames(chol.mat)
-rownames(pc.cor.mat) <- paste0("PC", 1:nrow(pc.cor.mat))
-for(i in 1:ncol(chol.pc)){
-  pc.cor <- apply(chol.mat, 2, function(x) cor(x, chol.pc[,i], 
-    use = "pairwise.complete.obs"))
-  pc.cor.mat[i,] <- pc.cor
-}
-pheatmap(t(pc.cor.mat), cluster_cols = FALSE)
-
-chol.pc.mat <- chol.decomp$u[,1:4]
-rownames(chol.pc.mat) <- rownames(chol.mat)
-colnames(chol.pc.mat) <- paste0("Chol_PC", 1:ncol(chol.pc.mat))
-
+```{r full_chol_pc_mat}
+#add NAs for individuals without cholesterol measurements
 excluded.names <- setdiff(rownames(final.trait.mat), rownames(chol.pc.mat))
 chol.pc.padding <- matrix(NA, nrow = length(excluded.names), ncol = ncol(chol.pc.mat))
 rownames(chol.pc.padding) <- excluded.names
@@ -502,7 +579,7 @@ The following heatmap shows the correlation matrix
 only for the traits that are included in the final 
 trait set.
 
-```{r remove_traits, warning = FALSE, fig.width = 7, fig.height = 7}
+```{r remove_missing, warning = FALSE, fig.width = 7, fig.height = 7}
 keep.traits <- setdiff(colnames(final.trait.mat), remove.traits)
 pared.traits <- final.trait.mat[,keep.traits]
 
@@ -569,6 +646,43 @@ plot.with.model(rankZ(final.trait.mat[,"fat_pad_weight"]),
 
 ```
 
+## Heritability
+
+The following plot shows the estimated heritablity of each 
+trait. Some traits have very low heritability, but we will 
+not remove them. Heritability estimates have very wide error
+bars, and we don't want to exclude potentially informative 
+traits a priori. 
+
+```{r herit, fig.width = 7, fig.height = 5}
+library(qtl2)
+
+kin.file <- file.path(data.results.dir, "overall.kinship.RDS")
+if(!file.exists(kin.file)){
+  load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata")) #ensembl.version, genoprobs, K, map, markers
+  Kg = calc_kinship(genoprobs, "overall")
+  saveRDS(Kg, kin.file)
+}else{
+  Kg <- readRDS(kin.file)
+}
+
+covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
+num.covar <- dummy_covar(covar)
+rownames(num.covar) <- rownames(num.pheno)
+saveRDS(num.covar, file.path(data.results.dir, "Clinical_Phenotype_Covariates.RDS"))
+
+
+herit  <- est_herit(norm.traits, Kg, addcovar = num.covar)
+ylim <- get_plot_bounds(min.val = 0, max.val = (max(as.numeric(herit))), 
+  scale.factor = 10, return.even = TRUE)
+herit.order <- order(as.numeric(herit))
+par(mar = c(8, 4, 4, 2))
+barplot(as.numeric(herit)[herit.order], names = colnames(norm.traits)[herit.order], las = 2,
+  ylab = "Heritability", ylim = ylim)
+abline(h = seq(0, ylim[2], 0.1), lty = 2, col = "darkgray")
+```
+
+
 ## Adjusting
 
 The phenotypes need to be all on the same scale for
@@ -580,11 +694,6 @@ standardize so that all traits have a variance of 1.
 ```{r adjust}
 
 #adjust out covariates
-covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
-num.covar <- dummy_covar(covar)
-rownames(num.covar) <- rownames(num.pheno)
-saveRDS(num.covar, file.path(data.results.dir, "Clinical_Phenotype_Covariates.RDS"))
-
 #remove sex, wave, and generation from the phenotypes
 adj.pheno <- adjust(norm.traits, num.covar) 
 
@@ -592,7 +701,6 @@ adj.pheno <- adjust(norm.traits, num.covar)
 scaled.pheno <- apply(adj.pheno, 2, function(x) scale(x, center = TRUE, scale = TRUE))
 rownames(scaled.pheno) <- rownames(adj.pheno)
 ```
-
 
 The following plot shows the contributions of each trait to 
 the principal components of the trait matrix. The bars
@@ -602,13 +710,14 @@ The traits are renamed to be more descriptive. These names are
 stored in Data/DO/trait_names.csv
 
 
-```{r trait_pc}
+```{r trait_pc, fig.height = 6, fig.width = 5}
 descriptive_names <- read.csv(here("Data", "DO", "trait_names.csv"), header = FALSE)
+matched_names <- descriptive_names[sapply(colnames(scaled.pheno), function(x) which(descriptive_names[,1] == x)),2]
 
 trait.decomp <- plot.decomp(scaled.pheno, pc = ncol(scaled.pheno), plot.results = FALSE)
 pc.mat <- trait.decomp$v
 colnames(pc.mat) <- paste0("PC", 1:ncol(pc.mat))
-rownames(pc.mat) <- descriptive_names[,2]
+rownames(pc.mat) <- matched_names
 
 #png("~/Desktop/trait_pc.png", width = 6, height = 7, units = "in", res = 100)
 layout(matrix(c(1,2,3), ncol = 1), heights = c(0.5, 1, 0.2))
@@ -629,49 +738,26 @@ Clinical_Phenotypes_Adjusted.RDS
 The names in this final matrix are the same as in the above plot.
 
 ```{r write_data}
+colnames(scaled.pheno) <- matched_names
 saveRDS(scaled.pheno, file.path(data.results.dir, "Clinical_Phenotypes_Adjusted.RDS"))
 ```
 
+The following heatmap shows the trait correlations with their final names.
 
-## Trait Correlation vs. LOD score
+```{r final_cor, fig.height = 7, fig.width = 7}
+pheatmap(cor(scaled.pheno, use = "pairwise.complete.obs"), cellwidth = 12, cellheight = 12)
+```
 
-What is the correlation between a transcript's local eQTL LOD
-score and its correlation to the traits.
+The following plot shows the heritabilities of the final traits with their 
+final names.
 
-```{r trait_lod_cor}
-#read in adjusted expression from 1a.Tissue_Expression.Rmd
-adj.expr <- readRDS(file.path(data.results.dir, "Tissue_Expression_Adjusted.RDS"))
-tissue.names = names(adj.expr)
-#read in transcript information from 1a.Tissue_Expression.Rmd
-gene.tables <- readRDS(file.path(data.results.dir, "Gene_Tables.RDS"))
-#read in local LOD score information from 1a.Tissue_Expression.Rmd
-local.coef <- readRDS(here("Results", "Transcriptomes", "eQTL_coef_local.RDS"))
-
-#for each transcript in each tissue, calculate its maximum 
-#correlation across all traits.
-
-tx.trait.cor.file <- here("Results", "eQTL", "Trait_Transcript_Cor.RDS")
-if(!file.exists(tx.trait.cor.file)){
-  tx.trait.cor <- vector(mode = "list", length = length(tissue.names))
-  names(tx.trait.cor) <- tissue.names
-  for(tx in 1:length(tx.trait.cor)){
-    common.ind <- intersect(rownames(adj.expr[[tx]]), rownames(scaled.pheno))
-    tx.trait.cor[[tx]] <- apply(adj.expr[[tx]][common.ind,], 2, 
-      function(x) max(abs(apply(scaled.pheno[common.ind,], 2, 
-      function(y) cor(x, y, use = "pairwise.complete.obs", method = "spearman")))))
-  }
-  saveRDS(tx.trait.cor, tx.trait.cor.file)
-}else{
-  tx.trait.cor <- readRDS(tx.trait.cor.file)
-}
-
-#plot vs. the local LOD score for each transcript
-#in each tissue
-par(mfrow = c(2,2))
-for(tx in 1:length(local.coef)){
-  gene.idx <- match(local.coef[[tx]]$gene.id, names(tx.trait.cor[[tx]]))
-  plot.with.model(local.coef[[tx]]$lod, tx.trait.cor[[tx]][gene.idx],
-    xlab = "Local eQTL LOD score", ylab = "Maximum Trait Correlation",
-    report = "cor.test", main = tissue.names[tx])
-}
+```{r final_herit, fig.width = 5, fig.height = 4}
+herit  <- est_herit(scaled.pheno, Kg, addcovar = num.covar)
+ylim <- get_plot_bounds(min.val = 0, max.val = (max(as.numeric(herit))), 
+  scale.factor = 10, return.even = TRUE)
+herit.order <- order(as.numeric(herit))
+par(mar = c(8, 4, 4, 2))
+barplot(as.numeric(herit)[herit.order], names = colnames(scaled.pheno)[herit.order], las = 2,
+  ylab = "Heritability", ylim = ylim)
+abline(h = seq(0, ylim[2], 0.1), lty = 2, col = "darkgray")
 ```

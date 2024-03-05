@@ -50,6 +50,53 @@ load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata")) #ensembl.version, genoprobs
 
 ```
 
+## From end of trait selection
+
+## Trait Correlation vs. LOD score
+
+What is the correlation between a transcript's local eQTL LOD
+score and its correlation to the traits.
+
+```{r trait_lod_cor}
+#read in adjusted expression from 1a.Tissue_Expression.Rmd
+adj.expr <- readRDS(file.path(data.results.dir, "Tissue_Expression_Adjusted.RDS"))
+tissue.names = names(adj.expr)
+#read in transcript information from 1a.Tissue_Expression.Rmd
+gene.tables <- readRDS(file.path(data.results.dir, "Gene_Tables.RDS"))
+#read in local LOD score information from 1a.Tissue_Expression.Rmd
+local.coef <- readRDS(here("Results", "DO", "Transcriptomes", "eQTL_coef_local.RDS"))
+
+#for each transcript in each tissue, calculate its maximum 
+#correlation across all traits.
+
+tx.trait.cor.file <- here("Results", "DO", "Transcriptomes", "Trait_Transcript_Cor.RDS")
+if(!file.exists(tx.trait.cor.file)){
+  tx.trait.cor <- vector(mode = "list", length = length(tissue.names))
+  names(tx.trait.cor) <- tissue.names
+  for(tx in 1:length(tx.trait.cor)){
+    common.ind <- intersect(rownames(adj.expr[[tx]]), rownames(scaled.pheno))
+    tx.trait.cor[[tx]] <- apply(adj.expr[[tx]][common.ind,], 2, 
+      function(x) max(abs(apply(scaled.pheno[common.ind,], 2, 
+      function(y) cor(x, y, use = "pairwise.complete.obs", method = "spearman")))))
+  }
+  saveRDS(tx.trait.cor, tx.trait.cor.file)
+}else{
+  tx.trait.cor <- readRDS(tx.trait.cor.file)
+}
+
+#plot vs. the local LOD score for each transcript
+#in each tissue
+par(mfrow = c(2,2))
+for(tx in 1:length(local.coef)){
+  gene.idx <- match(local.coef[[tx]]$gene.id, names(tx.trait.cor[[tx]]))
+  plot.with.model(local.coef[[tx]]$lod, tx.trait.cor[[tx]][gene.idx],
+    xlab = "Local eQTL LOD score", ylab = "Maximum Trait Correlation",
+    report = "cor.test", main = tissue.names[tx])
+}
+```
+
+## End section from trait selection
+
 ## Trait Matrix Decomposition
 
 The trait matrix clusters into several clusters of related traits.
