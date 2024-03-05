@@ -16,16 +16,12 @@ cd $SLURM_SUBMIT_DIR
 
 module load singularity
 
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1a.Tissue_Expression.Rmd"))'
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "1a.Trait_Selection.Rmd"))'
 
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", , "1.manuscript", "1.DO", "1b.Tissue_Expression.Rmd"))'
 
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1b.Trait_Selection.Rmd"))'
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", , "1.manuscript", "1.DO", "2a.Kinship_Expression_Traits.Rmd"))'
 
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", , "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
 
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "2a.Kinship_Expression_Traits.Rmd"))'
-
-
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "3a.Imputation.Rmd"))'
-
-
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "3b.High_Dimensional_Mediation.Rmd"))'
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", , "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
