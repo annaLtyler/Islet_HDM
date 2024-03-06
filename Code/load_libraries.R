@@ -11,7 +11,7 @@ load_libraries <- function(package.names, personal.library = FALSE){
     if(length(to.install) > 0){
 
         if(personal.library){
-            lib.loc <- .libPaths()[1]
+            lib.loc <- .libPaths()[3]
         }else{
             lib.loc <- .libPaths()[2]
         }
