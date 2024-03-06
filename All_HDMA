@@ -10,7 +10,7 @@
 #SBATCH --mail-type=END
 # delete everything in the results folder and then run this pipeline to get clean results
 # it may need to be restarted more than once if it times out
-# example use: sbatch HDMA 
+# example use: sbatch All_HDMA 
 
 cd $SLURM_SUBMIT_DIR
 
@@ -18,10 +18,10 @@ module load singularity
 
 singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "1a.Trait_Selection.Rmd"))'
 
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", , "1.manuscript", "1.DO", "1b.Tissue_Expression.Rmd"))'
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "1b.Tissue_Expression.Rmd"))'
 
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", , "1.manuscript", "1.DO", "2a.Kinship_Expression_Traits.Rmd"))'
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "2a.Kinship_Expression_Traits.Rmd"))'
 
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", , "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
 
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", , "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
