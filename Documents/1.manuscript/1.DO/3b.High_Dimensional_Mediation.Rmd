@@ -46,7 +46,7 @@ For this workflow there are several parameters to set.
 ```{r get_args}
 rm(list = ls()) #clear out R environment
 #args <- commandArgs(trailingOnly=T)
-num.perm = 10
+num.perm = 1000
 
 args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
 #args <- c(1,0,0,1,0) #merged tissues, full imputation, mediation model
@@ -252,13 +252,14 @@ local eQTLs from each transcript. This will
 ensure that none of the local eQTL information
 is in the transcriptomic kernel.
 
-
 After removing the local eQTL effects, mean center 
 and standardize residual transcriptome. 
 
 The phenotypes are already mean centered and scaled.
 
-```{r remove_local_effects}
+```{r remove_local_effects, eval = FALSE}
+#we are removing this for now. 
+#We can use it again later it we decide this is better.
 
 residual.expr.files <- sapply(tissue.names, function(x) file.path(data.results.dir, 
     paste0(x, "_Residual.RDS")))
@@ -288,6 +289,12 @@ for(tx in 1:length(tissue.names)){
     to.keep <- setdiff(1:ncol(residual.expr[[tx]]), na.idx)
     residual.expr[[tx]] <- residual.expr[[tx]][,to.keep]
 }
+```
+
+```{r bypass_regress}
+#this code bypasses the removal of the local effect of genotype
+#in the above code chunk
+residual.expr <- adj.expr
 ```
 
 ```{r scale}
@@ -325,13 +332,41 @@ if(merge.tissues){
 
 ## Build phenotype kernel
 
-```{r pheno_kernel}
+The plot below shows where there are missing values in the
+phenotype matrix. Red indicates missing, blue indicates a filled
+cell. There are a few individuals that are missing a few entries. 
+They are not concentrated in any particular generation or sex.
+
+```{r pheno_missing}
+common.ind <- intersect(rownames(Kt[[1]]), rownames(scaled.pheno))
+
 #select a subset of phenotypes if desired
 #sub.pheno <- scaled.pheno[,c("ins_final", "Glu_tAUC", "Ins_tAUC", "HOMA_B", "HOMA_IR")] #chr 11-related
 #sub.pheno <- scaled.pheno[,c("weight_final", "food_ave", "TG_6", "TG_10", "TG_14", "TG_final", "Chol_PC1", "Chol_PC2", "Chol_PC3", "Chol_PC4", "leptin", "adiponectin", "fat_pad_weight", "adiposity")] #fat-related traits
 #sub.pheno <- scaled.pheno[,c("TG_6wk", "TG_10wk", "TG_14wk")]
-sub.pheno <- scaled.pheno
+sub.pheno <- scaled.pheno[common.ind,]
 
+pheno.missing <- matrix(0, nrow = nrow(sub.pheno), ncol = ncol(sub.pheno))
+pheno.missing[which(is.na(sub.pheno))] <- 1
+pheatmap(pheno.missing, main = "Missing Values")
+
+missing.ind <- which(rowSums(pheno.missing) > 0)
+ismissing <- rep(0, nrow(sub.pheno))
+ismissing[missing.ind] <- 1
+
+#par(mfrow = c(3,3))
+pval <- rep(NA, ncol(covar))
+for(i in 1:ncol(covar)){
+    cont.table <- table(data.frame(cbind(ismissing, covar[common.ind,i])))
+    #barplot(cont.table, beside = TRUE)
+    sig.test <- fisher.test(cont.table)
+    pval[i] <- sig.test$p.value
+}
+barplot(-log10(pval), names = colnames(covar), las = 2, ylab = "-log10(pval)",
+main = "-log10(pval) for Fisher exact test\non missingness contingency table")
+```
+
+```{r pheno_kernel}
 #there are a few missing values. Impute these
 sub.pheno <- knn.impute(sub.pheno)
 
