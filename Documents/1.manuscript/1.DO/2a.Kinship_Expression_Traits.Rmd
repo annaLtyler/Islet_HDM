@@ -59,10 +59,10 @@ score and its correlation to the traits.
 
 ```{r trait_lod_cor}
 #read in adjusted expression from 1a.Tissue_Expression.Rmd
-adj.expr <- readRDS(file.path(data.results.dir, "Tissue_Expression_Adjusted.RDS"))
+adj.expr <- readRDS(file.path(parsed.data.dir, "Tissue_Expression_Adjusted.RDS"))
 tissue.names = names(adj.expr)
 #read in transcript information from 1a.Tissue_Expression.Rmd
-gene.tables <- readRDS(file.path(data.results.dir, "Gene_Tables.RDS"))
+gene.tables <- readRDS(file.path(parsed.data.dir, "Gene_Tables.RDS"))
 #read in local LOD score information from 1a.Tissue_Expression.Rmd
 local.coef <- readRDS(here("Results", "DO", "Transcriptomes", "eQTL_coef_local.RDS"))
 
