@@ -74,9 +74,9 @@ if(!file.exists(tx.trait.cor.file)){
   tx.trait.cor <- vector(mode = "list", length = length(tissue.names))
   names(tx.trait.cor) <- tissue.names
   for(tx in 1:length(tx.trait.cor)){
-    common.ind <- intersect(rownames(adj.expr[[tx]]), rownames(scaled.pheno))
+    common.ind <- intersect(rownames(adj.expr[[tx]]), rownames(pheno))
     tx.trait.cor[[tx]] <- apply(adj.expr[[tx]][common.ind,], 2, 
-      function(x) max(abs(apply(scaled.pheno[common.ind,], 2, 
+      function(x) max(abs(apply(pheno[common.ind,], 2, 
       function(y) cor(x, y, use = "pairwise.complete.obs", method = "spearman")))))
   }
   saveRDS(tx.trait.cor, tx.trait.cor.file)
