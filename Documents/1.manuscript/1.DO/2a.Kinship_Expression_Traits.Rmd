@@ -16,7 +16,7 @@ from 1a.Tissue_Expression.Rmd and 1b.Trait_Selection.Rmd.
 ```{r here, message = FALSE, warning = FALSE}
 rm(list = ls())
 library(here)
-results.dir <- here("Results", "Transcriptomes")
+results.dir <- here("Results", "DO", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
 parsed.data.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
 is.interactive = FALSE #set to true to show verbose reporting of progress on some longer processes
@@ -37,8 +37,8 @@ tissue.names <- names(expr)
 
 common.ind <- Reduce("intersect", lapply(expr, rownames))
 ind.matched.expr <- lapply(expr, function(x) x[common.ind,])
-local.lod <- readRDS(here("Results", "DO", "Transcriptomes", "Local_LOD.RDS")) #generated in 1a.Tissue_Expression.Rmd
-gene.tables <- readRDS(file.path(parsed.data.dir, "Gene_Tables.RDS")) #generated in 1a.Tissue_Expression.Rmd
+local.lod <- readRDS(here("Results", "DO", "Transcriptomes", "Local_LOD.RDS")) #generated in 1b.Tissue_Expression.Rmd
+gene.tables <- readRDS(file.path(parsed.data.dir, "Gene_Tables.RDS")) #generated in 1b.Tissue_Expression.Rmd
 
 pheno <- readRDS(file.path(parsed.data.dir, "Clinical_Phenotypes_Adjusted.RDS")) #generated in 1b.Trait_Selection.Rmd
 pheno.names <- colnames(pheno)

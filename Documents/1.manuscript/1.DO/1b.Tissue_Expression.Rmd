@@ -1160,7 +1160,7 @@ all.tx <- Reduce("union", tissue.tx)
 
 #calculate all local LOD scores for future comparisons
 #and thresholding
-local.lod.file <- here("Results", "Transcriptomes", "Local_LOD.RDS")
+local.lod.file <- here("Results", "DO", "Transcriptomes", "Local_LOD.RDS")
 if(!file.exists(local.lod.file) || overwrite.results){
   local.lod <- sapply(local.coef, function(x) x$lod[match(all.tx, x$gene.id)])
   rownames(local.lod) <- all.tx
