@@ -1372,8 +1372,8 @@ dev.off()
 #write out gene lists for each cluster
 gene.lists <- toa.results[[2]]
 for(g in 1:length(gene.lists)){
-    file.name <- paste0(gsub(" ", "_", names(gene.lists)[g]), "_cluster.txt")
-    write.table(gene.lists[[g]], here("Results", "DO", "Gene_Sets", file.name),
+    file.name <- file.path(results.dir, paste0(gsub(" ", "_", names(gene.lists)[g]), "_cluster.txt"))
+    write.table(gene.lists[[g]], file.name,
         sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
 }
 
