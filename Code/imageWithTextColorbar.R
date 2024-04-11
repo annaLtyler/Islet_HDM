@@ -15,7 +15,7 @@ color.fun = c("linear", "exponential"), exp.steepness = 1, color.spread = 50,
 global.color.scale = FALSE, global.min = NULL, global.max = NULL,
 axis.line = 0, use.pheatmap.colors = FALSE, round.nearest = 1, 
 ax.min = NULL, ax.max = NULL, n.ax.ticks = NULL, hadj = NA, padj = NA, 
-bounding.box = TRUE, bar.lwd = 1){
+bounding.box = TRUE, bar.lwd = 1,  las = 1){
 
 		require(grid)
 	
@@ -233,7 +233,7 @@ bounding.box = TRUE, bar.lwd = 1){
 				segments(x0 = rep(0, nrow(num.mat)), x1 = rep(1, nrow(num.mat)),
 				y0 = num.mat[,1], col = col.key[,2], lwd = bar.lwd)
             }
-        axis(axis.side, line = axis.line, cex.axis = cex, at = at, padj = padj, hadj = hadj)
+        axis(axis.side, line = axis.line, cex.axis = cex, at = at, padj = padj, hadj = hadj, las = las)
 			
 					
 		par(mar = c(5.1, 4.1, 4.1, 2.1))

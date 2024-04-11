@@ -10,7 +10,7 @@
 #from a mixture of ontologies.
 
 plot.enrichment.wordcloud <- function(enrichment, num.terms = 10, plot.label = "", 
-    max.term.size = NULL, max.p.val = 0.05, order.by = c("default", "p_value"), 
+    max.term.size = NULL, max.p.val = 0.05, order.by = c("p_value", "default"), 
     decreasing = FALSE, plot.results = TRUE, vertex.label.cex = 1, vertex.label.dist = 1, 
     max.vertex.cex = 30, max.edge.lwd = 5, colors = "black", net_layout = layout_nicely,
     just.wordcloud = FALSE, min.cex = 0.5, max.cex = 5, title.cex = 1, title.font = 2){

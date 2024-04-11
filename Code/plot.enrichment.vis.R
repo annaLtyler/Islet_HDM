@@ -5,7 +5,7 @@
 #This function has been updated to 
 
 plot.enrichment.vis <- function(enrichment, num.terms = 10, text.size = 1, 
-order.by = c("gprofiler", "p_value", "overlap_size", "term_size"), 
+order.by = c("p_value", "gprofiler", "overlap_size", "term_size"), 
 decreasing = FALSE, plot.label = "Enrichment", highlight.terms = NULL, 
 highlight.col = "#1f78b4", mar = c(5,20,4,4), max.term.size = NULL){
 	

@@ -7,8 +7,8 @@
 imageWithText <- function(mat, xlab = "", ylab = "", main = NULL, main.shift = 0.12, 
 col.names = colnames(mat), row.names = rownames(mat), row.text.adj = 1, row.text.shift = 0, 
 row.text.rotation = 0, col.text.rotation = 90, col.text.adj = 1, 
-col.text.shift = 0, show.text = TRUE, cex = 0.5, col.text.cex = 1, 
-row.text.cex = 1, main.cex = 1, split.at.vals = FALSE, split.points = 0, 
+col.text.shift = 0, col.text.font = 1, show.text = TRUE, cex = 0.5, col.text.cex = 1, 
+row.text.cex = 1, row.text.font = 1, main.cex = 1, split.at.vals = FALSE, split.points = 0, 
 col.scale = "gray", color.spread = 50, light.dark = "f", class.mat = NULL, 
 grad.dir = c("high", "low", "middle", "ends"), color.fun = c("linear", "exponential"), 
 exp.steepness = 1, global.color.scale = FALSE, global.min = NULL, global.max = NULL, 
@@ -230,7 +230,8 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 			par(xpd = TRUE)
 			plot.range <- max(y.coord) - min(y.coord)
 			col.text.y <- min(y.coord) - (plot.range*(col.text.shift)) #positive numbers move out of plotting area
-			text((x.coord[1,]), col.text.y, labels = col.names, srt = col.text.rotation, adj = col.text.adj, cex = col.text.cex)
+			text((x.coord[1,]), col.text.y, labels = col.names, srt = col.text.rotation, 
+				adj = col.text.adj, cex = col.text.cex)
 			}
 
 		if(!is.null(row.names)){
@@ -240,8 +241,22 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 			par(xpd = TRUE)
 			plot.range <- (max(x.coord) - min(x.coord))
 			row.text.x <- min(x.coord) - (plot.range*(row.text.shift)) #positive numbers move out of plotting area
-			text(row.text.x, y.coord[,1], labels = rev(row.names), adj = row.text.adj, cex = row.text.cex, srt = row.text.rotation)
+			if(length(row.text.font) == 1){
+				text(row.text.x, y.coord[,1], labels = rev(row.names), adj = row.text.adj, 
+					cex = row.text.cex, srt = row.text.rotation, font = row.text.font)
 			}
+			else{
+				if(length(row.text.font) != nrow(y.coord)){
+					stop("row.text.font must either be a single number or a 
+					vector the same length as the number of rows.")
+				}else{
+				for(rt in 1:nrow(y.coord)){
+					text(row.text.x, y.coord[rt,1], labels = rev(row.names)[rt],
+					adj = row.text.adj, cex = row.text.cex, srt = row.text.rotation, font = row.text.font[rt])
+					}
+				}
+			}
+		}
 
 
 	}

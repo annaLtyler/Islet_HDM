@@ -65,8 +65,8 @@ library("here")
 
 data.dir <- here("Data", "CC-RIX") #directory holding original data
 
-data.results.dir <- here("Results", "CC-RIX", "Data") #directory holding parsed data for downstream workflows
-if(!file.exists(data.results.dir)){dir.create(data.results.dir)}
+parsed.data.dir <- here("Results", "CC-RIX", "Data") #directory holding parsed data for downstream workflows
+if(!file.exists(parsed.data.dir)){dir.create(parsed.data.dir, recursive = TRUE)}
 
 results.dir <- here("Results", "CC-RIX", "Data_Exploration") #directory holding visualizations from this workflow
 if(!file.exists(results.dir)){dir.create(results.dir)}
@@ -109,11 +109,11 @@ want to subdivide along these groups in the future.
 ```{r covar}
 factor.covar <- annot[,c("Sex", "Age", "RNAseq_Batch", "Diet", "Treatment")]
 rownames(factor.covar) <- annot[,1]
-write.csv(factor.covar, file.path(data.results.dir, "Covar.csv"))
+write.csv(factor.covar, file.path(parsed.data.dir, "Covar.csv"))
 
 group.def <- c("Sex", "Diet", "Treatment") #use these factors to define groups
 groups <- unique(factor.covar[,group.def])
-write.csv(groups, file.path(data.results.dir, "Groups.csv"), quote = FALSE)
+write.csv(groups, file.path(parsed.data.dir, "Groups.csv"), quote = FALSE)
 #covar.mat <- dummy_covar(factor.covar)
 ```
 
@@ -144,10 +144,10 @@ for(i in 1:length(expr)){
     expr.covar <- dummy_covar(expr.mouse.info.table[,c("Sex", "Diet", "Treatment", "Timepoint")])
     adj.expr[[i]] <- adjust(expr[[i]], expr.covar)
 }
-saveRDS(expr, file.path(data.results.dir, "Expression.by.Tissue.RDS"))
+saveRDS(expr, file.path(parsed.data.dir, "Expression.by.Tissue.RDS"))
 
 #also save expression adjusted for all covariates
-saveRDS(adj.expr, file.path(data.results.dir, "Expression.by.Tissue.Adjusted.RDS"))
+saveRDS(adj.expr, file.path(parsed.data.dir, "Expression.by.Tissue.Adjusted.RDS"))
 
 ```
 
@@ -297,7 +297,7 @@ pheatmap(pred.weight.mat[weight.order,], cluster_rows = FALSE, cluster_cols = FA
 
 mouse.weight.val <- apply(pred.weight.mat, 1, function(x) x[max(which(!is.na(x)))])
 #hist(mouse.weight.val, breaks = 100)
-write.table(mouse.weight.val, file.path(data.results.dir, "Weight.Summarized.csv"), 
+write.table(mouse.weight.val, file.path(parsed.data.dir, "Weight.Summarized.csv"), 
 col.names = "Body.Weight", sep = ",")
 ```
 
@@ -376,7 +376,7 @@ for(g in 1:nrow(groups)){
     cat("\n\n")
 }   
 
-write.csv(chem.mat, file.path(data.results.dir, "Blood.Chemistries.Summarized.csv"))
+write.csv(chem.mat, file.path(parsed.data.dir, "Blood.Chemistries.Summarized.csv"))
 ```
 
 ## Gene Expression and Blood Chemistry {.tabset .tabset-fade .tabset-pills}

@@ -6,7 +6,8 @@ plot.hexbin.as.plot <- function(x, y, xlab, ylab, main,
     min.cex = 1, max.cex = 3, n.bins = 10, count.scale.fun = NULL,
     legend.pos = "topright", round.legend = 10, use.pheatmap.colors = TRUE, 
     col.scale = "blue", grad.dir = "high", col.fun = c("linear", "exponential"), 
-    exp.steepness = 1){
+    exp.steepness = 1, light.dark = "f", custom.colors = NULL, legend.bg = par("bg"),
+    with.model = FALSE, report = "lm", xlim = NULL, ylim = NULL){
 
     if(missing(main)){main = ""}
 	if(missing(xlab)){xlab = deparse(substitute(x))}
@@ -22,17 +23,31 @@ plot.hexbin.as.plot <- function(x, y, xlab, ylab, main,
         cols <- colors.from.values(count.scale.fun(hb@count), 
         use.pheatmap.colors = use.pheatmap.colors,
         col.scale = col.scale, grad.dir = grad.dir, 
-        color.fun = col.fun, exp.steepness = exp.steepness)    
+        color.fun = col.fun, exp.steepness = exp.steepness, light.dark = light.dark,
+        custom.colors = custom.colors) 
     }else{
         cols <- colors.from.values(hb@count, use.pheatmap.colors = use.pheatmap.colors,
-        col.scale = col.scale, grad.dir = grad.dir, color.fun = col.fun, 
-        exp.steepness = exp.steepness)    
+        col.scale = col.scale, grad.dir = grad.dir, color.fun = col.fun, light.dark = light.dark,
+        exp.steepness = exp.steepness, custom.colors = custom.colors)    
     }
     
-    plot(xy, xlab = xlab, 
+    plot.order = order(pt.cex, decreasing = FALSE)
+    plot(lapply(xy, function(x) x[plot.order]), xlab = xlab, 
         ylab = ylab, pch = 16,
-        main = main, col = cols, 
-        cex = pt.cex)
+        main = main, col = cols[plot.order], 
+        cex = pt.cex[plot.order], xlim = xlim, ylim = ylim)
+
+    if(with.model){
+        model <- lm(y~x)
+        stats <- plot.with.model(x, y, report = report, plot.results = FALSE)
+        abline(model)
+        if(report == "lm"){
+            stat.text <- paste0("R2 = ", signif(stats[1]), "; p = ", signif(stats[2]))
+        }else{
+            stat.text <- paste0("r = ", signif(stats[1]), "; p = ", signif(stats[2]))
+        }
+        mtext(stat.text, side = 3)
+    }
     
     bins <- sort(unique(hb@count))
     if(is.null(round.legend)){
@@ -44,9 +59,10 @@ plot.hexbin.as.plot <- function(x, y, xlab, ylab, main,
     rounded.bins[which(rounded.bins == 0)] <- 1
 
     bin.cols <- colors.from.values(rounded.bins, use.pheatmap.colors = use.pheatmap.colors,
-    col.scale = col.scale, grad.dir = grad.dir, color.fun = col.fun, exp.steepness = exp.steepness)
+    col.scale = col.scale, grad.dir = grad.dir, color.fun = col.fun, exp.steepness = exp.steepness,
+    light.dark = light.dark, custom.colors = custom.colors)
 
     bin.cex <- scale.between.vals(rounded.bins, target.min = min.cex, target.max = max.cex)
-    legend(legend.pos, legend = rounded.bins, col = bin.cols, pch = 16)
+    legend(legend.pos, legend = rounded.bins, col = bin.cols, pch = 16, bg = legend.bg)
 
 }

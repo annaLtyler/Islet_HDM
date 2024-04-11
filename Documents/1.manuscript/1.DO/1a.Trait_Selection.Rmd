@@ -655,7 +655,7 @@ not remove them. Heritability estimates have very wide error
 bars, and we don't want to exclude potentially informative 
 traits a priori. 
 
-```{r herit, fig.width = 7, fig.height = 5}
+```{r herit, fig.width = 5, fig.height = 5}
 library(qtl2)
 
 kin.file <- file.path(data.results.dir, "overall.kinship.RDS")
@@ -672,15 +672,32 @@ num.covar <- dummy_covar(covar)
 rownames(num.covar) <- rownames(num.pheno)
 saveRDS(num.covar, file.path(data.results.dir, "Clinical_Phenotype_Covariates.RDS"))
 
-
 herit  <- est_herit(norm.traits, Kg, addcovar = num.covar)
-ylim <- get_plot_bounds(min.val = 0, max.val = (max(as.numeric(herit))), 
+herit_error <- est_herit_error(norm.traits, Kg)
+herit.min <- as.numeric(herit) - herit_error
+herit.max <- as.numeric(herit) + herit_error
+ylim <- get_plot_bounds(min.val = min(herit.min), max.val = max(herit.max), 
   scale.factor = 10, return.even = TRUE)
 herit.order <- order(as.numeric(herit))
-par(mar = c(8, 4, 4, 2))
-barplot(as.numeric(herit)[herit.order], names = colnames(norm.traits)[herit.order], las = 2,
-  ylab = "Heritability", ylim = ylim)
-abline(h = seq(0, ylim[2], 0.1), lty = 2, col = "darkgray")
+
+plot.new()
+plot.window(xlim = c(min(herit.min), max(herit.max)), ylim = c(1, length(herit)))
+segments(y0 = 1:length(herit), x0 = herit.min[herit.order], x1 = herit.max[herit.order])
+segments(y0 = 1:length(herit)-0.2, y1 = 1:length(herit)+0.2, x0 = herit.min[herit.order])
+segments(y0 = 1:length(herit)-0.2, y1 = 1:length(herit)+0.2, x0 = herit.max[herit.order])
+points(y = 1:length(herit), x = herit[herit.order], pch = 16, cex = 1.5, col = "darkgray")
+axis(1)
+abline(v = 0)
+abline(v = seq(0.1, 0.6, 0.1), lty = 2, col = "gray")
+mtext("Heritability", side = 1, line = 2)
+
+par(xpd = NA)
+text(y = 1:length(herit), x = min(herit.min)-0.01, labels = names(herit)[herit.order], 
+  adj = 1)
+par(xpd = TRUE)
+#barplot(as.numeric(herit)[herit.order], names = colnames(norm.traits)[herit.order], las = 2,
+#  ylab = "Heritability", ylim = ylim)
+#abline(h = seq(0, ylim[2], 0.1), lty = 2, col = "darkgray")
 ```
 
 
@@ -752,13 +769,28 @@ pheatmap(cor(scaled.pheno, use = "pairwise.complete.obs"), cellwidth = 12, cellh
 The following plot shows the heritabilities of the final traits with their 
 final names.
 
-```{r final_herit, fig.width = 5, fig.height = 4}
+```{r final_herit, fig.width = 5, fig.height = 5}
+
 herit  <- est_herit(scaled.pheno, Kg, addcovar = num.covar)
-ylim <- get_plot_bounds(min.val = 0, max.val = (max(as.numeric(herit))), 
-  scale.factor = 10, return.even = TRUE)
+herit_error <- est_herit_error(scaled.pheno, Kg)
+max.herit <- as.numeric(herit) + herit_error
+min.herit <- as.numeric(herit) - herit_error
+xlim <- get_plot_bounds(min.val = 0, max.val = (max(max.herit)), 
+  scale.factor = 20, return.even = TRUE)
 herit.order <- order(as.numeric(herit))
-par(mar = c(8, 4, 4, 2))
-barplot(as.numeric(herit)[herit.order], names = colnames(scaled.pheno)[herit.order], las = 2,
-  ylab = "Heritability", ylim = ylim)
-abline(h = seq(0, ylim[2], 0.1), lty = 2, col = "darkgray")
+
+par(mar = c(4, 8, 4, 2))
+plot.new()
+plot.window(xlim = xlim, ylim = c(0, length(herit)))
+segments(x0 = min.herit[herit.order], x1 = max.herit[herit.order], y0 = 1:length(herit))
+segments(x0 = min.herit[herit.order], y0 = 1:length(herit)-0.2, y1 = 1:length(herit)+0.2)
+segments(x0 = max.herit[herit.order], y0 = 1:length(herit)-0.2, y1 = 1:length(herit)+0.2)
+points(y = 1:length(herit), x = as.numeric(herit)[herit.order])
+abline(v = seq(0, xlim[2], 0.1), lty = 2, col = "gray")
+axis(1)
+mtext("Heritability", side = 1, line = 2.5)
+par(xpd = NA)
+text(x = min(min.herit)-0.02, y = 1:length(herit), gsub("_", " ", names(max.herit)[herit.order]), adj = 1)
+par(xpd = TRUE)
+
 ```

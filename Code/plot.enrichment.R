@@ -4,9 +4,9 @@
 #gprofiler
 
 plot.enrichment <- function(enrichment, num.terms = 10, text.size = 1, 
-order.by = c("gprofiler", "p_value", "overlap_size", "term_size"), 
+order.by = c("p_value", "gprofiler", "overlap_size", "term_size"), 
 decreasing = FALSE, plot.label = "Enrichment", max.term.size = NULL,
-title.color = "black"){
+max.char = 40, title.color = "black"){
 
 if(class(enrichment) == "list"){
 		enrichment <- enrichment[[1]]
@@ -32,8 +32,20 @@ if(class(enrichment) == "list"){
 		}	
 	
 	total.lines = 20
+
+	trim.name <- function(term.name, max.char){
+		split.name <- strsplit(term.name, "")
+		name.len <- length(split.name[[1]])
+		if(name.len < max.char){
+			return(term.name)
+			}else{
+			paste.name <- paste0(paste0(split.name[[1]][1:max.char], collapse = ""), "...", collapse = "")
+			return(paste.name)
+			}	
+	}
+
 		
-	par(mar = c(0,4,4,4))
+	#par(mar = c(0,4,4,4))
 	split.text <- unlist(strsplit(enrichment[,"term_name"], ";"))
 	split.text <- split.text[which(split.text != "")]
 	num.terms <- min(c(num.terms, nrow(enrichment)))
@@ -42,7 +54,13 @@ if(class(enrichment) == "list"){
 	columns.to.write <- c("term_name", "term_size", "query_size", "intersection_size", "p_value", "source")
 
 	sub.table <- enrichment[1:num.terms,columns.to.write]
-	colnames(sub.table) <- c("term", "N-term", "N-query", "overlap", "p_value", "domain")
+	colnames(sub.table) <- c("term", "N-term", "N-query", "overlap", "p value", "domain")
+
+	if(!is.null(max.char)){
+	trimmed.names <- sapply(sub.table[,"term"], function(x) trim.name(x, max.char))
+	sub.table[,"term"] <- trimmed.names
+	}
+
 
 	x.pts <- c(0.4, segment.region(0.55, 1, (ncol(sub.table) - 1), alignment = "ends"))	
 	if(nrow(sub.table) > 1){
@@ -52,7 +70,7 @@ if(class(enrichment) == "list"){
 		y.start = 0.51	
 		y.end = 0.49
 		}
-	y.pts <- segment.region(y.start,y.end, (num.terms+1))
+	y.pts <- segment.region(y.start,y.end, (num.terms+1), "ends")
 	# min.gap = 0.03; maj.gap = 0.08
 	y.pts.dist <- mean(apply(consec_pairs(y.pts), 1, function(x) x[1] - x[2]))
 
@@ -73,9 +91,9 @@ if(class(enrichment) == "list"){
 				#on the first line, print the whole sub.table row with the first phenotype
 				plot.vector = c(tolower(split.text[s]), sub.table[d,2:ncol(sub.table)])
 				x.vals <- x.pts
-				y.vals <- rep(y.pts[d], length(plot.vector))
+				y.vals <- rep(y.pts[(d+1)], length(plot.vector))
 				}else{
-				split.y <- segment.region(y.pts[d], y.pts[(d+1)]+(y.pts.dist/5), length(split.text))
+				split.y <- segment.region(y.pts[(d+1)], y.pts[(d+1)]+(y.pts.dist/5), length(split.text))
 				#on subsequent phenotype rows, only print phenotype
 				# y.pt = y.pt - min.gap
 				plot.vector = tolower(split.text[s])

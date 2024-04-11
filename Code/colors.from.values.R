@@ -7,6 +7,10 @@ grad.dir = c("high", "low", "middle", "ends"), color.fun = c("linear", "exponent
 exp.steepness = 1, global.color.scale = FALSE, global.min = NULL, global.max = NULL, 
 use.pheatmap.colors = FALSE, na.col = "lightgray", custom.colors = NULL){
 
+		if(length(custom.colors) > 0){
+			if(length(custom.colors) < 4){stop("custom.colors should be a vector of four values.")}
+		}
+
 		require(grid)
 	 	class.mat = NULL
 		#make sure Inf and -Inf are coded as NA

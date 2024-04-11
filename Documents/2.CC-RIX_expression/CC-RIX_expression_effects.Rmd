@@ -55,7 +55,7 @@ is.interactive <- FALSE
 This report shows results for `r tissue.name` tissue.
 
 ## Load data and code
-n
+
 ```{r source_code}
 library("here")
 all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
