@@ -2,8 +2,8 @@ plot.grouped.boxes <- function(group.list, group.labels = names(group.list),
 group.cols = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3"),
 main = "", type = c("list", "matrix"), plot.grouping = c("outer", "inner"),
 plot.type = c("box", "strip"), print.vals = c("mean", "median"), ylab = "",
-text.cex = 0.7, label.srt = 0, legend.x = NULL, legend.y = NULL, notch = FALSE,
-cex = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group.sep = 1.3){
+stats.cex = 0.7, label.srt = 0, legend.x = NULL, legend.y = NULL, notch = FALSE,
+cex = 1, cex.names = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group.sep = 1.3){
 
 	oldPar <- par(no.readonly = TRUE)
 	on.exit(oldPar)
@@ -73,9 +73,9 @@ cex = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group.sep = 1.3){
 					print.val1 <- signif(median(data.vals, na.rm = TRUE), 2)
 					}
 				print.val2 <- signif(sd(data.vals, na.rm = TRUE), 2)
-				text(x = box.pos, y = (ymin - (plot.height*0.05)), labels = print.val1, cex = text.cex)
-				text(x = box.pos, y = (ymin - (plot.height*0.075)), labels = "+/-", cex = text.cex)
-				text(x = box.pos, y = (ymin - (plot.height*0.1)), labels = print.val2, cex = text.cex)
+				text(x = box.pos, y = (ymin - (plot.height*0.05)), labels = print.val1, cex = stats.cex)
+				text(x = box.pos, y = (ymin - (plot.height*0.075)), labels = "+/-", cex = stats.cex)
+				text(x = box.pos, y = (ymin - (plot.height*0.1)), labels = print.val2, cex = stats.cex)
 				par(xpd = FALSE)
 				}
 
@@ -89,7 +89,8 @@ cex = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group.sep = 1.3){
 			} #end looping through groups
 		#write a label for the group
 		par(xpd = TRUE)
-		text(x = mean(group.pos), y = (ymin - (plot.height*0.15)), labels = label, srt = label.srt)
+		text(x = mean(group.pos), y = (ymin - (plot.height*0.15)), labels = label, srt = label.srt, 
+			cex = cex.names)
 		par(xpd = FALSE)
 		} #end looping through group elements
 

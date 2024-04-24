@@ -142,6 +142,7 @@ saveRDS(cc.avg.expr, cc.avg.expr.file)
 The imputation process is as follows:
 
 For each transcript in each tissue, 
+
   1. identify the nearest marker
   2. find the genotype at that marker for each CC F1
   3. multiply the local eQTL coefficients by the F1 genotypes 

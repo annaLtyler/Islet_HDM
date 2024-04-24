@@ -1,13 +1,16 @@
 #This plots a hexbin plot using a regular plotting function so 
 #we can get multiple plots on one page. I'm still not sure how
 #do to it when plotting an actual hexbin object.
+#setting legend.pos to NA suppresses plotting of the legend
+#write.results is for plot.with.model. Setting to FALSE suppresses
+#the written r and p values.
 
 plot.hexbin.as.plot <- function(x, y, xlab, ylab, main, 
     min.cex = 1, max.cex = 3, n.bins = 10, count.scale.fun = NULL,
     legend.pos = "topright", round.legend = 10, use.pheatmap.colors = TRUE, 
     col.scale = "blue", grad.dir = "high", col.fun = c("linear", "exponential"), 
     exp.steepness = 1, light.dark = "f", custom.colors = NULL, legend.bg = par("bg"),
-    with.model = FALSE, report = "lm", xlim = NULL, ylim = NULL){
+    with.model = FALSE, report = "lm", write.results = TRUE, xlim = NULL, ylim = NULL){
 
     if(missing(main)){main = ""}
 	if(missing(xlab)){xlab = deparse(substitute(x))}
@@ -41,10 +44,14 @@ plot.hexbin.as.plot <- function(x, y, xlab, ylab, main,
         model <- lm(y~x)
         stats <- plot.with.model(x, y, report = report, plot.results = FALSE)
         abline(model)
-        if(report == "lm"){
-            stat.text <- paste0("R2 = ", signif(stats[1]), "; p = ", signif(stats[2]))
+        if(write.results){
+            if(report == "lm"){
+                stat.text <- paste0("R2 = ", signif(stats[1]), "; p = ", signif(stats[2]))
+            }else{
+                stat.text <- paste0("r = ", signif(stats[1]), "; p = ", signif(stats[2]))
+            }
         }else{
-            stat.text <- paste0("r = ", signif(stats[1]), "; p = ", signif(stats[2]))
+            stat.text = ""
         }
         mtext(stat.text, side = 3)
     }
@@ -63,6 +70,12 @@ plot.hexbin.as.plot <- function(x, y, xlab, ylab, main,
     light.dark = light.dark, custom.colors = custom.colors)
 
     bin.cex <- scale.between.vals(rounded.bins, target.min = min.cex, target.max = max.cex)
-    legend(legend.pos, legend = rounded.bins, col = bin.cols, pch = 16, bg = legend.bg)
+    if(!is.na(legend.pos)){
+        legend(legend.pos, legend = rounded.bins, col = bin.cols, pch = 16, bg = legend.bg)
+    }
+
+    if(with.model){
+        invisible(stats)
+    }
 
 }

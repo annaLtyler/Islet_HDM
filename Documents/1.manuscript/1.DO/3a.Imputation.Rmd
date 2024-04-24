@@ -14,8 +14,6 @@ bibliography: hdm.bib
 ```{r param}
 rm(list = ls()) #clear out previous R environment
 remove.pseudogenes = TRUE #if TRUE, removes pseudogenes and predicted genes 
-tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
-tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
 is.interactive = FALSE
 overwrite.results = FALSE #set to TRUE to overwrite previous results
 ```
@@ -92,7 +90,11 @@ pseudogenes in previous workflows. See code for details.
 #scaled
 adj.expr <- readRDS(file.path(data.results.dir, "Tissue_Expression_Adjusted.RDS")) 
 tissue.names <- names(adj.expr)
-tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
+#tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
+#tissue.cols  <- colors.from.values(1:length(tissue.names), split.at.vals = TRUE, #nicer colors
+#    split.points = seq(0.5, 4.5, 1), 
+#    col.scale = c("blue", "red", "green", "purple"), light.dark = "d")
+tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
 
 #mean center and standardize gene expression so all variances are 1
 scaled.expr <- lapply(adj.expr, function(x) apply(x, 2, scale))
@@ -356,14 +358,25 @@ local.distal.comp <- list("Local" = Reduce("cbind", lapply(local.var.exp, functi
 for(i in 1:length(local.distal.comp)){
     colnames(local.distal.comp[[i]]) <- tissue.names
 }
+#display.brewer.all()
+local.col <- brewer.pal(9, "BrBG")[2]
+distal.col <- brewer.pal(9, "Greys")[6]
 plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "Variance Explained",
-    main = "Variance Explained by Local and Distal Components")
+    main = "Variance Explained by Local and Distal Components", group.cols = c(local.col, distal.col))
+```
+
+```{r local_v_distal_fig, eval = FALSE}
+pdf("~/Desktop/local_distal.pdf", width = 8, height = 6)
+plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "",
+    main = "", group.cols = c(local.col, distal.col), cex.names = 1.5)
+mtext("Variance Explained", side = 2, line = 2.5, cex = 1.5)
+dev.off()
 ```
 
 ```{r fig, eval = FALSE}
 par(mar = c(3,4,1,2))
 plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "Variance Explained",
-    main = "")
+    main = "", group.cols = c(local.col, distal.col))
 ```
 
 ## Heritability and Trait Relevance
@@ -422,9 +435,9 @@ names(trait.cor) <- tissue.names
 The following plots are the same as above, but show the linear fit.
 
 ```{r local_lin_fit, fig.height = 8, fig.width = 8}
-#col.ramp <- c("#ffeda0", "#feb24c", "#fc4e2a", "#bd0026")
-col.ramp <- c("#ece7f2", "#a6bddb", "#3690c0", "#045a8d")
-
+col.ramp <- brewer.pal(9, "BrBG")[c(3,2,2,2)]
+#display.brewer.all()
+#pdf("~/Desktop/local_v_relevance.pdf", width = 6, height = 6)
 par(mfrow = c(2,2))
 for(tx in 1:length(trait.cor)){
     common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp[[tx]]))
@@ -432,12 +445,18 @@ for(tx in 1:length(trait.cor)){
 #    plot.with.model(local.var.exp[[tx]][common.tx], abs(trait.cor[[tx]][common.tx]),
 #        xlab = "Local Variance Explained", ylab = "Max Correlation with Trait",
 #        main = tissue.names[tx], report = "cor.test")
-    plot.hexbin.as.plot(x = abs(trait.cor[[tx]][common.tx]), y = local.var.exp[[tx]][common.tx], 
-        ylab = "Local Variance Explained", xlab = "Max Correlation with Trait",
-        main = tissue.names[tx], n.bins = 4, use.pheatmap.colors = FALSE, 
+    cor.stats <- plot.hexbin.as.plot(x = abs(trait.cor[[tx]][common.tx]), 
+        y = local.var.exp[[tx]][common.tx], ylab = "", xlab = "",
+        main = "", n.bins = 4, use.pheatmap.colors = FALSE, 
         custom.colors = col.ramp, with.model = TRUE, report = "cor.test", 
-        legend.bg = "white")
+        legend.pos = NA, write.results = FALSE, ylim = c(0,1), xlim = c(0, 0.75))
+    text(x = 0.44, y = 0.95, labels = paste0("r = ", cor.stats[1]), adj = 0)
+    text(x = 0.44, y = 0.84, labels = paste0("p = ", cor.stats[2]), adj = 0)
+    mtext(tissue.names[tx], side = 3, line = 0.5, font = 2, cex = 1.5)
+    mtext("Variance Explained", side = 2, line = 2.5)
+    mtext("Max. Trait Correlation", side = 1, line = 2.5)
 }
+#dev.off() 
 ```
 
 #### LOD - Linear
@@ -461,6 +480,7 @@ for(tx in 1:length(tissue.names)){
         main = tissue.names[tx], n.bins = 4, use.pheatmap.colors = FALSE, 
         custom.colors = col.ramp, with.model = TRUE, report = "cor.test", 
         legend.bg = "white", ylim = c(0, 240), xlim = c(0, 0.8))
+    
 
 }
 
@@ -475,18 +495,27 @@ for(tx in 1:length(tissue.names)){
 The following figures show the same data, but with linear fit models.
 
 ```{r lin_fig, fig.width = 8, fig.height = 8}
+col.ramp <- brewer.pal(9, "Greys")[c(5,6,6,6)]
+#display.brewer.all()
+#pdf("~/Desktop/distal_v_relevance.pdf", width = 6, height = 6)
 par(mfrow = c(2,2))
 for(tx in 1:length(trait.cor)){
     distal.herit <- tx.distal.herit[[tx]][,"residual_variance"]*tx.distal.herit[[tx]][,"residual_heritability"]
     common.tx <- intersect(names(trait.cor[[tx]]), names(distal.herit))
 
-    plot.hexbin.as.plot(abs(trait.cor[[tx]][common.tx]), distal.herit[common.tx],
-        ylab = "Variance Explained", xlab = "Max Correlation with Trait",
-        main = tissue.names[tx], n.bins = 4, use.pheatmap.colors = FALSE, 
+    cor.stats <- plot.hexbin.as.plot(abs(trait.cor[[tx]][common.tx]), distal.herit[common.tx],
+        ylab = "", xlab = "", main = "", n.bins = 4, use.pheatmap.colors = FALSE, 
         custom.colors = col.ramp, with.model = TRUE, report = "cor.test", 
-        legend.bg = "white", ylim = c(0, 1), xlim = c(0, 0.8))
+        legend.pos = NA, write.results = FALSE, ylim = c(0, 1), xlim = c(0, 0.8))
+    text(x = 0.44, y = 0.95, labels = paste0("r = ", cor.stats[1]), adj = 0)
+    text(x = 0.44, y = 0.84, labels = paste0("p = ", cor.stats[2]), adj = 0)
+    mtext(tissue.names[tx], side = 3, line = 0.5, font = 2, cex = 1.5)
+    mtext("Variance Explained", side = 2, line = 2.5)
+    mtext("Max. Trait Correlation", side = 1, line = 2.5)
 }
+#dev.off() 
 ```
+
 
 ## Distal Tails {.tabset .tabset-fade .tabset-pills}
 
