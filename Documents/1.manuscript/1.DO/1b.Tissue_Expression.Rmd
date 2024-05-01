@@ -67,8 +67,8 @@ generation.
 library(here)
 results.dir <- here("Results", "DO", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
-data.results.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
-if(!file.exists(data.results.dir)){dir.create(data.results.dir)}
+parsed.data.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+if(!file.exists(parsed.data.dir)){dir.create(parsed.data.dir)}
 ```
 
 ```{r load_code, message = FALSE, warning = FALSE}
@@ -91,7 +91,7 @@ load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata")) #ensembl.version, genoprobs
 
 #write out gene information for later use
 gene.tables <- lapply(tissue.data, function(x) x$annot.mrna)
-saveRDS(gene.tables, file.path(data.results.dir, "Gene_Tables.RDS"))
+saveRDS(gene.tables, file.path(parsed.data.dir, "Gene_Tables.RDS"))
 ```
 
 ```{r setup}
@@ -108,7 +108,7 @@ colnames(combo.mat) <- tissue.names
 
 ```{r remove_pseudogenes}
 if(remove.pseudogenes){
-  description.files <- file.path(data.results.dir, paste0("Gene_Description_", tissue.names, ".RDS"))
+  description.files <- here("Data", "general", paste0("Gene_Description_", tissue.names, ".RDS"))
   if(any(!file.exists(description.files))){
 
     require("biomaRt")
@@ -156,7 +156,7 @@ Regress covariates out of the rank Z normalized gene
 expression data.
 
 ```{r adjust}
-adj.expr.file <- file.path(data.results.dir, "Tissue_Expression_Adjusted.RDS")
+adj.expr.file <- file.path(parsed.data.dir, "Tissue_Expression_Adjusted.RDS")
 if(!file.exists(adj.expr.file) || overwrite.results){
   #regress out covariates, and normalize residuals
   adj.expr <- lapply(tissue.data, function(x) adjust(x$data$norm, x$covar.matrix))
@@ -533,7 +533,7 @@ tissue.
 #functional kinship, we will compare it to the 
 #germline kinship.
 
-kin.file <- file.path(data.results.dir, "overall.kinship.RDS")
+kin.file <- file.path(parsed.data.dir, "overall.kinship.RDS")
 if(!file.exists(kin.file) || overwrite.results){
     Kg = calc_kinship(genoprobs, "overall")
     saveRDS(Kg, kin.file)
@@ -1499,7 +1499,7 @@ dev.off()
 ```
 
 ```{r, eval = FALSE}
-clin.pheno <- readRDS(file.path(data.results.dir, "Clinical_Phenotypes_Adjusted.RDS"))
+clin.pheno <- readRDS(file.path(parsed.data.dir, "Clinical_Phenotypes_Adjusted.RDS"))
 clin.decomp <- plot.decomp(clin.pheno, plot.results = FALSE)
 clin.pc <- clin.decomp$u[,1,drop=FALSE]
 rownames(clin.pc) <- rownames(clin.pheno)[clin.decomp$rows.used]

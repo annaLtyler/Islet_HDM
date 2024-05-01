@@ -1,0 +1,29 @@
+debugging individual Rmd
+
+
+srun -q batch --pty bash -i
+module load singularity
+
+cd to Containers
+start R container
+
+setwd("../Projects/Islets/Islet_HDM")
+library(here)
+library(rmarkdown)
+
+render(here("Documents", "1.manuscript", "1.DO", "1a.Trait_Selection.Rmd"))
+render(here("Documents", "1.manuscript", "1.DO", "1b.Tissue_Expression.Rmd"))
+render(here("Documents", "1.manuscript", "1.DO", "2a.Kinship_Expression_Traits.Rmd"))
+render(here("Documents", "1.manuscript", "1.DO", "3a.Imputation.Rmd"))
+render(here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))
+
+
+render(here("Documents", "1.manuscript", "2.CC-RIX", "1a.CC-RIX_Phenotypes_Expression.Rmd"))
+render(here("Documents", "1.manuscript", "2.CC-RIX", "1b.CC-RIX_Genotypes.Rmd"))
+render(here("Documents", "1.manuscript", "2.CC-RIX", "2.Impute_CC-RIX_gene_expression.Rmd"))
+render(here("Documents", "1.manuscript", "2.CC-RIX", "2.Impute_CC-RIX_gene_expression.Rmd"))
+
+
+#sumner doesn't like connecting to BioMaRt for some reason, 
+#so we will save gene description files in the data folder so it doesn't get erased
+#those are data anyway, not parsed data.
