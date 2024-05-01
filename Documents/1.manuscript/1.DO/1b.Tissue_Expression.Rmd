@@ -1623,7 +1623,7 @@ high-, low-, or mid-degree transcripts in the network.
 Here we calculate degree without saving the full transcript by
 transcript correlation network. They are very large.
 
-```{r network_degree}
+```{r network_degree, eval = FALSE}
 gene.deg.file <- file.path(results.dir, "Transcript_Degree.RDS")
 
 if(!file.exists(gene.deg.file)){

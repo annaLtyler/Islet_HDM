@@ -1,0 +1,10 @@
+
+docker run -ti --rm r-base
+
+docker run --rm \
+	-ti \
+	--name devtest \
+	--mount type=bind \
+	source="/Users/atyler/Library/R/arm64/4.3/library" \
+	target="/usr/local/lib/R/site-library" \
+	r-base:4.3.3
