@@ -14,6 +14,8 @@ rm(list = ls()) #clear out the environment
 min.lod <- 8
 remove.pseudogenes = TRUE #if TRUE, removes pseudogenes and predicted genes 
 tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
+
+library(here)
 #tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
 tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
 
@@ -64,7 +66,6 @@ from each transcriptome. Covariates included sex and
 generation.
 
 ```{r here, message = FALSE, warning = FALSE}
-library(here)
 results.dir <- here("Results", "DO", "Transcriptomes")
 if(!file.exists(results.dir)){dir.create(results.dir)}
 parsed.data.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
