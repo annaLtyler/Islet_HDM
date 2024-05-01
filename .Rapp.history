@@ -1,0 +1,355 @@
+str(pr)
+system.file("extdata", "grav2.zip", package="qtl2")
+?fisher.test
+test <- read.csv("~/Desktop/ingredients_2023-12-30 20 11 23.csv")
+test
+test[which(test == ".")] <- 9
+test <- as.matrix(read.csv("~/Desktop/ingredients_2023-12-30 20 11 23.csv"))
+test[which(test == ".")] <- 0
+test[which(test == "X")] <- 1
+library(pheatmap)
+as.numeric(test)
+test
+test <- as.matrix(read.csv("~/Desktop/ingredients_2023-12-30 20 11 23.csv", row.names = 1))
+test
+test <- as.matrix(read.csv("~/Desktop/ingredients_2023-12-30 20 11 23.csv", row.names = 1))
+test[which(test == "X")] <- 1
+test[which(test == ".")] <- 0
+test
+num.test <- apply(test, 2, as.numeric)
+library(pheatmap)
+pheatmap(num.test)
+source('~/Documents/git_repositories/useful_r_code/plot.decomp.R', chdir = TRUE)
+plot.decomp(num.test, label.points = TRUE)
+num.test
+plot.decomp(t(num.test), label.points = TRUE)
+rownames(num.test) <- rownames(test)
+plot.decomp(num.test, label.points = TRUE)
+plot.decomp(t(num.test), label.points = TRUE)
+plot.decomp(num.test, label.points = TRUE)
+log10(1000)
+test <- readRDS("~/Documents/Projects/Alzheimers/human/cape_AD/Data/CAPE_Geno.RDS")
+str(test)
+dimnames(test)[[3]]
+dimnames(test[[1]])[[3]]
+on19 <- grep("X19", dimnames(test[[1]][[3]]))
+on19
+on19 <- grep("X19", dimnames(test[[1]])[[3]]
+on19 <- grep("X19", dimnames(test[[1]])[[3]])
+on19
+marker.names <- dimnames(test[[1]])[[3]]
+marker.names[on19]
+library(qtl2)
+page(est_herit)
+page(get_common_ids)
+library(qtl2)
+?scan1perm
+?summary
+>scan1perm.summary
+?scan1perm.summary
+?summary.scan1perm
+useful.fun <- list.files("~/Documents/git_repositories/useful_r_code", full.names = TRUE)
+useful.fun
+for(i in 1:length(useful.fun)){source(useful.fun[i])}
+a <- seq(-100, 100, 1)
+acol <- colors.from.values(a, use.pheatmap.colors = TRUE)
+barplot(a, col = acol)
+barplot(a, col = acol, border = NA)
+abline(h = 0)
+a <- rnorm(100)
+acol <- colors.from.values(a, use.pheatmap.colors = TRUE)
+hist(a)
+a <- rnorm(1000)
+hist(a)
+ahist <- hist(a)
+ahist <- hist(a, plot = FALSE)
+ahist
+acol  <- colors.from.values(ahist$mids)
+barplot(ahist$counts, col = acol)
+acol  <- colors.from.values(ahist$mids, use.pheatmap.values = TRUE)
+acol  <- colors.from.values(ahist$mids, use.pheatmap.colors = TRUE)
+barplot(ahist$counts, col = acol)
+barplot(ahist$counts, col = acol, breaks = 100)
+ahist <- hist(a, plot = FALSE, breaks = 100)
+acol  <- colors.from.values(ahist$mids, use.pheatmap.colors = TRUE)
+barplot(ahist$counts, col = acol)
+barplot(ahist$counts, col = acol, border = NA)
+ahist <- hist(a, plot = FALSE, breaks = 25)
+acol  <- colors.from.values(ahist$mids, use.pheatmap.colors = TRUE)
+barplot(ahist$counts, col = acol)
+library(qtl2()
+library(qtl2)
+?read_cross2
+test <- readRDS("~/Documents/Projects/EAE/Data/map.RDS")
+str(test)
+library(stringr)
+?stringr
+?flatten
+library(stringr)
+?trim
+?par
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Data/DO/Clinical_Phenotypes_V11.RDS")
+str(test)
+annot <- test$annot_samples
+annot
+.
+annot <- test$annot.samples
+annot
+head(annot)
+annote[,"DeathDate"] - annot[,"Birthdate"]
+annot[,"DeathDate"] - annot[,"Birthdate"]
+annot[,"DeathDate"] - annot[,"BirthDate"]
+annot[,"DeathDate"] - annot[,"BirthDate"]/7
+days.old <- annot[,"DeathDate"] - annot[,"BirthDate"]
+days.old
+as.numeric(days.old)/7
+hist(as.numeric(days.old)/7)
+?model.matrix
+cross <- readRDS("~/Documents/Projects/LPS/LPS_cape/Results/cape_2ET/cross.RDS")
+names(cross)
+sort(names(cross))
+cross$results_path
+cross$results_path <- "~/Documents/Projects/LPS/LPS_cape/Results/cape_2ET"
+saveRDS(cross, "~/Documents/Projects/LPS/LPS_cape/Results/cape_2ET/cross.RDS")
+?par
+?table
+a <- 2/3
+b <- 1.5
+a/b
+b/a
+?legend
+library(pheatmap)
+?pheatmap
+?glmnet
+library(glmnet)
+?glmnet
+?glmnet.predict
+?predict.glmnet
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/DO/Transcriptomes/Transcript_Heritability.RDS")
+str(test)
+head(test[[1]])
+str(test[[1]])
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/DO/Imputed_Transcriptomes/Distal_Heritability_Adipose.RDS")
+str(test)
+head(~/Documents/Projects/Islets/Islet_HDM/Results/DO/Imputed_Transcriptomes/Distal_Heritability_Adipose.RDS)
+head(test)
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/DO/Imputed_Transcriptomes/eQTL_Coef_Adipose.RDS")
+str(Test)
+str(test)
+head(test)
+?barplot
+library(qtl2)
+?genoprobpos
+??genoprobpos
+?legend
+?text
+library(biomaRt)
+??filters
+?listEnsembl
+?useEnsembl
+library(easyPubMet)
+library(easyPubMed)
+?get_pubmed_ids
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/DO/Transcriptomes/TWAS_imputed_expr_trait_cor.RDS")
+str(test)
+str(test[[1]])
+head(test[[1]])
+dim(test[[1]])
+plot(sort(test[[1]][1,]))
+setwd("~/Documents/Projects/Islets/Islet_HDM/")
+list.files()
+library(here)
+.libPaths(c("/Users/atyler/Library/R/arm64/4.3/library", .libPaths()))
+library(here)
+tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
+barplot(rep(1, 4), col = tissue.cols)
+test <- read.csv("~/Documents/Data/DO/Phenotype_Data/svenson850_phenotypes_v2.csv")
+head(test)
+colnames(gest)
+colnames(test)
+grep("glu", colnames(test),)
+colnames(test)[grep("glu", colnames(test))]
+hist(test[,"glucose1"])
+test[,"diet"]
+chow.idx <- which(test[,"diet"] == "chow")
+hist(test[chow.idx,"glucose1"])
+hf.idx <- which(test[,"diet"] == "hf")
+hist(test[hf.idx,"glucose1"])
+max.glu1 <- max(test[,"glucose1"])
+max.glu1
+max.glu1 <- max(test[,"glucose1"], na.rm = TRUE)
+max.glu1
+hist(test[chow.idx,"glucose1"], xlim = c(0, max.glu1))
+hist(test[chow.idx,"glucose1"], xlim = c(0, max.glu1), xlab = "Glucose (mg/dL)")
+hist(test[hf.idx,"glucose1"], col = "#3182bd", add = TRUE)
+dens.chow <- density(test[chow.idx,"glucose1"])
+no.chow.na <- which(!is.na(test[chow.idx,"glucose1"]))
+dens.chow <- density(test[chow.idx[no.chow.na],"glucose1"])
+dens.chow
+no.hf.na <- which(!is.na(test[hf.idx,"glucose1"]))
+no.hf.na <- which(!is.na(test[hf.idx,"glucose1"]))
+dens.hf <- density(test[hf.idx[no.hf.na],"glucose1"])
+dens.hf
+str(dens.hf)
+maxy <- max(c(dens.chow$y, dens.hf$y))
+maxy
+plot(density(test[chow.idx[no.chow.na],"glucose1"]), xlim = c(0, max.glu1), xlab = "Glucose (mg/dL)")
+plot(density(test[chow.idx[no.chow.na],"glucose1"]), xlim = c(0, max.glu1), xlab = "Glucose (mg/dL)", lwd = 3)
+points(density(test[hf.idx[no.hf.na],"glucose1"]), col = "#3182bd", type = "l", lwd = 3)
+abline(v =250)
+abline(v = 250, lwd = 3)
+plot(density(test[chow.idx[no.chow.na],"glucose1"]), xlim = c(0, max.glu1), xlab = "Glucose (mg/dL)", lwd = 3)#
+points(density(test[hf.idx[no.hf.na],"glucose1"]), col = "#3182bd", type = "l", lwd = 3)#
+abline(v = 250, lwd = 2, lty = 2)
+compare_dist <- function(colname){#
+	max.glu1 <- max(test[, colname], na.rm = TRUE)#
+#
+	no.chow.na <- which(!is.na(test[chow.idx, colname]))#
+	dens.chow <- density(test[chow.idx[no.chow.na], colname])#
+#
+	no.hf.na <- which(!is.na(test[hf.idx, colname]))#
+	dens.hf <- density(test[hf.idx[no.hf.na], colname])#
+#
+	maxy <- max(c(dens.chow$y, dens.hf$y))#
+	plot(density(test[chow.idx[no.chow.na], colname]), xlim = c(0, max.glu1), #
+		xlab = colname, lwd = 3, main = paste(colname, " levels in the DO"))#
+	points(density(test[hf.idx[no.hf.na], colname]), col = "#3182bd", type = "l", lwd = 3)#
+	abline(v = 250, lwd = 2, lty = 2)#
+}
+compare_dist("glucose1")
+compare_dist("glucose2")
+par(mfrow = c(1,2))#
+compare_dist("glucose1")#
+compare_dist("glucose2")
+compare_dist <- function(colname){#
+	max.glu1 <- max(test[, colname], na.rm = TRUE)#
+#
+	no.chow.na <- which(!is.na(test[chow.idx, colname]))#
+	dens.chow <- density(test[chow.idx[no.chow.na], colname])#
+#
+	no.hf.na <- which(!is.na(test[hf.idx, colname]))#
+	dens.hf <- density(test[hf.idx[no.hf.na], colname])#
+#
+	maxy <- max(c(dens.chow$y, dens.hf$y))#
+	plot(density(test[chow.idx[no.chow.na], colname]), xlim = c(0, max.glu1), #
+		xlab = colname, lwd = 3, main = paste(colname, " levels in the DO"))#
+	points(density(test[hf.idx[no.hf.na], colname]), col = "#3182bd", type = "l", lwd = 3)#
+	abline(v = 250, lwd = 2, lty = 2)#
+	legend("topright", legend = c("chow", "hf"), col = c("black", "#3182bd"), lty = 1, lwd = 3)#
+}
+par(mfrow = c(1,2))
+par(mfrow = c(1,2))
+compare_dist("glucose1")
+compare_dist("glucose2")
+thresh = 250
+length(which(test[chow.idx[no.chow.na],colname] >= thresh))
+colname = "glucose1"
+length(which(test[chow.idx[no.chow.na],colname] >= thresh))
+below.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] < thresh))
+prop <- above.thresh.chow/length(no.chow.na)
+above.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] >= thresh))
+below.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] < thresh))
+prop <- above.thresh.chow/length(no.chow.na)
+prop
+above.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] >= thresh))#
+	below.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] < thresh))#
+	prop.hf <- above.thresh.hf/length(no.hf.na)
+prop.hf
+c(below.thresh.hf, above.thresh.hf, prop.hf))
+result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), c(below.thresh.hf, above.thresh.hf, prop.hf))
+above.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] >= thresh))#
+	below.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] < thresh))#
+	prop.chow <- above.thresh.chow/length(no.chow.na)#
+#
+	above.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] >= thresh))#
+	below.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] < thresh))#
+	prop.hf <- above.thresh.hf/length(no.hf.na)
+result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), c(below.thresh.hf, above.thresh.hf, prop.hf))
+result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), #
+		c(below.thresh.hf, above.thresh.hf, prop.hf))
+result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), #
+		c(below.thresh.hf, above.thresh.hf, prop.hf))	#
+	colnames(result) <- c("Num Below", "Num Above", "Proportion Above")	#
+	rownames(result) <- c("Chow", "HF")
+result
+compare_dist <- function(colname, thresh = 250){#
+	max.glu1 <- max(test[, colname], na.rm = TRUE)#
+#
+	no.chow.na <- which(!is.na(test[chow.idx, colname]))#
+	dens.chow <- density(test[chow.idx[no.chow.na], colname])#
+#
+	no.hf.na <- which(!is.na(test[hf.idx, colname]))#
+	dens.hf <- density(test[hf.idx[no.hf.na], colname])#
+#
+	maxy <- max(c(dens.chow$y, dens.hf$y))#
+	plot(density(test[chow.idx[no.chow.na], colname]), xlim = c(0, max.glu1), #
+		xlab = colname, lwd = 3, main = paste(colname, " levels in the DO"))#
+	points(density(test[hf.idx[no.hf.na], colname]), col = "#3182bd", type = "l", lwd = 3)#
+	abline(v = thresh, lwd = 2, lty = 2)#
+	legend("topright", legend = c("chow", "hf"), col = c("black", "#3182bd"), lty = 1, lwd = 3)#
+	above.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] >= thresh))#
+	below.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] < thresh))#
+	prop.chow <- above.thresh.chow/length(no.chow.na)#
+#
+	above.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] >= thresh))#
+	below.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] < thresh))#
+	prop.hf <- above.thresh.hf/length(no.hf.na)#
+	result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), #
+		c(below.thresh.hf, above.thresh.hf, prop.hf))	#
+	colnames(result) <- c("Num Below", "Num Above", "Proportion Above")	#
+	rownames(result) <- c("Chow", "HF")#
+	return(result)#
+}
+compare_dist("glucose1")
+compare_dist("glucose2")
+compare_dist("glucose1", thresh = 300)
+compare_dist("glucose2", thresh = 300)
+comp.col = "diet"
+groups <- unique(test[,comp.col])
+groups
+comp.col =
+"sex"
+groups <- unique(test[,comp.col])
+groups
+groups <- unique(test[,comp.col])
+g1.idx <- which(test[,"diet"] == groups[1])
+g1.idx <- which(test[,compcol] == groups[1])
+g2.idx <- which(test[,comp.col] == groups[2])
+g1.idx <- which(test[,comp.col] == groups[1])
+no.g1.na <- which(!is.na(test[g1.idx, colname]))
+dens.g1 <- density(test[g1.idx[no.g1.na], colname])
+compare_dist <- function(colname = "glucose1", comp.col = "diet", thresh = 250){#
+	max.glu1 <- max(test[, colname], na.rm = TRUE)#
+#
+	groups <- unique(test[,comp.col])#
+#
+	g1.idx <- which(test[,comp.col] == groups[1])#
+	g2.idx <- which(test[,comp.col] == groups[2])#
+	no.g1.na <- which(!is.na(test[g1.idx, colname]))#
+	dens.g1 <- density(test[g1.idx[no.g1.na], colname])#
+#
+	no.g2.na <- which(!is.na(test[g2.idx, colname]))#
+	dens.g2 <- density(test[g2.idx[no.g2.na], colname])#
+#
+	maxy <- max(c(dens.g1$y, dens.g2$y))#
+	plot(density(test[g1.idx[no.g1.na], colname]), xlim = c(0, max.glu1), #
+		xlab = colname, lwd = 3, main = paste(colname, " levels in the DO"))#
+	points(density(test[g2.idx[no.g2.na], colname]), col = "#3182bd", type = "l", lwd = 3)#
+	abline(v = thresh, lwd = 2, lty = 2)#
+	legend("topright", legend = c(groups), col = c("black", "#3182bd"), lty = 1, lwd = 3)#
+	above.thresh.g1 <- length(which(test[g1.idx[no.g1.na],colname] >= thresh))#
+	below.thresh.g1 <- length(which(test[g1.idx[no.g1.na],colname] < thresh))#
+	prop.g1 <- above.thresh.g1/length(no.g1.na)#
+#
+	above.thresh.g2 <- length(which(test[g2.idx[no.g2.na],colname] >= thresh))#
+	below.thresh.g2 <- length(which(test[g2.idx[no.g2.na],colname] < thresh))#
+	prop.g2 <- above.thresh.g2/length(no.g2.na)#
+	result <- rbind(c(below.thresh.g1, above.thresh.g1, prop.g1), #
+		c(below.thresh.g2, above.thresh.g2, prop.g2))	#
+	colnames(result) <- c("Num Below", "Num Above", "Proportion Above")	#
+	rownames(result) <- groups#
+	return(result)#
+}
+par(mfrow = c(1,2))#
+compare_dist("glucose1", comp.col = "diet", thresh = 250)#
+compare_dist("glucose2", comp.col = "diet", thresh = 250)

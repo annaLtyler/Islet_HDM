@@ -23,7 +23,8 @@ render(here("Documents", "1.manuscript", "2.CC-RIX", "1b.CC-RIX_Genotypes.Rmd"))
 render(here("Documents", "1.manuscript", "2.CC-RIX", "2.Impute_CC-RIX_gene_expression.Rmd"))
 render(here("Documents", "1.manuscript", "2.CC-RIX", "2.Impute_CC-RIX_gene_expression.Rmd"))
 
+render(here("Documents", "1.manuscript", "3.Human", "4.Cell_Type_Validation.Rmd"))
+render(here("Documents", "1.manuscript", "3.Human", "4.Gene_Set_Validation.Rmd"))
+render(here("Documents", "1.manuscript", "3.Human", "4.Human_Data_Validation.Rmd"))
 
-#sumner doesn't like connecting to BioMaRt for some reason, 
-#so we will save gene description files in the data folder so it doesn't get erased
-#those are data anyway, not parsed data.
+
