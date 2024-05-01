@@ -359,8 +359,11 @@ for(i in 1:length(local.distal.comp)){
     colnames(local.distal.comp[[i]]) <- tissue.names
 }
 #display.brewer.all()
-local.col <- brewer.pal(9, "BrBG")[2]
-distal.col <- brewer.pal(9, "Greys")[6]
+#local.col <- brewer.pal(9, "BrBG")[2]
+#distal.col <- brewer.pal(9, "Greys")[6]
+herit.cols <- as.matrix(read.delim(here("Data", "general", "heritability_colors.txt"), header = FALSE, row.names = 1))[,1]
+local.col <- herit.cols["Local"]
+distal.col <- herit.cols["Distal"]
 plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "Variance Explained",
     main = "Variance Explained by Local and Distal Components", group.cols = c(local.col, distal.col))
 ```

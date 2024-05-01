@@ -827,7 +827,7 @@ The following plots show more detail of these distributions.
 
 par(mfrow = c(2,2))
 for(tx in 1:length(tissue.names)){
-    hist(transcript_loadings[[tx]], breaks = 100, xlab = "Loading",
+    hist(transcript_loadings[[tx]], breaks = 50, xlab = "Loading",
     main = tissue.names[tx], col = tissue.cols[tx])
     abline(v = 0, col = "red")
 }
@@ -1324,6 +1324,10 @@ dev.off()
 #to be plotted. Each gene is in a row, with an external gene
 #name as the row name. The columns are the following: Loading,
 #Local_Heritability, Distal_Heritability, Num_Abstracts
+herit.cols <- as.matrix(read.delim(here("Data", "general", "heritability_colors.txt"), header = FALSE, row.names = 1))[,1]
+local.col <- herit.cols["Local"]
+distal.col <- herit.cols["Distal"]
+
 
 plot_gene_stats <- function(gene.set.stats, loading.lim = NULL, herit.max = 1){
     
@@ -1332,16 +1336,14 @@ plot_gene_stats <- function(gene.set.stats, loading.lim = NULL, herit.max = 1){
 
     #png(file.path(results.dir, "gene_stats_combined.png"), width = 5, height = 12, units = "in", res = 300)
     #clust.order <- hclust(dist(all.info[,2:3]))$order
-    tissue.col  <- colors.from.values(matrix(as.numeric(as.factor(tx.label)), 
-        nrow = 1), split.at.vals = TRUE, split.points = seq(0.5, 4.5, 1), 
-        col.scale = c("blue", "red", "green", "purple"), light.dark = "d")
+    tissue.col  <- unlist(lapply(1:length(tissue.names), function(x) rep(tissue.cols[x], length(which(tx.label == tissue.names[x])))))
     by.both <- sort.by.then.by(cbind(as.numeric(as.factor(tx.label)), all.info[,"Loading"]), 
         col.type = c("n", "n"), sort.cols = c(2,1), return.order = TRUE)
     clust.order <- c(c(1:length(tx.label))[by.both[,1]])[by.both[,2]]
 
     #layout.mat <- matrix(c(1,1,1,2,2,2,3,3,3,3,4,3), ncol = 4)
     #layout.mat <- matrix(c(1,1,2,2,3,2), ncol = 3)
-    layout.mat <- matrix(c(1,1,0,2,2,4,3,2,0), ncol = 3)
+    layout.mat <- matrix(c(1,1,5,2,2,4,3,2,4), ncol = 3)
     layout(layout.mat, widths = c(1, 0.4, 0.4), heights = c(0.25, 1, 0.2))
     par(mar = c(4,4,2,0))
     if(is.null(loading.lim)){
@@ -1349,7 +1351,7 @@ plot_gene_stats <- function(gene.set.stats, loading.lim = NULL, herit.max = 1){
     }
     a <- barplot(all.info[clust.order,"Loading"],las = 2, xlab = "Loading", 
         col = tissue.col[clust.order], names = NA,
-        horiz = TRUE, xlim = loading.lim)
+        horiz = TRUE, xlim = loading.lim, cex.lab = 1.5)
     
     mtext("Loading", side = 3, line = -2)
     #legend("topleft", fill = unique(tissue.col), legend = tissue.names, bty = "n")
@@ -1379,8 +1381,11 @@ plot_gene_stats <- function(gene.set.stats, loading.lim = NULL, herit.max = 1){
     imageWithTextColorbar(matrix(seq(herit.bound[1], herit.bound[2], 0.1)), x = 7, y = 90,
         use.pheatmap.colors = TRUE, cex = 1,
         global.color.scale = TRUE, global.min = herit.bound[1], global.max = herit.bound[2], las = 2)
-    par(mar = c(4,1,0,0))
-    boxplot(all.info[,2:3], names = c("D", "L"), ylim = c(0, herit.max))
+    par(mar = c(4,6,0,4))
+    boxplot(all.info[,2:3], names = c("L", "D"), ylim = c(0, herit.max), ylab = "Heritability",
+        col = c(local.col, distal.col))
+    par(mar = c(4,4,1,2))
+    hist(all.info[,1], main = "", xlab = "Loading", ylab = "", breaks = 20, xlim = loading.lim)
     invisible(all.info)
 }
 ```
@@ -1896,7 +1901,7 @@ plot_clustered_values <- function(cluster_results){
     #show value distributions per group
     par(mfrow = c(3,2), mar = c(4,4,4,4))
     for(g in 1:length(group.vals)){
-        boxplot(group.vals[[g]], main = get_max_enrich(group.enrich[[g]]))
+        boxplot(group.vals[[g]], main = get_max_enrich(group.enrich[[g]]), col = tissue.cols, las = 2)
         abline(h = 0)
     }
 }

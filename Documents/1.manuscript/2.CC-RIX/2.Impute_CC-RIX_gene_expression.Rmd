@@ -85,11 +85,16 @@ for(i in 1:length(cc.geno)){
 cc.expr <- readRDS(here("Results", "CC-RIX", "Data", "Expression.by.Tissue.Adjusted.RDS"))
 cc.tissues <- names(cc.expr)
 
+tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
+tissue.idx <- sapply(cc.tissues, function(x) grep(x, names(tissue.cols), ignore.case = TRUE))
+tissue.cols <- tissue.cols[tissue.idx]
+
 #gene marker information 
 marker.info <- readRDS(here("Results", "DO", "Data", "Gene_Tables.RDS"))
 
 #sample annotations
 manifest <- read.csv(here("Data", "CC-RIX", "Original_Samples_Manifest.csv"))
+
 ```
 
 We have multiple animals of each genotype with measured gene expression.
@@ -267,12 +272,24 @@ for(tx in 1:length(cc.tissues)){
   
   measured.imp.cor <- sapply(common.tx, function(x) cor(cc.avg.expr[[tx]][,x], tx.imp.expr[[tx]][,x]))
   tx.measured.imp.cor[[tx]] <- measured.imp.cor
-  hist(measured.imp.cor, main = cc.tissues[tx], xlab = "Imputed-Measured Correlation")
-  abline(v = mean(measured.imp.cor, na.rm = TRUE), col = "red")  
+  hist(measured.imp.cor, main = cc.tissues[tx], xlab = "Imputed-Measured Correlation", 
+    col = tissue.cols[tx])
+  #abline(v = mean(measured.imp.cor, na.rm = TRUE))  
+  mean.imp.cor <- mean(measured.imp.cor, na.rm = TRUE)
+  arrows(x0 = mean.imp.cor, y0 = 150, y1 = 0, col = "black", lwd = 3, length = 0.1)
 
-  plot(local.eqtl[[eqtl.idx]][common.tx,"lod"], measured.imp.cor, 
-    xlab = "eQTL LOD", ylab = "Measured-Imputed Correlation", main = cc.tissues[tx],
-    xlim = c(6, max.lod))
+  plot.new()
+  plot.window(xlim = c(6, max.lod), ylim = c(-0.7, 1))
+  axis(1);axis(2)
+  mtext("eQTL LOD", side = 1, line = 2.5)
+  mtext("Measured-Imputed Correlation", side = 2, line = 2.5)
+  mtext(cc.tissues[tx], side = 3, line = 2.5)
+  #if(tx == 1){
+    points(local.eqtl[[eqtl.idx]][common.tx,"lod"], measured.imp.cor,
+      xlim = c(6, max.lod), col = "gray10") 
+  #}
+  points(local.eqtl[[eqtl.idx]][common.tx,"lod"], measured.imp.cor, 
+    pch = 16, col = tissue.cols[tx])
   abline(h = 0)
   cat("\n\n")
 }

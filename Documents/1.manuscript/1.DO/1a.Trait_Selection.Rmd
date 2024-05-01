@@ -56,7 +56,6 @@ num.pheno <- pheno.data$data
 colnames(num.pheno)[which(colnames(num.pheno) == "adipocity")] <- "adiposity"
 ```
 
-
 ## Body Weight
 
 Investigate body weight patterns.
@@ -233,6 +232,11 @@ y.max <- max(c(f.dens$y, m.dens$y))
 fcol <- rgb(126/256, 205/256, 97/256, alpha = 0.5)
 mcol <- rgb(74/256, 149/256, 224/256, alpha = 0.5)
 
+par(mar = c(4,8,4,4))
+boxplot(glu[not.outlier]~sex[not.outlier], names = c("Female", "Male"), xlab = "",
+  ylab = "Fasting Glucose (mg/dL)", col = c(fcol, mcol))
+
+par(mar = c(4,4,2,2))
 plot.new()
 plot.window(xlim = c(0, x.max), ylim = c(0, y.max))
 plot.poly.xy(poly.top.x = f.dens$x, poly.top.y = f.dens$y, poly.bottom.x = f.dens$x,
@@ -779,6 +783,7 @@ xlim <- get_plot_bounds(min.val = 0, max.val = (max(max.herit)),
   scale.factor = 20, return.even = TRUE)
 herit.order <- order(as.numeric(herit))
 
+#vertical
 par(mar = c(4, 8, 4, 2))
 plot.new()
 plot.window(xlim = xlim, ylim = c(0, length(herit)))
@@ -793,4 +798,20 @@ par(xpd = NA)
 text(x = min(min.herit)-0.02, y = 1:length(herit), gsub("_", " ", names(max.herit)[herit.order]), adj = 1)
 par(xpd = TRUE)
 
+
+#horizontal
+herit.order <- order(as.numeric(herit), decreasing = TRUE)
+par(mar = c(8, 4, 4, 2))
+plot.new()
+plot.window(ylim = xlim, xlim = c(0, length(herit)))
+segments(y0 = min.herit[herit.order], y1 = max.herit[herit.order], x0 = 1:length(herit))
+segments(y0 = min.herit[herit.order], x0 = 1:length(herit)-0.2, x1 = 1:length(herit)+0.2)
+segments(y0 = max.herit[herit.order], x0 = 1:length(herit)-0.2, x1 = 1:length(herit)+0.2)
+points(x = 1:length(herit), y = as.numeric(herit)[herit.order])
+abline(h = seq(0, xlim[2], 0.1), lty = 2, col = "gray")
+axis(2)
+mtext("Heritability", side = 2, line = 2.5)
+par(xpd = NA)
+text(y = min(min.herit)-0.02, x = 1:length(herit), gsub("_", " ", names(max.herit)[herit.order]), adj = 1, srt = 90)
+par(xpd = TRUE)
 ```

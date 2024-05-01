@@ -47,8 +47,8 @@ args <- commandArgs(trailingOnly=T)
 gene.set.name <- args[1]
 
 if(is.na(gene.set.name) || length(gene.set.name) == 0){
-    #gene.set.name <- "Apelin_signaling_pathway_cluster.txt"
-    gene.set.name <- "Lep-Lepr_quaternary_protein_cluster.txt"
+    gene.set.name <- "Apelin_signaling_pathway_cluster.txt"
+    #gene.set.name <- "Lep-Lepr_quaternary_protein_cluster.txt"
     #gene.set.name <- "Riboflavin_metabolism_cluster.txt" #just one gene
     #gene.set.name <- "endomembrane_system_cluster.txt" #islet-specific cluster
 }
@@ -85,7 +85,7 @@ set across tissues.
 
 ```{r tissue_loadings}
 tx.loadings <- lapply(transcript_loadings, function(x) x[intersect(rownames(x), gene.set[,1]),,drop=FALSE])
-boxplot(tx.loadings, main = cluster.name, ylab = "Loading")
+boxplot(tx.loadings, main = cluster.name, ylab = "Loading", col = tissue.cols)
 abline(h = 0)
 ```
 
@@ -235,7 +235,9 @@ The following plots show gene-by-gene the comparison
 between their correlations with genotype and phenotype.
 
 ```{r comp, fig.width = 9, fig.height = 7}
-tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
+#tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
+tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
+
 all.geno.cor <- as.vector(geno.cor.mat)
 all.pheno.cor <- as.vector(pheno.cor.mat)
 pt.col <- rep(tissue.cols, ncol(geno.cor.mat))

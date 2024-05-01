@@ -16,7 +16,9 @@ cd $SLURM_SUBMIT_DIR
 
 module load singularity
 
-#prep data
+#================
+# DO data prep
+#================
 
 #singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "1a.Trait_Selection.Rmd"))'
 
@@ -26,8 +28,50 @@ module load singularity
 
 #singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
 
-#run HDM
+#================
+# run HDM
+#================
 
 singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
 
-#follow-up
+#================
+# CC-RIX data prep
+#================
+
+#parse phenotypes and gene expression
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "1a.CC-RIX_Phenotypes_Expression.Rmd"))'
+
+#build genotype object
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "1b.CC-RIX_Genotypes.Rmd"))'
+
+#impute CC-RIX gene expression
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "2.Impute_CC-RIX_gene_expression.Rmd"))'
+
+#================
+# CC-RIX validation
+#================
+
+#predict metabolic index with measured transcripts
+use_cc_imputed_transcriptome=FALSE
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
+mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_measured.html
+
+#predict metabolic index with imputed transcripts
+use_cc_imputed_transcriptome=TRUE
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
+mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_imputed.html
+
+#================
+# Human validation
+#================
+
+#Cell-type-specific gene expression
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Cell_Type_Validation.Rmd"))'
+
+#Look at apelin module more closely
+gene_set_name=Apelin_signaling_pathway_cluster.txt
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Gene_Set_Validation.Rmd"))' --args "$gene_set_name"
+
+#Predictions of human metabolic index using HDMA results
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Human_Data_Validation.Rmd"))'
+
