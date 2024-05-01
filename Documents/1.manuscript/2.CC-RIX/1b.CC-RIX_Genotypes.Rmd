@@ -47,7 +47,11 @@ map.file <- file.path(results.dir, "Map.RDS")
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
 all.packages <- c("pheatmap", "qtl2", "abind")
-load_libraries(all.packages, personal.library = TRUE)
+
+all.paths <- .libPaths()
+personal.path <- grep("atyler", all.paths)
+load_libraries(all.packages, lib.loc = all.paths[personal.path])
+
 data(CCcolors) 
 #barplot(rep(1, length(CCcolors)), col = CCcolors, names = names(CCcolors))
 ```

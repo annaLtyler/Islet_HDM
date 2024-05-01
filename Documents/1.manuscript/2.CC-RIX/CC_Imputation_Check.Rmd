@@ -38,8 +38,10 @@ for(j in 1:length(all.fun)){source(all.fun[j])}
 
 
 ```{r load_libraries,  warning = FALSE, message = FALSE, error = FALSE}
-needed.packages <- c("pheatmap", "knitr", "qtl2", "stringr", "hexbin")
-load_libraries(needed.packages, personal.library = TRUE)
+all.packages <- c("pheatmap", "knitr", "qtl2", "stringr", "hexbin")
+all.paths <- .libPaths()
+personal.path <- grep("atyler", all.paths)
+load_libraries(all.packages, lib.loc = all.paths[personal.path])
 ```
 
 Read in measured CC-RIX gene expression. Also read in DO 

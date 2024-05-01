@@ -27,7 +27,10 @@ all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
 for(i in 1:length(all.fun)){source(all.fun[i])}
 
 all.packages <- c("pheatmap")
-load_libraries(all.packages, personal.library = TRUE)
+
+all.paths <- .libPaths()
+personal.path <- grep("atyler", all.paths)
+load_libraries(all.packages, lib.loc = all.paths[personal.path])
 ```
 
 ```{r read_data}

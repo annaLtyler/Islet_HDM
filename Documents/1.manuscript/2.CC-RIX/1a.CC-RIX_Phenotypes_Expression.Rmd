@@ -79,7 +79,10 @@ gene.info <- read.delim(here("Data", "general", "mouse_gene_info.txt"))
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
 all.packages <- c("pheatmap", "qtl2", "gprofiler2")
-load_libraries(all.packages, personal.library = TRUE)
+
+all.paths <- .libPaths()
+personal.path <- grep("atyler", all.paths)
+load_libraries(all.packages, lib.loc = all.paths[personal.path])
 ```
 
 

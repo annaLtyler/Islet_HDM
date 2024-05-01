@@ -53,13 +53,17 @@ if(is.na(gene.set.name) || length(gene.set.name) == 0){
     #gene.set.name <- "endomembrane_system_cluster.txt" #islet-specific cluster
 }
 
+toa.cluster.dir <- file.path(results.dir, "TOA_Clusters")
 cluster.name <- gsub("_", " ", gsub(".txt", "", gene.set.name), "_")
-gene.set <- read.table(here("Results", "Gene_Sets", gene.set.name))
+gene.set <- read.table(here("Results", "Gene_Sets", gene.set.name)) 
 ```
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
 all.packages <- c("pheatmap", "gprofiler2", "RColorBrewer", "GEOquery", "limma", "vioplot")
-load_libraries(all.packages, personal.library = TRUE)
+
+all.paths <- .libPaths()
+personal.path <- grep("atyler", all.paths)
+load_libraries(all.packages, lib.loc = all.paths[personal.path])
 ```
 
 

@@ -3,17 +3,15 @@
 #If any are not installed, it installs them, and 
 #then loads all packages
 
-load_libraries <- function(package.names, personal.library = FALSE){
+load_libraries <- function(package.names, lib.loc = NULL){
 
     current.packages <- installed.packages()
     to.install <- setdiff(package.names, rownames(current.packages))
 
     if(length(to.install) > 0){
 
-        if(personal.library){
-            lib.loc <- .libPaths()[3]
-        }else{
-            lib.loc <- .libPaths()[2]
+        if(is.null(lib.loc)){
+            lib.loc <- .libPaths()[1]
         }
 
         for(i in 1:length(to.install)){
