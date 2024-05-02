@@ -20,19 +20,23 @@ module load singularity
 # DO data prep
 #================
 
+#<5 min
 #singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "1a.Trait_Selection.Rmd"))'
 
+#<5 min
 #singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "1b.Tissue_Expression.Rmd"))'
 
+#<5 min
 #singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "2a.Kinship_Expression_Traits.Rmd"))'
 
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
+#~8.5 hrs
+#singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
 
 #================
 # run HDM
 #================
 
-#singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
 
 #================
 # CC-RIX data prep

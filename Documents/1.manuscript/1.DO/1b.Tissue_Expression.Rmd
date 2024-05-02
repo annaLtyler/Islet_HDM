@@ -19,6 +19,10 @@ library(here)
 #tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors
 tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
 
+herit.cols <- as.matrix(read.delim(here("Data", "general", "heritability_colors.txt"), header = FALSE, row.names = 1))[,1]
+local.col <- herit.cols["Local"]
+distal.col <- herit.cols["Distal"]
+
 overwrite.results <- FALSE
 ```
 
@@ -193,6 +197,7 @@ if(!file.exists(decomp.file) || overwrite.results){
   expr.decomp <- readRDS(decomp.file)
 }
 
+#pdf("~/Desktop/transcript_pc.pdf", width = 7, height = 5)
 par(mar = c(4,4,4,1))
 layout(matrix(c(1,2), nrow = 1), widths = c(1, 0.3))
 plot(expr.decomp$u,
@@ -202,13 +207,16 @@ abline(v = seq(-0.02, 0.03, 0.01), col = rgb(0.9, 0.9, 0.9), lwd = 0.8)
 abline(v = seq(-0.025, 0.035, 0.01), col = "lightgray", lwd = 0.5, lty = "dotted")
 abline(h = seq(-0.03, 0.03, 0.01), col = rgb(0.9, 0.9, 0.9), lwd = 0.8)
 abline(v = seq(-0.025, 0.035, 0.01), col = "lightgray", lwd = 0.5, lty = "dotted")
+points(expr.decomp$u, col = "black", pch = sample.sex+1)
 points(expr.decomp$u, col = tissue.col, pch = sample.sex+16)
 par(mar = c(4,0,4,0))
 plot.new()
 plot.window(xlim = c(0,1), ylim = c(0,1))
+legend(0, 1, legend = tissue.names, col = "black", pch = 1, adj = 0, title = "Tissue")
 legend(0, 1, legend = tissue.names, col = tissue.cols, pch = 16, adj = 0, title = "Tissue")
 legend(0, 0.5, legend = c("Female", "Male"), col = "black", pch = unique(sample.sex)+16, 
   adj = 0, title = "Sex")
+#dev.off()
 ```
 
 ## Tissue-Specific Genes
@@ -499,12 +507,12 @@ rownames(eqtl.count.table) <- c("Total", "Distal", "Local")
 #barplot(eqtl.table, beside = TRUE)
 layout(matrix(c(1,2), nrow = 1), widths = c(1,0.2))
 par(mar = c(4,4,4,1))
-barplot(eqtl.count.table[c("Local", "Distal"),], col = c("#d95f02", "#1b9e77"),
-  ylab = "eQTL Count")
+barplot(eqtl.count.table[c("Local", "Distal"),], col = herit.cols[c("Local", "Distal")],
+  ylab = "eQTL Count", cex.names = 1.5)
 par(mar = c(4,0,4,1))
 plot.new()
 plot.window(xlim = c(0,1), ylim = c(0,1))
-legend(x = 0, y = 0.5, legend = c("Distal", "Local"), fill = c("#1b9e77", "#d95f02"))
+legend(x = 0, y = 0.5, legend = c("Distal", "Local"), fill = herit.cols[c("Distal", "Local")])
 ```
 
 
