@@ -555,7 +555,7 @@ plot.cols <- c(rep(tissue.cols[1], length(adipose_type_loadings)),
     rep(tissue.cols[2], length(islet_cell_loadings)))
 
 asterisk.col <- "red"
-par(mar = c(8,8,4,4))
+par(mar = c(11,8,2,4))
 vioplot(all_samples, col = plot.cols, ylim = c(xmin, xmax), axes = FALSE,
     main = "Null Loading Distribution", las = 2, cex.axis = 1.5)
 mtext("Loading", side = 2, line = 5, cex = 1.5)
