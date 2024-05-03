@@ -532,7 +532,7 @@ for(i in 1:length(tissue.expr)){
 
 
 
-```{r pop_traits_fig, warning = FALSE}
+```{r pop_traits_fig, warning = FALSE, eval = FALSE}
 
 #just plot body weight results for figure
 if(imp.text == "measured"){
@@ -548,9 +548,8 @@ if(use.cc.imputed.transcriptome){
 }else{
     fig.name <- "Tissue_prediction_measured.pdf"
 }
+
 pdf(paste0("~/Desktop/", fig.name), width = 3.5, height = 9)
-
-
 par(mfrow =c(3,1))
 for(i in 1:length(tissue.expr)){
     mean.mge <- rowMeans(pop.mge[[i]], na.rm = TRUE)
@@ -572,7 +571,6 @@ for(i in 1:length(tissue.expr)){
 
     text(x = -3, y = 3, labels = paste0("r = ", stats[1]), adj = 0, cex = 1.2)
     text(x = -3, y = 2.3, labels = paste0("p = ", stats[2]), adj = 0, cex = 1.2)
-
 }
 dev.off()
 
