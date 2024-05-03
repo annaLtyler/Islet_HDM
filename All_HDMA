@@ -60,14 +60,15 @@ module load singularity
 #================
 
 #predict metabolic index with measured transcripts
+#<2min
 use_cc_imputed_transcriptome=FALSE
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
-mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_measured.html
+#singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
+#mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_measured.html
 
 #predict metabolic index with imputed transcripts
 use_cc_imputed_transcriptome=TRUE
-#singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
-#mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_imputed.html
+singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
+mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_imputed.html
 
 #================
 # Human validation
