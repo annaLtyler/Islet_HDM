@@ -74,7 +74,7 @@ Load code and libraries.
 all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
 for(i in 1:length(all.fun)){source(all.fun[i])}
 
-all.packages <- c("qtl2", "gprofiler2", "pheatmap", "knitr", "DT", "hexbin")
+all.packages <- c("qtl2", "gprofiler2", "pheatmap", "knitr", "DT", "hexbin", "RColorBrewer")
 
 all.paths <- .libPaths()
 personal.path <- grep("atyler", all.paths)
