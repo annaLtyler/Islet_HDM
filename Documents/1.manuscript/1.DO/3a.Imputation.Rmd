@@ -243,10 +243,12 @@ for(tx in 1:length(tissue.names)){
 ```
 
 ```{r read_imp}
-local.imp.files <- list.files(imputed.results.dir, pattern = "Local", full.names = TRUE)
+local.imp.files <- get.files(imputed.results.dir, want = "Local", 
+    dont.want = "Comparison", full.names = TRUE)
 tx.local.imp <- lapply(local.imp.files, readRDS)
 
-distal.herit.files <- list.files(imputed.results.dir, pattern = "Distal", full.names = TRUE)
+distal.herit.files <- get.files(imputed.results.dir, want = "Distal", 
+    dont.want = "Comparison", full.names = TRUE)
 tx.distal.herit <- lapply(distal.herit.files, readRDS)
 
 local.var.exp <- lapply(tx.distal.herit, function(x) x[,"local_var"])
