@@ -1,7 +1,8 @@
 plot.grouped.boxes <- function(group.list, group.labels = names(group.list), 
 group.cols = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3"),
 main = "", type = c("list", "matrix"), plot.grouping = c("outer", "inner"),
-plot.type = c("box", "strip"), print.vals = c("mean", "median"), ylab = "",
+plot.type = c("box", "stripchart", "vioplot"), strip.method = "jitter", strip.offset = 0.1, 
+print.vals = c("mean", "median"), ylab = "",
 stats.cex = 0.7, label.srt = 0, legend.x = NULL, legend.y = NULL, notch = FALSE,
 cex = 1, cex.names = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group.sep = 1.3){
 
@@ -24,16 +25,29 @@ cex = 1, cex.names = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group
 	xmin = 0
 
 	if(type == "list"){
-		xmax <- sum(unlist(lapply(group.list, length))) + 1
-		plot.window(xlim = c(0,xmax), ylim = c(ymin,ymax))
 		max.iter <- length(group.list[[1]]) #number of elements in each list
 		}else{
-		xmax <- sum(unlist(lapply(group.list, function(x) dim(x)[2])))
-		plot.window(xlim = c(0,xmax), ylim = c(ymin,ymax))	
 		max.iter <- dim(group.list[[1]])[2]
 		}
+
+	#use the iteration scheme below to calculate the maximum position of plotted elements
+	box.pos = 1
+	for(i in 1:max.iter){ #for each element of an individual group
+		for(l in 1:length(group.list)){ #plot the ith element from group l
+		if(l < length(group.list)){
+			box.pos = box.pos + within.group.sep
+			}else{
+			box.pos = box.pos + between.group.sep
+			}			
+		}
+	}
+
+	xmax <- box.pos
+	
+	#reset box.pos to 1
 	box.pos <- 1
 	plot.height <- ymax - ymin
+
 
 	plot.new()
 	plot.window(xlim = c(xmin, xmax), ylim = c(ymin, ymax))
@@ -55,11 +69,19 @@ cex = 1, cex.names = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group
 					boxplot(as.vector(data.vals), at = box.pos, add = TRUE, 
 						col = group.cols[col.idx], 
 						axes = FALSE, main = "", notch = notch, cex = cex, pch = pch)
-				}else{
+				}
+				if(plot.type == "stripchart"){
 					stripchart(as.vector(data.vals), at = box.pos, add = TRUE, 
 						col = group.cols[col.idx], axes = FALSE, 
-						main = "", method = "jitter", vertical = TRUE, pch = pch)
+						main = "", method = strip.method, offset = strip.offset, 
+						vertical = TRUE, pch = pch)
 				}
+				if(plot.type == "vioplot"){
+					vioplot(as.vector(data.vals), at = box.pos, add = TRUE, 
+						col = group.cols[col.idx], axes = FALSE, 
+						main = "")
+				}
+
 			}
 			mtext(main, side = 3, line = 0)
 			mtext(ylab, side = 2, line = 2.5)

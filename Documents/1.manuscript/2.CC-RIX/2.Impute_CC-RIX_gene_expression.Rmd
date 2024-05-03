@@ -260,10 +260,12 @@ and imputed expression are negatively correlated. This was not the
 case in the DO (3a.Imputation.Rmd).
 
 ```{r compare, fig.width = 8, fig.height = 4, results = "asis", warning = FALSE}
-max.lod <- max(sapply(local.eqtl, function(x) max(x[,"lod"], na.rm = TRUE)))
-tx.measured.imp.cor <- vector(mode = "list", length = length(cc.tissues))
-names(tx.measured.imp.cor) <- cc.tissues
 
+max.lod <- max(sapply(local.eqtl, function(x) max(x[,"lod"], na.rm = TRUE)))
+tx.measured.imp.cor <- tx.measured.imp.var <- vector(mode = "list", length = length(cc.tissues))
+names(tx.measured.imp.cor) <- names(tx.measured.imp.var) <- cc.tissues
+
+#pdf("~/Desktop/test_var_exp.pdf", height = 8, width = 8)
 par(mfrow = c(1,2))
 for(tx in 1:length(cc.tissues)){
   cat("###", cc.tissues[tx], "\n")
@@ -273,29 +275,85 @@ for(tx in 1:length(cc.tissues)){
   common.tx <- Reduce("intersect", list(colnames(cc.avg.expr[[tx]]), 
     colnames(tx.imp.expr[[imp.idx]]), rownames(local.eqtl[[eqtl.idx]])))
   
-  measured.imp.cor <- sapply(common.tx, function(x) cor(cc.avg.expr[[tx]][,x], tx.imp.expr[[tx]][,x]))
+  has.var.expr <- which(apply(cc.avg.expr[[tx]][,common.tx], 2, var) > 0)
+  has.var.imp <- which(apply(tx.imp.expr[[tx]][,common.tx], 2, var) > 0)
+  common.with.var <- intersect(names(has.var.expr), names(has.var.imp))
+  measured.imp.cor <- sapply(common.with.var, function(x) cor(cc.avg.expr[[tx]][,x], tx.imp.expr[[tx]][,x]))
+  measured.imp.var <- sapply(common.with.var, function(x) summary(lm(tx.imp.expr[[tx]][,x]~cc.avg.expr[[tx]][,x]))$adj.r.squared)
   tx.measured.imp.cor[[tx]] <- measured.imp.cor
-  hist(measured.imp.cor, main = cc.tissues[tx], xlab = "Imputed-Measured Correlation", 
-    col = tissue.cols[tx])
+  tx.measured.imp.var[[tx]] <- measured.imp.var
+
+  a <- hist(measured.imp.cor, xlab = "Imputed-Measured Correlation", col = tissue.cols[tx], main = "")
   #abline(v = mean(measured.imp.cor, na.rm = TRUE))  
   mean.imp.cor <- mean(measured.imp.cor, na.rm = TRUE)
-  arrows(x0 = mean.imp.cor, y0 = 150, y1 = 0, col = "black", lwd = 3, length = 0.1)
+  arrows(x0 = mean.imp.cor, y0 = max(a$counts)*0.1, y1 = 0, col = "black", lwd = 3, length = 0.1)
 
   plot.new()
-  plot.window(xlim = c(6, max.lod), ylim = c(-0.7, 1))
+  plot.window(xlim = c(6, max.lod), ylim = c(-0.9, 1))
   axis(1);axis(2)
   mtext("eQTL LOD", side = 1, line = 2.5)
   mtext("Measured-Imputed Correlation", side = 2, line = 2.5)
-  mtext(cc.tissues[tx], side = 3, line = 2.5)
   #if(tx == 1){
-    points(local.eqtl[[eqtl.idx]][common.tx,"lod"], measured.imp.cor,
+    points(local.eqtl[[eqtl.idx]][common.with.var,"lod"], measured.imp.cor,
       xlim = c(6, max.lod), col = "gray10") 
   #}
-  points(local.eqtl[[eqtl.idx]][common.tx,"lod"], measured.imp.cor, 
+  points(local.eqtl[[eqtl.idx]][common.with.var,"lod"], measured.imp.cor, 
     pch = 16, col = tissue.cols[tx])
   abline(h = 0)
+
+  a <- hist(measured.imp.var, col = tissue.cols[tx], xlab = "Variance Explained", main = "")
+  mean.imp.var <- mean(measured.imp.var, na.rm = TRUE)
+  arrows(x0 = mean.imp.var, y0 = max(a$counts)*0.1, y1 = 0, col = "black", lwd = 3, length = 0.1)
+
+
+  plot.new()
+  plot.window(xlim = c(6, max.lod), ylim = c(-0.1, 1))
+  axis(1);axis(2)
+  mtext("eQTL LOD", side = 1, line = 2.5)
+  mtext("Variance Explained", side = 2, line = 2.5)
+
+  #if(tx == 1){
+    points(local.eqtl[[eqtl.idx]][common.with.var,"lod"], measured.imp.var,
+      xlim = c(6, max.lod), col = "gray10") 
+  #}
+  points(local.eqtl[[eqtl.idx]][common.with.var,"lod"], measured.imp.var, 
+    pch = 16, col = tissue.cols[tx])
+
   cat("\n\n")
 }
+#dev.off()
+```
+
+The boxplots below compare the imputed-measured correlation across
+tissues. 
+
+```{r comp_cor, fig.width = 5, fig.height = 5}
+boxplot(tx.measured.imp.cor, ylab = "Correlation", col = tissue.cols)
+abline(h = 0)
+```
+
+## Comparison of imputation across tissues
+
+The boxplots below show the comparison of the variance explained
+of the measured gene expression by the local genotype as compared
+to what we saw in the DO. 
+
+```{r do_cc_comp, fig.width = 7, fig.height = 5}
+local.distal.comp <- readRDS(here("Results", "DO", "Imputed_Transcriptomes", 
+  "Local_Distal_Comparison.RDS"))
+
+just.local <- local.distal.comp$Local
+common.tx <- intersect(rownames(just.local), Reduce("intersect", lapply(tx.measured.imp.var, names)))
+cc.var <- sapply(tx.measured.imp.var, function(x) x[common.tx])
+
+comp.list <- list(just.local[,c("Adipose", "Liver", "SkeletalMuscle")], cc.var)
+names(comp.list) <- c("DO", "CC-RIX")
+plot.grouped.boxes(group.list = comp.list, 
+  type = "matrix", group.cols = c("#af8dc3", "#7fbf7b"),
+  ylab = "Variance Explained", plot.type = "vioplot",
+  within.group.sep = 1, between.group.sep = 1.5)
+plot.dim <- par("usr")
+segments(x0 = plot.dim[1], x1 = plot.dim[2], y0 = 0)
 ```
 
 ## Imputation and Trait Relevance {.tabset .tabset-fade .tabset-pills}

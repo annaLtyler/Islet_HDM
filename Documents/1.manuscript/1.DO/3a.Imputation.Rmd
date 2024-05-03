@@ -264,6 +264,9 @@ LOD scores should have higher correlations to the
 measured transcript.
 
 ```{r check_correlations, results = "asis", fig.height = 4, fig.width = 8}
+
+tissue.imp.cor <- vector(mode = "list", length = length(tissue.names))
+names(tissue.imp.cor) <- tissue.names
 for(tx in 1:length(tissue.names)){
     cat("####", tissue.names[tx], "\n")
     measured <- scaled.expr[[tx]]
@@ -274,6 +277,7 @@ for(tx in 1:length(tissue.names)){
     all.cor <- sapply(1:length(common.tx), 
         function(x) cor(measured[common.ind,common.tx[x]], 
         imputed[common.ind,common.tx[x]]))
+    tissue.imp.cor[[tx]] <- all.cor
     local.lod <- local.coef[[tx]]$lod[match(common.tx, local.coef[[tx]]$gene.id)]
     par(mfrow = c(1,2))
     hist(all.cor, main = "Histogram of Correlations", 
@@ -283,9 +287,15 @@ for(tx in 1:length(tissue.names)){
         ylab = "Correlation", ylim = c(0,1))
     mtext(tissue.names[tx], side = 3, outer = TRUE, line = -1.5, font = 2)
     cat("\n\n")
-
 }
 ```
+
+The tissue comparison is below.
+
+```{r tissue_cor_comp}
+boxplot(lapply(tissue.imp.cor, function(x) x^2))
+```
+
 
 ### Distal and local heritabilities
 
@@ -369,6 +379,8 @@ local.col <- herit.cols["Local"]
 distal.col <- herit.cols["Distal"]
 plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "Variance Explained",
     main = "Variance Explained by Local and Distal Components", group.cols = c(local.col, distal.col))
+
+saveRDS(local.distal.comp, file.path(imputed.results.dir, "Local_Distal_Comparison.RDS")) #save this to compare to CC-RIX
 ```
 
 ```{r local_v_distal_fig, eval = FALSE}

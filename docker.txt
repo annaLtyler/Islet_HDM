@@ -8,3 +8,12 @@ docker run --rm \
 	source="/Users/atyler/Library/R/arm64/4.3/library" \
 	target="/usr/local/lib/R/site-library" \
 	r-base:4.3.3
+
+
+docker run --rm \
+	-ti \
+	--name devtest \
+	--v type=bind \
+	source="/Users/atyler/Library/R/arm64/4.3/library" \
+	target="/usr/local/lib/R/site-library" \
+	r-base:4.3.3
