@@ -22,6 +22,9 @@ library("here")
 data.results.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
 if(!file.exists(data.results.dir)){dir.create(data.results.dir, recursive = TRUE)}
 
+paper.data.dir <- here("Results", "Paper")
+if(!file.exists(paper.data.dir)){dir.create(paper.data.dir, recursive = TRUE)}
+
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
 ```
