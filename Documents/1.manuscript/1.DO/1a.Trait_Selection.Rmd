@@ -19,11 +19,12 @@ is.interactive = FALSE
 #is.interactive = TRUE
 library("here")
 
-data.results.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
-if(!file.exists(data.results.dir)){dir.create(data.results.dir, recursive = TRUE)}
+parsed.data.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+if(!file.exists(parsed.data.dir)){dir.create(parsed.data.dir, recursive = TRUE)}
 
 paper.data.dir <- here("Results", "Paper")
 if(!file.exists(paper.data.dir)){dir.create(paper.data.dir, recursive = TRUE)}
+paper.data <- list("paper.data" = list(), "data.idx" = 1)
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
@@ -35,6 +36,21 @@ all.packages <- c("pheatmap")
 all.paths <- .libPaths()
 personal.path <- grep("atyler", all.paths)
 load_libraries(all.packages, lib.loc = all.paths[personal.path])
+```
+
+```{r record_result_fun}
+record_result <- function(the.result, data.list, data.label, data.idx){
+  data.list[[data.idx]] <- the.result
+  names(data.list)[data.idx] <- data.label
+  data.idx <- data.idx + 1
+  return(list("paper.data" = data.list, "data.idx" = data.idx))
+}
+```
+
+```{r cutoffs}
+#diabetic range from PMID
+glucose.ranges <- c(250, 300) 
+paper.data <- record_result(glucose.ranges, paper.data$paper.data, "glucose_ranges", paper.data$data.idx)
 ```
 
 ## Data
@@ -54,7 +70,7 @@ the individual data points to look for oddities.
 ```{r pheno}
 pheno.data <- readRDS(here("Data", "DO", "Clinical_Phenotypes_V11.RDS"))
 #write out annotations for phenotypes
-write.table(pheno.data$annot.phenotype, file.path(data.results.dir, "Phenotype_Annotations.txt"), 
+write.table(pheno.data$annot.phenotype, file.path(parsed.data.dir, "Phenotype_Annotations.txt"), 
   sep = "\t", quote = FALSE, row.names = FALSE)
 
 num.pheno <- pheno.data$data
@@ -166,7 +182,7 @@ There is a weak relationship between food consumption and
 final weight.
 
 ```{r weight_v_food}
-plot.with.model(food.mat[,"food_ave"], ordered.bw[,"weight_final"],
+food.weight.stats <- plot.with.model(food.mat[,"food_ave"], ordered.bw[,"weight_final"],
   xlab = "Avg. Food Consumption", ylab = "Weight (g)")
 ```
 
@@ -220,15 +236,15 @@ plot.with.model(glu.mat[,"glu_final"], glu.diff, report = "cor.test",
 
 ```
 
-```{r ins_hist, eval = FALSE}
+```{r ins_hist}
 glu <- num.pheno[, "glu_final"]
 weight <- num.pheno[, "weight_final"]
 sex <- as.numeric(as.factor(covar[,1]))
 not.outlier <- which(glu < 800)
 
-pdf("~/Desktop/glucose_weight.pdf", height = 4, width = 4)
+pdf(file.path(parsed.data.dir, "fig_panels_densities.pdf"), height = 4, width = 4)
 
-#as densities
+#fasting glucose as densities
 f.locale <- which(sex == 1)
 m.locale <- which(sex == 2)
 f.dens <- density(glu[intersect(f.locale, not.outlier)])
@@ -237,10 +253,6 @@ x.max <- max(c(f.dens$x, m.dens$x))
 y.max <- max(c(f.dens$y, m.dens$y))
 fcol <- rgb(126/256, 205/256, 97/256, alpha = 0.5)
 mcol <- rgb(74/256, 149/256, 224/256, alpha = 0.5)
-
-par(mar = c(4,8,4,4))
-boxplot(glu[not.outlier]~sex[not.outlier], names = c("Female", "Male"), xlab = "",
-  ylab = "Fasting Glucose (mg/dL)", col = c(fcol, mcol))
 
 par(mar = c(4,4,2,2))
 plot.new()
@@ -256,7 +268,7 @@ mtext("Density", side = 2, line = 2.5)
 
 #diabetic range from PMID
 #will need to find real values for this. They vary an unbelievable amount.
-glucose.ranges <- c(250, 300) 
+#glucose.ranges <- c(250, 300) 
 
 #abline(v = glucose.ranges)
 
@@ -273,10 +285,7 @@ legend(225, 0.012, lwd = 10, col = c(fcol, mcol), legend = c("female", "male"), 
 legend(225, 0.008, fill = c(normal.col, pre.col, diab.col), 
   legend = c("normal", "pre-diabetes", "diabetes"), cex = 0.8)
 
-plot.with.model(weight[not.outlier], glu[not.outlier], xlab = "Weight (g)",
-  ylab = "Fasting Glucose (mg/dL)", col = sex+2)
-
-#as densities
+#body weight as densities
 f.locale <- which(sex == 1)
 m.locale <- which(sex == 2)
 f.bw <- num.pheno[f.locale,"weight_final"]
@@ -290,6 +299,7 @@ y.max <- max(c(f.dens$y, m.dens$y))
 fcol <- rgb(126/256, 205/256, 97/256, alpha = 0.5)
 mcol <- rgb(74/256, 149/256, 224/256, alpha = 0.5)
 
+par(mar = c(4,4,2,2))
 plot.new()
 plot.window(xlim = c(0, x.max), ylim = c(0, y.max))
 plot.poly.xy(poly.top.x = f.dens$x, poly.top.y = f.dens$y, poly.bottom.x = f.dens$x,
@@ -313,12 +323,34 @@ legend(45, 0.08, lwd = 10, col = c(fcol, mcol), legend = c("female", "male"), ce
 legend(45, 0.05, fill = c(fcol, mcol), cex = 0.8,
   legend = c("Avg. wt. (F)", "Avg. wt. (M)"))
 
-
-plot.with.model(num.pheno[,"food_ave"], num.pheno[,"weight_final"],
-  ylab = "Weight (g)",
-  xlab = "Avg Food Consumption (AU)", col = sex+2)
-
 dev.off()
+
+pdf(file.path(parsed.data.dir, "Fig_panels_boxes.pdf"), height = 4, width = 4)
+par(mar = c(4,8,4,4))
+boxplot(glu[not.outlier]~sex[not.outlier], names = c("Female", "Male"), xlab = "",
+  ylab = "Fasting Glucose (mg/dL)", col = c(fcol, mcol))
+dev.off()
+
+pdf(file.path(parsed.data.dir, "Fig_panels_correlations.pdf"), height = 3, width = 4)
+par(mar = c(4,4,1,2))
+weight.glu.stats <- plot.with.model(weight[not.outlier], glu[not.outlier], xlab = "",
+  ylab = "", col = sex+2, write.results = FALSE)
+mtext("Weight (g)", side = 1, line = 2.5, cex = 1)
+mtext("Fasting Glucose (mg/dL)", side = 2, line = 2.5, cex = 1)
+text(x = 15, y = 365, labels = bquote(R^2 == .(weight.glu.stats[1])), adj = 0)
+text(x = 15, y = 325, labels = bquote(p == .(signif(weight.glu.stats[2], 2))), adj = 0)
+paper.data <- record_result(weight.glu.stats, paper.data$paper.data, "weight_glu", paper.data$data.idx)
+
+food.weight.stats <- plot.with.model(num.pheno[,"food_ave"], num.pheno[,"weight_final"],
+  ylab = "", xlab = "", col = sex+2,
+  write.results = FALSE)
+mtext("Avg Food Consumption (AU)", side = 1, line = 2.5, cex = 1)
+mtext("Weight (g)", side = 2, line = 2.5, cex = 1)
+text(x = 1.8, y = 68, labels = bquote(R^2 == .(food.weight.stats[1])), adj = 0)
+text(x = 1.8, y = 61, labels = bquote(p == .(signif(food.weight.stats[2], 2))), adj = 0)
+paper.data <- record_result(food.weight.stats, paper.data$paper.data, "food_weight", paper.data$data.idx)
+dev.off()
+
 ```
 
 
@@ -336,8 +368,21 @@ plot.with.model(num.pheno[,"Glu_tAUC"], num.pheno[,"Glu_iAUC"],
   xlab = "Glu_tAUC", ylab = "Glu_iAUC")
 plot.with.model(num.pheno[,"Glu_iAUC"], num.pheno[,"weight_final"],
   xlab = "Glu_iAUC", ylab = "final weight")
-plot.with.model(num.pheno[,"Glu_tAUC"], num.pheno[,"weight_final"],
-  xlab = "Glu_tAUC", ylab = "final weight")
+
+plot.with.model(num.pheno[,"Glu_tAUC"], 
+  num.pheno[,"weight_final"], xlab = "Glu_tAUC", ylab = "final weight")
+```
+
+```{r perc_diabetic}
+num.prediab <- length(intersect(which(num.pheno[,"glu_final"] >= glucose.ranges[1]), which(num.pheno[,"glu_final"] < glucose.ranges[2])))
+perc.prediab <- (num.prediab/nrow(num.pheno))*100
+prediab <- c("Num_pre-diabetic" = num.prediab, "Perc_pre-diabetic" = perc.prediab)
+paper.data <- record_result(prediab, paper.data$paper.data, "Prediabetic", paper.data$data.idx)
+
+num.diabetic <- length(which(num.pheno[,"glu_final"] >= glucose.ranges[2]))
+perc.diabetic <- (num.diabetic/nrow(num.pheno))*100
+diabetic <- c("Num_diabetic" = num.diabetic, "Perc_diabetic" = perc.diabetic)
+paper.data <- record_result(diabetic, paper.data$paper.data, "Diabetic", paper.data$data.idx)
 ```
 
 ```{r add_glu_tAUC}
@@ -668,7 +713,7 @@ traits a priori.
 ```{r herit, fig.width = 5, fig.height = 5}
 library(qtl2)
 
-kin.file <- file.path(data.results.dir, "overall.kinship.RDS")
+kin.file <- file.path(parsed.data.dir, "overall.kinship.RDS")
 if(!file.exists(kin.file)){
   load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata")) #ensembl.version, genoprobs, K, map, markers
   Kg = calc_kinship(genoprobs, "overall")
@@ -680,7 +725,7 @@ if(!file.exists(kin.file)){
 covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
 num.covar <- dummy_covar(covar)
 rownames(num.covar) <- rownames(num.pheno)
-saveRDS(num.covar, file.path(data.results.dir, "Clinical_Phenotype_Covariates.RDS"))
+saveRDS(num.covar, file.path(parsed.data.dir, "Clinical_Phenotype_Covariates.RDS"))
 
 herit  <- est_herit(norm.traits, Kg, addcovar = num.covar)
 herit_error <- est_herit_error(norm.traits, Kg)
@@ -767,7 +812,7 @@ The names in this final matrix are the same as in the above plot.
 
 ```{r write_data}
 colnames(scaled.pheno) <- matched_names
-saveRDS(scaled.pheno, file.path(data.results.dir, "Clinical_Phenotypes_Adjusted.RDS"))
+saveRDS(scaled.pheno, file.path(parsed.data.dir, "Clinical_Phenotypes_Adjusted.RDS"))
 ```
 
 The following heatmap shows the trait correlations with their final names.
@@ -820,4 +865,8 @@ mtext("Heritability", side = 2, line = 2.5)
 par(xpd = NA)
 text(y = min(min.herit)-0.02, x = 1:length(herit), gsub("_", " ", names(max.herit)[herit.order]), adj = 1, srt = 90)
 par(xpd = TRUE)
+```
+
+```{r save_paper_data}
+saveRDS(paper.data$paper.data, file.path(paper.data.dir, "pheno_stats.RDS"))
 ```

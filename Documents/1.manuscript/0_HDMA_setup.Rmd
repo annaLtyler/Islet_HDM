@@ -1,0 +1,39 @@
+---
+title: "HDMA Setup"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+
+```{r all_packages}
+
+rm(list = ls())
+
+all.paths <- .libPaths()
+personal.path <- grep("atyler", all.paths)
+
+#is.interactive = TRUE
+library("here")
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+
+all.packages <- c('here', 'pheatmap', 'igraph', 'gprofiler2', 
+'qtl2', 'stringr', 'wordcloud', 'wordcloud2', 'hexbin', 
+'regress', 'propagate', 'knitr', 'DT', 'RColorBrewer', 'vioplot', 
+'Matrix', 'RGCCA', 'bnstruct', 'corpcor', 'cluster', 'grid', 
+'easyPubMed', 'abind', 'GEOquery', 'limma', 'pdftools', "containerit")
+
+load_libraries(all.packages, lib.loc = all.paths[personal.path])
+```
+
+```{r create_containerit}
+doc.obj <- dockerfile() #create a dockerfile object
+write(doc.obj) #by default writes the dockerfile "Dockerfile" to the working directory
+```
