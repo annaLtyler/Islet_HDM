@@ -48,5 +48,11 @@ R --slave -e 'install.packages("wordcloud",repos="https://cran.rstudio.com/")'
 R --slave -e 'install.packages("wordcloud2",repos="https://cran.rstudio.com/")'
 R --slave -e 'install.packages("zoo",repos="https://cran.rstudio.com/")'
 
+R --slave -e 'BiocManager::install("Biobase")'
+R --slave -e 'BiocManager::install("BiocGenerics")'
+R --slave -e 'BiocManager::install("GEOquery")'
+R --slave -e 'BiocManager::install("limma")'
+
 mkdir -p /payload/
-exec /bin/bash R "$@"
+exec /bin/bash R --no-restore --no-save --quiet "$@"
+

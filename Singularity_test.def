@@ -1,0 +1,16 @@
+Bootstrap: docker
+From: rocker/r-base:latest
+Stage: spython-base
+
+%labels
+maintainer="atyler"
+%post
+export DEBIAN_FRONTEND=noninteractive; apt-get -y update \
+&& apt-get install -y libglpk-dev \
+libgmp-dev \
+libxml2-dev \
+libcurl4-openssl-dev \
+pandoc \
+
+mkdir -p /payload/
+exec /bin/bash R --no-restore --no-save --quiet "$@"
