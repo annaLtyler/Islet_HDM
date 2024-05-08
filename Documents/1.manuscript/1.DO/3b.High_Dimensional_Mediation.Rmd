@@ -729,13 +729,15 @@ calc_null <- FALSE #set to TRUE to calculate null loading
 #These imputed transcripts are the fitted values from fit1 
 #with the nearest marker and a kinship correction
 #created by 3b.Imputation.Rmd
-imp.files <- list.files(here("Results", "DO", "Imputed_Transcriptomes"), pattern = "Local", full.names = TRUE)
+imp.files <- get.files(here("Results", "DO", "Imputed_Transcriptomes"), 
+    want = c("Local", "Imputation"), full.names = TRUE)
 tissue.imp.gen <- lapply(imp.files, readRDS)
 #local.var.exp <- lapply(tissue.imp.gen, function(x) apply(x, 2, var))
 
 #also read in distal components of heritability
 #created by 3b.Imputation.Rmd
-distal.files <- list.files(here("Results", "DO", "Imputed_Transcriptomes"), pattern = "Distal", full.names = TRUE)
+distal.files <- get.files(here("Results", "DO", "Imputed_Transcriptomes"), 
+    want = "Distal", dont.want = "Comparison", full.names = TRUE)
 distal.var <- lapply(distal.files, readRDS)
 
 names(distal.var) <- names(tissue.imp.gen) <- tissue.names
