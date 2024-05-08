@@ -1,5 +1,5 @@
 Bootstrap: docker
-From: rocker/r-base:latest
+From: rocker/r-base:4.3.3
 Stage: spython-base
 
 %labels
