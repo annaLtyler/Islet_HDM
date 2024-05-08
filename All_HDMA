@@ -37,7 +37,7 @@ module load singularity
 #================
 
 #~4.5 hrs
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
 
 #================
 # CC-RIX data prep
@@ -81,7 +81,7 @@ use_cc_imputed_transcriptome=TRUE
 
 #Look at apelin module more closely
 gene_set_name=Apelin_signaling_pathway_cluster.txt
-singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Gene_Set_Validation.Rmd"))' --args "$gene_set_name"
+#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Gene_Set_Validation.Rmd"))' --args "$gene_set_name"
 
 #Predictions of human metabolic index using HDMA results
 #singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Human_Data_Validation.Rmd"))'
