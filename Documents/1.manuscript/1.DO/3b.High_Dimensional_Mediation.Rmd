@@ -153,9 +153,7 @@ all.packages <- c("pheatmap", "qtl2", "gprofiler2", "Matrix", "RGCCA",
     "bnstruct", "igraph", "corpcor", "cluster", "RColorBrewer",
     "grid", "wordcloud", "stringr", "hexbin", "vioplot", "easyPubMed")
 
-all.paths <- .libPaths()
-personal.path <- grep("atyler", all.paths)
-load_libraries(all.packages, lib.loc = all.paths[personal.path])
+load_libraries(all.packages)
 ```
 
 # High-Dimensional Mediation

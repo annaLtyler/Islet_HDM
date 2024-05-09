@@ -15,9 +15,6 @@ output:
 
 rm(list = ls())
 
-all.paths <- .libPaths()
-personal.path <- grep("atyler", all.paths)
-
 #is.interactive = TRUE
 library("here")
 
@@ -30,10 +27,10 @@ all.packages <- c('here', 'pheatmap', 'igraph', 'gprofiler2',
 'Matrix', 'RGCCA', 'bnstruct', 'corpcor', 'cluster', 'grid', 
 'easyPubMed', 'abind', 'GEOquery', 'limma', 'pdftools', "containerit")
 
-load_libraries(all.packages, lib.loc = all.paths[personal.path])
+load_libraries(all.packages)
 ```
 
 ```{r create_containerit}
-doc.obj <- dockerfile() #create a dockerfile object
-write(doc.obj) #by default writes the dockerfile "Dockerfile" to the working directory
+#doc.obj <- dockerfile() #create a dockerfile object
+#write(doc.obj) #by default writes the dockerfile "Dockerfile" to the working directory
 ```

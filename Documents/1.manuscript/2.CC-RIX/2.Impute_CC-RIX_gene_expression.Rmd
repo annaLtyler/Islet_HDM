@@ -37,10 +37,7 @@ test_plot = FALSE
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
 all.packages <- c("pheatmap", "stringr", "qtl2", "vioplot")
-
-all.paths <- .libPaths()
-personal.path <- grep("atyler", all.paths)
-load_libraries(all.packages, lib.loc = all.paths[personal.path])
+load_libraries(all.packages)
 ```
 
 Read in the following data:

@@ -83,9 +83,7 @@ for(i in 1:length(all.fun)){source(all.fun[i])}
 all.packages <- c("igraph", "pheatmap", "gprofiler2", "qtl2", "stringr",
   "wordcloud", "wordcloud2", "hexbin", "regress", "propagate")
 
-all.paths <- .libPaths()
-personal.path <- grep("atyler", all.paths)
-load_libraries(all.packages, lib.loc = all.paths[personal.path])
+load_libraries(all.packages)
 ```
 
 ```{r read_transcriptomes}

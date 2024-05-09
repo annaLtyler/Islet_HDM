@@ -64,10 +64,7 @@ gene.set <- read.table(file.path(toa.cluster.dir, gene.set.name))
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
 all.packages <- c("pheatmap", "gprofiler2", "RColorBrewer", "GEOquery", "limma", "vioplot", "grid")
-
-all.paths <- .libPaths()
-personal.path <- grep("atyler", all.paths)
-load_libraries(all.packages, lib.loc = all.paths[personal.path])
+load_libraries(all.packages)
 ```
 
 
