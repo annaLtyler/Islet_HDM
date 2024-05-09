@@ -17,6 +17,13 @@ cd $SLURM_SUBMIT_DIR
 module load singularity
 
 #================
+# load/install all libraries
+#================
+
+#time depends on whether libraries are installed already
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "0_HDMA_setup.Rmd"))'
+
+#================
 # DO data prep
 #================
 
