@@ -59,7 +59,17 @@ if(is.na(gene.set.name) || length(gene.set.name) == 0){
 
 toa.cluster.dir <- file.path(prev.results.dir, "TOA_Clusters")
 cluster.name <- gsub("_", " ", gsub(".txt", "", gene.set.name), "_")
-gene.set <- read.table(file.path(toa.cluster.dir, gene.set.name)) 
+cluster.file <- file.path(toa.cluster.dir, gene.set.name)
+
+#if the clusters and enrichments have changed, we won't be able
+#to find the pre-specified file. In this case, just choose a 
+#random file from those that exist, so we don't choke the analysis.
+if(!file.exists(cluster.file)){
+    rnd.file <- sample(list.files(toa.cluster.dir))[1]
+    cluster.file <- file.path(toa.cluster.dir, rnd.file)
+}
+
+gene.set <- read.table(cluster.file) 
 ```
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
