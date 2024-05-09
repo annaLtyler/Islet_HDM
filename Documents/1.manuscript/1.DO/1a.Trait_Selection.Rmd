@@ -74,6 +74,11 @@ write.table(pheno.data$annot.phenotype, file.path(parsed.data.dir, "Phenotype_An
 num.pheno <- pheno.data$data
 #fix the spelling of adiposity
 colnames(num.pheno)[which(colnames(num.pheno) == "adipocity")] <- "adiposity"
+
+covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
+num.covar <- dummy_covar(covar)
+rownames(num.covar) <- rownames(num.pheno)
+saveRDS(num.covar, file.path(parsed.data.dir, "Clinical_Phenotype_Covariates.RDS"))
 ```
 
 ## Body Weight
@@ -720,10 +725,6 @@ if(!file.exists(kin.file)){
   Kg <- readRDS(kin.file)
 }
 
-covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
-num.covar <- dummy_covar(covar)
-rownames(num.covar) <- rownames(num.pheno)
-saveRDS(num.covar, file.path(parsed.data.dir, "Clinical_Phenotype_Covariates.RDS"))
 
 herit  <- est_herit(norm.traits, Kg, addcovar = num.covar)
 herit_error <- est_herit_error(norm.traits, Kg)
