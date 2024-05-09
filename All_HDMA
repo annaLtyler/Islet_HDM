@@ -20,8 +20,8 @@ module load singularity
 # load/install all libraries
 #================
 
-#time depends on whether libraries are installed already
-singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "0_HDMA_setup.Rmd"))'
+#only need to run this once to install all required packages
+#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "0_HDMA_setup.Rmd"))'
 
 #================
 # DO data prep
@@ -31,13 +31,13 @@ singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here
 singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "1a.Trait_Selection.Rmd"))'
 
 #<5 min
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "1b.Tissue_Expression.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "1b.Tissue_Expression.Rmd"))'
 
 #<5 min
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "2a.Kinship_Expression_Traits.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "2a.Kinship_Expression_Traits.Rmd"))'
 
 #~9.5 hrs
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
 
 #total time: 9.75 hrs
 
