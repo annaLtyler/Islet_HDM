@@ -3,7 +3,7 @@
 #SBATCH -N 1 # number of nodes
 #SBATCH -n 1 # number of cores
 #SBATCH --mem=8G # memory pool for all cores
-#SBATCH -t 0-48:00 # time (D-HH:MM)
+#SBATCH -t 0-20:00 # time (D-HH:MM)
 #SBATCH -o slurm.%N.%j.out # STDOUT
 #SBATCH -e slurm.%N.%j.err # STDERR
 #SBATCH --mail-user=anna.tyler@jax.org
@@ -32,12 +32,16 @@ module load singularity
 #~9.5 hrs
 #singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
 
+#total time: 9.75 hrs
+
 #================
 # run HDM
 #================
 
 #~4.5 hrs
 #singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
+
+#total time: 4.5 hrs
 
 #================
 # CC-RIX data prep
@@ -55,6 +59,7 @@ module load singularity
 #<2min
 #singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "2.Impute_CC-RIX_gene_expression.Rmd"))'
 
+#total time: 8 min
 #================
 # CC-RIX validation
 #================
@@ -71,6 +76,8 @@ use_cc_imputed_transcriptome=TRUE
 #singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
 #mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_imputed.html
 
+#total time: 4 min
+
 #================
 # Human validation
 #================
@@ -85,5 +92,11 @@ gene_set_name=Autophagy_-_animal_cluster.txt
 singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Gene_Set_Validation.Rmd"))' --args "$gene_set_name"
 
 #Predictions of human metabolic index using HDMA results
+#~2 min
 singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Human_Data_Validation.Rmd"))'
 
+#total time: 5 min
+
+#================
+# Total time: <15 hrs
+#================

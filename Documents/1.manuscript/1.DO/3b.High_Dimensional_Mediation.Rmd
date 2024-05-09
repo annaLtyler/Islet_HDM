@@ -60,6 +60,11 @@ weight.adjusted <- as.logical(args[3]) #if TRUE, body weight is adjusted out of 
 complete.mediation <- as.logical(args[4]) #if TRUE use a mediation network. If FALSE use a reactive network
 delete_previous <- as.logical(args[5]) #if TRUE, previous results are overwritten
 
+remove.local.effects <- TRUE #if TRUE, the effects of local genotype are
+                             #removed from gene expression before kernelizing.
+                             #This allows us to specifically analyze the correlation 
+                             #between distal heritability and trait relevance 
+
 kinship.effect.only <- FALSE #if TRUE, locally imputed gene expression is 
                             #subtracted from the full model imputation to 
                             #give gene expression imputed only from kinship
@@ -255,54 +260,55 @@ Kg_cent = lapply(1:length(gen_cent), function(x) Kg_sub[[x]] - cent_sub[[x]] %*%
 
 ## Process transcriptome
 
-Before kernelizing, remove the effects of the
-local eQTLs from each transcript. This will 
-ensure that none of the local eQTL information
-is in the transcriptomic kernel.
+If specified, remove the effects of the
+local eQTLs from each transcript before kernelizing. 
+This allows us to look specifically at the relationship
+between distal heritability and trait relevance without
+comtamination from eQTLs. If we leave the effects of 
+local eQTLs in, we allow all drivers of transcript
+variation to potentially explain phenotypic variation.
+To the extent that there are good TWAS hits, these
+can be accounted for in this analysis.
 
 After removing the local eQTL effects, mean center 
 and standardize residual transcriptome. 
 
 The phenotypes are already mean centered and scaled.
 
-```{r remove_local_effects, eval = FALSE}
-#we are removing this for now. 
-#We can use it again later it we decide this is better.
+```{r remove_local_effects}
 
-residual.expr.files <- sapply(tissue.names, function(x) file.path(parsed.data.dir, 
-    paste0(x, "_Residual.RDS")))
+if(remove.local.effects){
+    residual.expr.files <- sapply(tissue.names, function(x) file.path(parsed.data.dir, 
+        paste0(x, "_Residual.RDS")))
 
-for(tx in 1:length(tissue.names)){
-    if(!file.exists(residual.expr.files[tx])){
-        tx.expr <- adj.expr[[tx]]
-        resid.tx  <- matrix(NA, nrow = nrow(tx.expr), ncol = ncol(tx.expr))
-        dimnames(resid.tx) <- dimnames(tx.expr)
-        gene.info <- gene.tables[[tx]]
-        for(ts in 1:ncol(tx.expr)){
-            report.progress(ts, ncol(tx.expr))
-            nearest.marker <- gene.info$nearest.marker.id[which(gene.info$gene.id == colnames(tx.expr)[ts])]
-            if(nearest.marker == ""){next()}
-            nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
-            model <- fit1(nearest.geno, tx.expr[,ts], kinship = Kg)
-            resid.tx[,ts] <- model$resid
+    for(tx in 1:length(tissue.names)){
+        if(!file.exists(residual.expr.files[tx])){
+            tx.expr <- adj.expr[[tx]]
+            resid.tx  <- matrix(NA, nrow = nrow(tx.expr), ncol = ncol(tx.expr))
+            dimnames(resid.tx) <- dimnames(tx.expr)
+            gene.info <- gene.tables[[tx]]
+            for(ts in 1:ncol(tx.expr)){
+                report.progress(ts, ncol(tx.expr))
+                nearest.marker <- gene.info$nearest.marker.id[which(gene.info$gene.id == colnames(tx.expr)[ts])]
+                if(nearest.marker == ""){next()}
+                nearest.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
+                model <- fit1(nearest.geno, tx.expr[,ts], kinship = Kg)
+                resid.tx[,ts] <- model$resid
+            }
+            saveRDS(resid.tx, residual.expr.files[tx])
         }
-        saveRDS(resid.tx, residual.expr.files[tx])
-     }
-}
-residual.expr <- lapply(residual.expr.files, readRDS)
+    }
+    residual.expr <- lapply(residual.expr.files, readRDS)
 
-#remove any transcripts that were skipped
-for(tx in 1:length(tissue.names)){
-    na.idx <- which(apply(residual.expr[[tx]], 2, function(x) all(is.na(x))))
-    to.keep <- setdiff(1:ncol(residual.expr[[tx]]), na.idx)
-    residual.expr[[tx]] <- residual.expr[[tx]][,to.keep]
-}
-```
-
-```{r bypass_regress}
-#this code bypasses the removal of the local effect of genotype
-#in the above code chunk
+    #remove any transcripts that were skipped
+    for(tx in 1:length(tissue.names)){
+        na.idx <- which(apply(residual.expr[[tx]], 2, function(x) all(is.na(x))))
+        to.keep <- setdiff(1:ncol(residual.expr[[tx]]), na.idx)
+        residual.expr[[tx]] <- residual.expr[[tx]][,to.keep]
+    }
+}else{
 residual.expr <- adj.expr
+}
 ```
 
 ```{r scale}
