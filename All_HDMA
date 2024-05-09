@@ -80,9 +80,10 @@ use_cc_imputed_transcriptome=TRUE
 #singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Cell_Type_Validation.Rmd"))'
 
 #Look at apelin module more closely
+#<1min
 gene_set_name=Autophagy_-_animal_cluster.txt
 singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Gene_Set_Validation.Rmd"))' --args "$gene_set_name"
 
 #Predictions of human metabolic index using HDMA results
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Human_Data_Validation.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Human_Data_Validation.Rmd"))'
 
