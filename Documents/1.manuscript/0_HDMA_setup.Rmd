@@ -25,12 +25,7 @@ all.packages <- c('here', 'pheatmap', 'igraph', 'gprofiler2',
 'qtl2', 'stringr', 'wordcloud', 'wordcloud2', 'hexbin', 
 'regress', 'propagate', 'knitr', 'DT', 'RColorBrewer', 'vioplot', 
 'Matrix', 'RGCCA', 'bnstruct', 'corpcor', 'cluster', 'grid', 
-'easyPubMed', 'abind', 'GEOquery', 'limma', 'pdftools', "containerit")
+'easyPubMed', 'abind', 'GEOquery', 'limma', 'pdftools')
 
 load_libraries(all.packages)
-```
-
-```{r create_containerit}
-#doc.obj <- dockerfile() #create a dockerfile object
-#write(doc.obj) #by default writes the dockerfile "Dockerfile" to the working directory
 ```
