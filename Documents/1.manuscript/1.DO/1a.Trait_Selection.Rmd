@@ -17,6 +17,9 @@ The final product is a trait matrix that is used in downstream analyses.
 ```{r load_code}
 is.interactive = FALSE
 #is.interactive = TRUE
+
+rm(list = ls())
+
 library("here")
 
 parsed.data.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data

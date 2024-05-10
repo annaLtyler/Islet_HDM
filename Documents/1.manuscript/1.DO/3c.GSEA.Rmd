@@ -1,0 +1,419 @@
+---
+title: "GSEA"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+## Introduction
+
+The purpose of this workflow is to use GSEA to look for 
+enrichments in the transcript loading lists as an alternative
+to the gProfiler method of enrichment. With GSEA there is no 
+need to use a cutoff and look only at the top-ranked genes.
+
+Here we look at both GO and KEGG gene sets.
+
+```{r load_code}
+rm(list = ls())
+
+is.interactive = FALSE
+#is.interactive = TRUE
+
+library("here")
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+
+kegg.result.dir <- here("Results", "KEGG")
+if(!file.exists(kegg.result.dir)){dir.create(kegg.result.dir, recursive = TRUE)}
+
+go.result.dir <- here("Results", "GO")
+if(!file.exists(kegg.result.dir)){dir.create(kegg.result.dir, recursive = TRUE)}
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("clusterProfiler", "fgsea", "pheatmap", "gprofiler2", "pathview", 
+    "vioplot", "pRoloc", "annotate", "GO.db")
+load_libraries(all.packages)
+```
+
+```{r load_hdma_results}
+tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
+
+transcript_loadings <- readRDS(here("Results", "DO", "High_Dim_Med_no_MGE", 
+    "tissue_together-_-complete_mediation-germline_kinship", "Loadings_Transcripts_0.RDS"))
+tissue.names <- names(transcript_loadings)
+```
+
+## KEGG enrichments
+
+We used the package clusterProfiler to download KEGG 
+annotations for mouse genes.
+
+```{r get_kegg}
+#download and read in mouse KEGG annotations using download_KEGG()
+#from the package clusterProfiler
+kegg.file <- here("Data", "general", "KEGG.Mouse.RDS")
+if(!file.exists(kegg.file)){
+    all.kegg <- download_KEGG("mmu", "KEGG", "kegg")
+    saveRDS(all.kegg, kegg.file)
+}else{
+    all.kegg <- readRDS(kegg.file)
+}
+
+u_path <- gsub(" - Mus musculus (house mouse)", "", all.kegg[[2]][,"to"], fixed = TRUE)
+
+#load gene conversion table
+gene.table <- read.table(here("Data", "general", "mouse_gene_info.txt"), sep = "\t", header = TRUE)
+```
+
+We biult a list of KEGG terms and their gene assignments.
+
+```{r build_list}
+# build GSEA list
+path.locale <- lapply(u_path, function(x) grep(x, all.kegg[[2]][,2], fixed = TRUE))
+path.id <- lapply(path.locale, function(x) all.kegg[[2]][x,][1])
+path.idx <- lapply(path.id, function(x) which(all.kegg[[1]][,1] == unlist(x)[1]))
+path.gene.id <- lapply(path.idx, function(x) all.kegg[[1]][x,2])
+names(path.gene.id) <- u_path
+
+path.gene.ensembl <- lapply(path.gene.id, 
+    function(x) gene.table[match(x, gene.table[,"entrezgene_id"]), "ensembl_gene_id"])
+```
+
+We then used fGSEA to calculate normalized enrichment scores (NES) 
+for each KEGG pathway using the transcript loadings from each of 
+the four tissues.
+
+```{r calc_enrich_kegg}
+path_enrich <- matrix(NA, nrow = length(u_path), ncol = length(tissue.names))
+rownames(path_enrich) <- u_path
+colnames(path_enrich) <- tissue.names
+
+all_min <- min(sapply(transcript_loadings, min))
+all_max <- max(sapply(transcript_loadings, max))
+
+path_enrich_file <- file.path(kegg.result.dir, "KEGG_pathway_enrichments.RDS")
+
+if(!file.exists(path_enrich_file)){
+    #get enrichment scores for all pathways and all tissues
+    for(tx in 1:length(tissue.names)){
+        sorted.tx.loadings <- transcript_loadings[[tx]][order(transcript_loadings[[tx]], decreasing = TRUE),1]
+        gsea.enrich <- fgsea::fgsea(path.gene.ensembl, sorted.tx.loadings, scoreType = "std")
+        norm.es <- as.numeric(as.matrix(gsea.enrich[,"NES"]))
+        names(norm.es) <- gsea.enrich$pathway
+
+        name.idx <- match(names(norm.es), rownames(path_enrich))
+        path_enrich[name.idx,tx] <- norm.es
+    }
+    saveRDS(path_enrich, path_enrich_file)
+}else{
+    path_enrich <- readRDS(path_enrich_file)
+}
+```
+
+### NES Distributions
+
+The distributions of the NES are shown below.
+
+```{r nes_dist}
+vioplot(path_enrich, col = tissue.cols, ylab = "GSEA normalized enrichment score")
+abline(h = 0)
+```
+
+### Top KEGG Enrichments {.tabset .tabset-fade .tabset-pills}
+
+The top and bottom 10 enrichment scores are shown below.
+
+```{r plot_nes, warning = FALSE, message = FALSE, error = FALSE, results = "asis", fig.width = 9, fig.height = 7}
+#pdf(file.path(kegg.result.dir, "NES_by_tissue.pdf"), width = 9, height = 7)
+top.scores <- vector(mode = "list", length = length(tissue.names))
+names(top.scores) <- tissue.names
+
+par(mar = c(4,4, 2, 4))
+for(tx in 1:length(tissue.names)){
+    cat("####", tissue.names[tx], "\n")
+    sorted.enrich <- path_enrich[order(path_enrich[,tx], decreasing = FALSE),tx]
+    extreme.enrich  <- c(head(sorted.enrich, 10), tail(sorted.enrich, 10))
+    a <- barplot(extreme.enrich, 
+        horiz = TRUE, las = 2, main = tissue.names[tx], 
+        xlim = c(min(path_enrich), max(path_enrich)), name = NA)
+    text(x = rep(-0.1, 10), y = tail(a, 10), labels = tail(names(extreme.enrich), 10), adj = 1)
+    text(x = rep(0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 0)
+    mtext("Normalized Enrichment Score", side = 1, line = 2.5)
+    top.scores[[tx]] <- names(extreme.enrich)
+    cat("\n\n")
+}
+#dev.off()
+```
+
+### Loadings for KEGG pathways
+
+Plot the loading distributions for the most extreme pathways. 
+The p value above each distribution is from a t test testing 
+whether the mean loading is non-zero.
+
+```{r plot_all_dist, warning = FALSE, message = FALSE, error = FALSE, fig.width = 9, fig.height = 9}
+all.extreme.kegg <- unique(unlist(top.scores))
+top.kegg.mat <- path_enrich[match(all.extreme.kegg, rownames(path_enrich)),]
+
+kegg.loading.file <- file.path(kegg.result.dir, "Kegg_Pathway_Loadings.pdf")
+
+if(!file.exists(kegg.loading.file)){
+    pdf(kegg.loading.file, width = 12, height = 12)
+    par(mfrow = c(4,4))
+    for(i in 1:length(all.extreme.kegg)){
+        if(is.interactive){
+            report.progress(i, length(u_path))
+        }
+        search.term <- all.extreme.kegg[i]
+
+        path.locale <- grep(search.term, all.kegg[[2]][,2], fixed = TRUE)
+        path.id <- all.kegg[[2]][path.locale,][1]
+        path.name <- all.kegg[[2]][path.locale,][2]
+
+        path.idx <- which(all.kegg[[1]][,1] == unlist(path.id))
+        path.gene.id <- all.kegg[[1]][path.idx,2]
+        path.gene.table <- gconvert(as.numeric(path.gene.id), "mmusculus", numeric_ns = "ENTREZGENE_ACC")
+
+        tissue.path.loadings <- vector(mode = "list", length = length(transcript_loadings))
+        names(tissue.path.loadings) <- tissue.names
+        for(tx in 1:length(transcript_loadings)){
+            gene.idx <- match(path.gene.table[,"target"], rownames(transcript_loadings[[tx]]))
+            tissue.path.loadings[[tx]] <- transcript_loadings[[tx]][gene.idx]
+        }
+
+        #test <- aov_list(tissue.path.loadings)
+        test <- lapply(tissue.path.loadings, function(x) t.test(x))
+        pval_p <- sapply(test, function(x) x$p.value)
+        
+        vioplot(tissue.path.loadings, main = paste0(search.term, "\n", length(path.gene.id), " genes"), 
+            ylim = c(all_min, all_max), col = tissue.cols)
+        text(x = 1:4, y = all_max, labels = paste0("p = ", signif(pval_p, 2)))
+        abline(h = 0)
+    }
+    dev.off()
+}
+```
+
+### NES Heat Map
+
+Plot a heatmap of the most extreme normalized enrichment scores together.
+
+```{r enrich_heat, warning = FALSE, message = FALSE, error = FALSE, fig.width = 7, fig.height = 9}
+#pdf(file.path(kegg.result.dir, "NES_heat.pdf"), width = 7, height = 50)
+pheatmap(top.kegg.mat)
+#dev.off()
+```
+
+### KEGG Pathway pictures {.tabset .tabset-fade .tabset-pills}
+
+We can also plot loadings on individual pathway images. We use
+the package pathview for this. Below we show NES overlaid onto
+the Oxidative Phosphorylation pathway in each tissue.
+
+In these pictures, the loadings are normalized to the min and
+max of all transcript loadings across all tissues. So -1 corresponds 
+to about -0.04 and 1 corresponds to about 0.04.
+
+You can see below that OxPhos in adipose tissue is very negatively
+loaded, meaning that greater expression is related to reduced
+metabolic index (leaner mouse). OxPhos in the other tissues
+is not loaded in any particular way, so it is not mediating
+the genetic effects in the other tissues.
+
+```{r oxphos, results = "asis", warning = FALSE, message = FALSE, error = FALSE}
+
+search.term <- "Oxidative phosphorylation"
+
+path.locale <- grep(search.term, all.kegg[[2]][,2], fixed = TRUE)
+path.id <- all.kegg[[2]][path.locale,][1]
+path.name <- all.kegg[[2]][path.locale,][2]
+
+path.idx <- which(all.kegg[[1]][,1] == unlist(path.id))
+path.gene.id <- all.kegg[[1]][path.idx,2]
+path.gene.table <- gconvert(as.numeric(path.gene.id), "mmusculus", numeric_ns = "ENTREZGENE_ACC")
+
+tissue.path.loadings <- vector(mode = "list", length = length(transcript_loadings))
+names(tissue.path.loadings) <- tissue.names
+for(tx in 1:length(transcript_loadings)){
+    gene.idx <- match(path.gene.table[,"target"], rownames(transcript_loadings[[tx]]))
+    gene.set <- transcript_loadings[[tx]][gene.idx]
+    names(gene.set) <- path.gene.table[,"input"]
+    gene.idx <- gene.idx[which(!is.na(gene.idx))]
+    tissue.path.loadings[[tx]] <- gene.set
+}
+
+scale.factor <- max(sapply(transcript_loadings, function(x) max(abs(x), na.rm = TRUE)))
+
+for(tx in 1:length(tissue.names)){
+    cat("####", tissue.names[tx], "\n")
+    pv.out <- pathview(gene.data = tissue.path.loadings[[tx]]/scale.factor, 
+        pathway.id = path.id, species = "mmu", 
+        out.suffix = paste(tissue.names[tx], gsub(" ", "_", search.term), sep = "_"),
+        kegg.dir = here("Results", "Kegg"))
+
+    picture.file <- paste0(path.id, ".", tissue.names[tx], "_", gsub(" ", "_", search.term), ".png")
+    if(file.exists(here(picture.file))){
+        system.call <- paste("mv", here(picture.file), file.path(kegg.result.dir, picture.file))
+        system(system.call)
+    }
+
+    cat("![](",file.path(kegg.result.dir, picture.file), ")\n")
+
+    cat("\n\n")
+}
+```
+
+
+## GO Enrichments
+
+We downloaded the GO annotation file (GAF) from MGI
+\url{https://www.informatics.jax.org/downloads/reports/index.html}
+We unzipped the file and saved mgi.gaf in Data/general
+
+The column contents of a GAF are described here:
+\url{https://geneontology.org/docs/go-annotation-file-gaf-format-2.2/}
+
+```{r get_GO}
+go.table <- read.delim(here("Data", "general", "mgi.gaf"), comment.char = "!", header = FALSE)
+common.genes <- intersect(gene.table[,"external_gene_name"], go.table[,3])
+gene.go.table <- go.table[which(go.table[,3] %in% common.genes),]
+
+#remove NOT terms, since these have been shown NOT to be involved in the listed GO term
+not.idx <- grep("NOT", gene.go.table[,4])
+is.involved.idx <- setdiff(1:nrow(gene.go.table), not.idx)
+is.go.table <- gene.go.table[is.involved.idx,]
+```
+
+```{r go_list}
+min_gene_num  <- 80
+max_gene_num  <- 3000
+
+u_term <- unique(is.go.table[,5])
+go.list <- lapply(u_term, function(x) unique(is.go.table[which(is.go.table[,5] == x),3]))
+names(go.list) <- u_term
+num.genes <- sapply(go.list, length)
+
+good.idx <- intersect(which(num.genes >= min_gene_num), which(num.genes <= max_gene_num))
+#length(good.idx)
+go.list <- go.list[good.idx]
+
+ensembl.go.list <- go.list
+for(i in 1:length(go.list)){
+    ensembl.id <- gene.table[match(go.list[[i]], gene.table[,"external_gene_name"]),"ensembl_gene_id"]
+    ensembl.go.list[[i]]  <- ensembl.id
+}
+
+```
+
+
+```{r go_names}
+go.term <- names(ensembl.go.list)
+term.ontology <- getGOOntology(go.term)
+term.names <- goIdToTerm(go.term)
+names(ensembl.go.list) <- term.names
+```
+
+```{r go_enrich}
+
+go.enrich.nes.file <- here("Results", "GO", "GO_NES.RDS")
+
+if(!file.exists(go.enrich.nes.file)){
+    go.enrich.nes <- matrix(NA, ncol = length(tissue.names), nrow = length(go.list))
+    colnames(go.enrich.nes) <- tissue.names
+    rownames(go.enrich.nes) <- names(ensembl.go.list)
+
+    for(tx in 1:length(tissue.names)){
+
+        sorted.tx.loadings <- transcript_loadings[[tx]][order(transcript_loadings[[tx]], decreasing = TRUE),1]
+        gsea.enrich <- fgsea::fgsea(ensembl.go.list, sorted.tx.loadings, scoreType = "std")
+        norm.es <- as.numeric(as.matrix(gsea.enrich[,"NES"]))
+        names(norm.es) <- gsea.enrich$pathway
+
+        name.idx <- match(names(norm.es), rownames(go.enrich.nes))
+        go.enrich.nes[name.idx,tx] <- norm.es
+    }
+    saveRDS(go.enrich.nes, go.enrich.nes.file)
+}else{
+    go.enrich.nes <- readRDS(go.enrich.nes.file)
+}
+
+
+vioplot(go.enrich.nes, col = tissue.cols)
+abline(h = 0)
+```
+
+### Top GO Enrichments {.tabset .tabset-fade .tabset-pills}
+
+Plot top and bottom enrichment scores.
+
+```{r plot_go_enrich, fig.width = 9, fig.height = 7, results = "asis"}
+#pdf(file.path(go.result.dir, "NES_by_tissue.pdf"), width = 9, height = 7)
+num.top <- 10
+extreme.go <- vector(mode = "list", length = length(tissue.names))
+names(extreme.go) <- tissue.names
+
+par(mar = c(4,4, 2, 4))
+for(tx in 1:length(tissue.names)){
+    cat("####", tissue.names[tx], "\n")
+    enrich.order <- order(go.enrich.nes[,tx], decreasing = FALSE)
+    sorted.enrich <- go.enrich.nes[enrich.order,tx]
+    sorted.onto <- term.ontology[enrich.order]
+    extreme.enrich  <- c(head(sorted.enrich, num.top), tail(sorted.enrich, num.top))
+    extreme.onto <- c(head(sorted.onto, num.top), tail(sorted.onto, num.top))
+    a <- barplot(extreme.enrich, 
+        horiz = TRUE, las = 2, main = tissue.names[tx], 
+        xlim = c(min(go.enrich.nes), max(go.enrich.nes)), names = NA)
+    text(x = rep(-0.1, num.top), y = tail(a, num.top), 
+        labels = paste0(tail(names(extreme.enrich), num.top), " (", tail(extreme.onto, num.top), ")"), adj = 1)
+    text(x = rep(0.1, num.top), y = head(a, num.top), 
+        labels = paste0(head(names(extreme.enrich), num.top), " (", head(extreme.onto, num.top), ")"), adj = 0)
+    mtext("Normalized Enrichment Score", side = 1, line = 2.5)
+ 
+    extreme.go[[tx]]  <- extreme.enrich
+    cat("\n\n")
+}
+#dev.off()
+```
+
+### GO Term Loading Distributions
+
+We plotted loading distributions for these top enriched terms
+in GO_Term_Loadings.pdf
+
+```{r all_terms}
+top.go.enrich <- unique(unlist(lapply(extreme.go, names)))
+
+pdf(file.path(go.result.dir, "GO_Term_Loadings.pdf"), width = 12, height = 12)
+par(mfrow = c(4,4))
+for(i in 1:length(top.go.enrich)){
+    go.idx <- which(names(ensembl.go.list) == top.go.enrich[i])
+    gene.vals <- lapply(transcript_loadings, function(x) x[match(ensembl.go.list[[go.idx]], rownames(x)),1])
+
+    test <- lapply(gene.vals, function(x) t.test(x))
+    pval_p <- sapply(test, function(x) x$p.value)
+    
+    vioplot(gene.vals, main = paste0(top.go.enrich[i], "\n", length(ensembl.go.list[[go.idx]])), 
+        ylim = c(all_min, all_max), col = tissue.cols)
+    text(x = 1:4, y = all_max, labels = paste0("p = ", signif(pval_p, 2)))
+    abline(h = 0)
+}
+dev.off()
+```
+
+### GO term heat map
+
+The following heat map shows the NES across the most 
+extreme enriched terms
+
+```{r go_enrich_heat, fig.width = 7, fig.height = 9}
+top.idx <- match(top.go.enrich, rownames(go.enrich.nes))
+pheatmap(go.enrich.nes[top.idx,])
+```
