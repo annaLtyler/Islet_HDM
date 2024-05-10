@@ -46,7 +46,7 @@ singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here
 #================
 
 #~4.5 hrs
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
 
 #total time: 4.5 hrs
 
@@ -56,15 +56,15 @@ singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here
 
 #parse phenotypes and gene expression
 #<5min
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "1a.CC-RIX_Phenotypes_Expression.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "1a.CC-RIX_Phenotypes_Expression.Rmd"))'
 
 #build genotype object
 #<1min
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "1b.CC-RIX_Genotypes.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "1b.CC-RIX_Genotypes.Rmd"))'
 
 #impute CC-RIX gene expression
 #<2min
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "2.Impute_CC-RIX_gene_expression.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "2.Impute_CC-RIX_gene_expression.Rmd"))'
 
 #total time: 8 min
 #================
@@ -74,14 +74,14 @@ singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here
 #predict metabolic index with measured transcripts
 #<2min
 use_cc_imputed_transcriptome=FALSE
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
-#mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_measured.html
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
+mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_measured.html
 
 #predict metabolic index with imputed transcripts
 #<2min
 use_cc_imputed_transcriptome=TRUE
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
-#mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_imputed.html
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "2.CC-RIX", "3.CC-RIX_validation.Rmd"))' --args "$use_cc_imputed_transcriptome"
+mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation_imputed.html
 
 #total time: 4 min
 

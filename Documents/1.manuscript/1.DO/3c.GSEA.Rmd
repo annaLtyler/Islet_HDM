@@ -143,7 +143,7 @@ for(tx in 1:length(tissue.names)){
     extreme.enrich  <- c(head(sorted.enrich, 10), tail(sorted.enrich, 10))
     a <- barplot(extreme.enrich, 
         horiz = TRUE, las = 2, main = tissue.names[tx], 
-        xlim = c(min(path_enrich), max(path_enrich)), name = NA)
+        xlim = c(min(path_enrich), max(path_enrich)), name = NA, col = tissue.cols[tx])
     text(x = rep(-0.1, 10), y = tail(a, 10), labels = tail(names(extreme.enrich), 10), adj = 1)
     text(x = rep(0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 0)
     mtext("Normalized Enrichment Score", side = 1, line = 2.5)
@@ -228,49 +228,57 @@ metabolic index (leaner mouse). OxPhos in the other tissues
 is not loaded in any particular way, so it is not mediating
 the genetic effects in the other tissues.
 
-```{r oxphos, results = "asis", warning = FALSE, message = FALSE, error = FALSE}
+```{r picture_fun, results = "asis", warning = FALSE, message = FALSE, error = FALSE}
 
-search.term <- "Oxidative phosphorylation"
 
-path.locale <- grep(search.term, all.kegg[[2]][,2], fixed = TRUE)
-path.id <- all.kegg[[2]][path.locale,][1]
-path.name <- all.kegg[[2]][path.locale,][2]
+plot_kegg_picture <- function(search.term, quote.level = "####"){
+    path.locale <- grep(search.term, all.kegg[[2]][,2], fixed = TRUE)
+    path.id <- all.kegg[[2]][path.locale,][1]
+    path.name <- all.kegg[[2]][path.locale,][2]
 
-path.idx <- which(all.kegg[[1]][,1] == unlist(path.id))
-path.gene.id <- all.kegg[[1]][path.idx,2]
-path.gene.table <- gconvert(as.numeric(path.gene.id), "mmusculus", numeric_ns = "ENTREZGENE_ACC")
+    path.idx <- which(all.kegg[[1]][,1] == unlist(path.id))
+    path.gene.id <- all.kegg[[1]][path.idx,2]
+    path.gene.table <- gconvert(as.numeric(path.gene.id), "mmusculus", numeric_ns = "ENTREZGENE_ACC")
 
-tissue.path.loadings <- vector(mode = "list", length = length(transcript_loadings))
-names(tissue.path.loadings) <- tissue.names
-for(tx in 1:length(transcript_loadings)){
-    gene.idx <- match(path.gene.table[,"target"], rownames(transcript_loadings[[tx]]))
-    gene.set <- transcript_loadings[[tx]][gene.idx]
-    names(gene.set) <- path.gene.table[,"input"]
-    gene.idx <- gene.idx[which(!is.na(gene.idx))]
-    tissue.path.loadings[[tx]] <- gene.set
-}
-
-scale.factor <- max(sapply(transcript_loadings, function(x) max(abs(x), na.rm = TRUE)))
-
-for(tx in 1:length(tissue.names)){
-    cat("####", tissue.names[tx], "\n")
-    pv.out <- pathview(gene.data = tissue.path.loadings[[tx]]/scale.factor, 
-        pathway.id = path.id, species = "mmu", 
-        out.suffix = paste(tissue.names[tx], gsub(" ", "_", search.term), sep = "_"),
-        kegg.dir = here("Results", "Kegg"))
-
-    picture.file <- paste0(path.id, ".", tissue.names[tx], "_", gsub(" ", "_", search.term), ".png")
-    if(file.exists(here(picture.file))){
-        system.call <- paste("mv", here(picture.file), file.path(kegg.result.dir, picture.file))
-        system(system.call)
+    tissue.path.loadings <- vector(mode = "list", length = length(transcript_loadings))
+    names(tissue.path.loadings) <- tissue.names
+    for(tx in 1:length(transcript_loadings)){
+        gene.idx <- match(path.gene.table[,"target"], rownames(transcript_loadings[[tx]]))
+        gene.set <- transcript_loadings[[tx]][gene.idx]
+        names(gene.set) <- path.gene.table[,"input"]
+        gene.idx <- gene.idx[which(!is.na(gene.idx))]
+        tissue.path.loadings[[tx]] <- gene.set
     }
 
-    cat("![](",file.path(kegg.result.dir, picture.file), ")\n")
+    scale.factor <- max(sapply(transcript_loadings, function(x) max(abs(x), na.rm = TRUE)))
 
-    cat("\n\n")
+    for(tx in 1:length(tissue.names)){
+        cat(quote.level, tissue.names[tx], "\n")
+        pv.out <- pathview(gene.data = tissue.path.loadings[[tx]]/scale.factor, 
+            pathway.id = path.id, species = "mmu", 
+            out.suffix = paste(tissue.names[tx], gsub(" ", "_", search.term), sep = "_"),
+            kegg.dir = here("Results", "Kegg"))
+
+        picture.file <- paste0(path.id, ".", tissue.names[tx], "_", gsub(" ", "_", search.term), ".png")
+        if(file.exists(here(picture.file))){
+            system.call <- paste("mv", here(picture.file), file.path(kegg.result.dir, picture.file))
+            system(system.call)
+        }
+
+        cat("![](",file.path(kegg.result.dir, picture.file), ")\n")
+
+        cat("\n\n")
+    }
 }
 ```
 
+#### Oxidative Phosphorylation
+
+```{r oxphos}
+kegg.term = "Oxidative phosphorylation"
+
+plot_kegg_picture(kegg.term)
+```
 
 ## GO Enrichments
 
@@ -370,7 +378,7 @@ for(tx in 1:length(tissue.names)){
     extreme.onto <- c(head(sorted.onto, num.top), tail(sorted.onto, num.top))
     a <- barplot(extreme.enrich, 
         horiz = TRUE, las = 2, main = tissue.names[tx], 
-        xlim = c(min(go.enrich.nes), max(go.enrich.nes)), names = NA)
+        xlim = c(min(go.enrich.nes), max(go.enrich.nes)), names = NA, col = tissue.cols[tx])
     text(x = rep(-0.1, num.top), y = tail(a, num.top), 
         labels = paste0(tail(names(extreme.enrich), num.top), " (", tail(extreme.onto, num.top), ")"), adj = 1)
     text(x = rep(0.1, num.top), y = head(a, num.top), 
