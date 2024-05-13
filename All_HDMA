@@ -91,16 +91,16 @@ mv Documents/1.manuscript/2.CC-RIX/3.CC-RIX_validation.html Documents/1.manuscri
 
 #Cell-type-specific gene expression
 #<2min
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Cell_Type_Validation.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Cell_Type_Validation.Rmd"))'
 
 #Look at apelin module more closely
 #<1min
 gene_set_name=Autophagy_-_animal_cluster.txt
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Gene_Set_Validation.Rmd"))' --args "$gene_set_name"
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Gene_Set_Validation.Rmd"))' --args "$gene_set_name"
 
 #Predictions of human metabolic index using HDMA results
 #~2 min
-#singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Human_Data_Validation.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "3.Human", "4.Human_Data_Validation.Rmd"))'
 
 #total time: 5 min
 

@@ -34,7 +34,7 @@ kegg.result.dir <- here("Results", "KEGG")
 if(!file.exists(kegg.result.dir)){dir.create(kegg.result.dir, recursive = TRUE)}
 
 go.result.dir <- here("Results", "GO")
-if(!file.exists(kegg.result.dir)){dir.create(kegg.result.dir, recursive = TRUE)}
+if(!file.exists(go.result.dir)){dir.create(go.result.dir, recursive = TRUE)}
 ```
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
@@ -77,8 +77,7 @@ We biult a list of KEGG terms and their gene assignments.
 
 ```{r build_list}
 # build GSEA list
-path.locale <- lapply(u_path, function(x) grep(x, all.kegg[[2]][,2], fixed = TRUE))
-path.id <- lapply(path.locale, function(x) all.kegg[[2]][x,][1])
+path.id <- all.kegg[[2]][,1]
 path.idx <- lapply(path.id, function(x) which(all.kegg[[1]][,1] == unlist(x)[1]))
 path.gene.id <- lapply(path.idx, function(x) all.kegg[[1]][x,2])
 names(path.gene.id) <- u_path
@@ -143,7 +142,7 @@ for(tx in 1:length(tissue.names)){
     extreme.enrich  <- c(head(sorted.enrich, 10), tail(sorted.enrich, 10))
     a <- barplot(extreme.enrich, 
         horiz = TRUE, las = 2, main = tissue.names[tx], 
-        xlim = c(min(path_enrich), max(path_enrich)), name = NA, col = tissue.cols[tx])
+        xlim = c(-3, 3), name = NA, col = tissue.cols[tx])
     text(x = rep(-0.1, 10), y = tail(a, 10), labels = tail(names(extreme.enrich), 10), adj = 1)
     text(x = rep(0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 0)
     mtext("Normalized Enrichment Score", side = 1, line = 2.5)
@@ -174,7 +173,7 @@ if(!file.exists(kegg.loading.file)){
         }
         search.term <- all.extreme.kegg[i]
 
-        path.locale <- grep(search.term, all.kegg[[2]][,2], fixed = TRUE)
+        path.locale <- which(u_path == search.term)
         path.id <- all.kegg[[2]][path.locale,][1]
         path.name <- all.kegg[[2]][path.locale,][2]
 
@@ -206,13 +205,13 @@ if(!file.exists(kegg.loading.file)){
 
 Plot a heatmap of the most extreme normalized enrichment scores together.
 
-```{r enrich_heat, warning = FALSE, message = FALSE, error = FALSE, fig.width = 7, fig.height = 9}
+```{r enrich_heat, warning = FALSE, message = FALSE, error = FALSE, fig.width = 7, fig.height = 10}
 #pdf(file.path(kegg.result.dir, "NES_heat.pdf"), width = 7, height = 50)
 pheatmap(top.kegg.mat)
 #dev.off()
 ```
 
-### KEGG Pathway pictures {.tabset .tabset-fade .tabset-pills}
+### KEGG Pathway pictures
 
 We can also plot loadings on individual pathway images. We use
 the package pathview for this. Below we show NES overlaid onto
@@ -230,9 +229,12 @@ the genetic effects in the other tissues.
 
 ```{r picture_fun, results = "asis", warning = FALSE, message = FALSE, error = FALSE}
 
-
-plot_kegg_picture <- function(search.term, quote.level = "####"){
-    path.locale <- grep(search.term, all.kegg[[2]][,2], fixed = TRUE)
+#some pathways can not be plotted because of the way they are
+#represented in KEGG. The Fatty Acid Metabolism pathway, for 
+#example cannot be plotted.
+plot_kegg_picture <- function(search.term, quote.level = "####", fig.width = 100){
+    path.labels <- gsub(" - Mus musculus (house mouse)", "", all.kegg[[2]][,2], fixed = TRUE)
+    path.locale <- which(path.labels == search.term)
     path.id <- all.kegg[[2]][path.locale,][1]
     path.name <- all.kegg[[2]][path.locale,][2]
 
@@ -249,6 +251,7 @@ plot_kegg_picture <- function(search.term, quote.level = "####"){
         gene.idx <- gene.idx[which(!is.na(gene.idx))]
         tissue.path.loadings[[tx]] <- gene.set
     }
+    #vioplot(tissue.path.loadings, col = tissue.cols);abline(h = 0)
 
     scale.factor <- max(sapply(transcript_loadings, function(x) max(abs(x), na.rm = TRUE)))
 
@@ -265,20 +268,27 @@ plot_kegg_picture <- function(search.term, quote.level = "####"){
             system(system.call)
         }
 
-        cat("![](",file.path(kegg.result.dir, picture.file), ")\n")
+        fig.line = paste0("![](",file.path(kegg.result.dir, picture.file), "){width=", fig.width, "%}\n")
+        cat(fig.line)
 
         cat("\n\n")
     }
 }
 ```
 
-#### Oxidative Phosphorylation
+#### Oxidative Phosphorylation  {.tabset .tabset-fade .tabset-pills}
 
-```{r oxphos}
-kegg.term = "Oxidative phosphorylation"
-
-plot_kegg_picture(kegg.term)
+```{r oxphos, results = "asis", error = FALSE, message = FALSE, warning = FALSE}
+plot_kegg_picture(search.term = "Oxidative phosphorylation", quote.level = "#####", fig.width = 100)
 ```
+
+#### Branched-chain amino acid degradation  {.tabset .tabset-fade .tabset-pills}
+
+```{r another, results = "asis", error = FALSE, message = FALSE, warning = FALSE}
+plot_kegg_picture("Valine, leucine and isoleucine degradation", quote.level = "#####", fig.width = 75)
+#plot_kegg_picture("Citrate cycle (TCA cycle)", quote.level = "#####", fig.width = 75)
+```
+
 
 ## GO Enrichments
 
@@ -378,7 +388,7 @@ for(tx in 1:length(tissue.names)){
     extreme.onto <- c(head(sorted.onto, num.top), tail(sorted.onto, num.top))
     a <- barplot(extreme.enrich, 
         horiz = TRUE, las = 2, main = tissue.names[tx], 
-        xlim = c(min(go.enrich.nes), max(go.enrich.nes)), names = NA, col = tissue.cols[tx])
+        xlim = c(-3, 3), names = NA, col = tissue.cols[tx])
     text(x = rep(-0.1, num.top), y = tail(a, num.top), 
         labels = paste0(tail(names(extreme.enrich), num.top), " (", tail(extreme.onto, num.top), ")"), adj = 1)
     text(x = rep(0.1, num.top), y = head(a, num.top), 
@@ -396,7 +406,7 @@ for(tx in 1:length(tissue.names)){
 We plotted loading distributions for these top enriched terms
 in GO_Term_Loadings.pdf
 
-```{r all_terms}
+```{r all_terms, error = FALSE, warning = FALSE, message = FALSE}
 top.go.enrich <- unique(unlist(lapply(extreme.go, names)))
 
 pdf(file.path(go.result.dir, "GO_Term_Loadings.pdf"), width = 12, height = 12)
