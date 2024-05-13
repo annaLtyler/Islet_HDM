@@ -696,7 +696,6 @@ for(tx in 1:length(tissue.names)){
 
 We correlated each imputed transcript with the traits.
 
-
 ```{r max_cor_fun}
 #this function finds the maximum absolute value of 
 #a vector of correlations, and returns the correlation
@@ -937,8 +936,9 @@ for(tx in 1:length(tissue.names)){
 ```
 
 ## Predictive TWAS
+
 We have a result that we are not the sum of our eQTLs because loading
-times imputed transcript does not predict trait. But what it loading
+times imputed transcript does not predict trait. But what if loading
 isn't the right number to use here. What about just correlation of the
 imputed transcript with the trait, as we do in TWAS? That might be a
 more direct test of this question. Or is it totally circular?

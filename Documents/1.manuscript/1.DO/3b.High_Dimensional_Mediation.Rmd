@@ -60,7 +60,7 @@ weight.adjusted <- as.logical(args[3]) #if TRUE, body weight is adjusted out of 
 complete.mediation <- as.logical(args[4]) #if TRUE use a mediation network. If FALSE use a reactive network
 delete_previous <- as.logical(args[5]) #if TRUE, previous results are overwritten
 
-remove.local.effects <- TRUE #if TRUE, the effects of local genotype are
+remove.local.effects <- FALSE #if TRUE, the effects of local genotype are
                              #removed from gene expression before kernelizing.
                              #This allows us to specifically analyze the correlation 
                              #between distal heritability and trait relevance 
@@ -72,7 +72,7 @@ kinship.effect.only <- FALSE #if TRUE, locally imputed gene expression is
 #kinship.type = c("germline", "functional") 
 kinship.type = "germline" #The germline kinship matrix is the 
                             #standard kinship matrix generated from genotype data.
-                            #the functional kinship matrix is a kinship matrix 
+                            #The functional kinship matrix is a kinship matrix 
                             #generated from the locally imputed transcripts. This
                             #captures the part of the genome that is locally 
                             #controlling gene expression at the time of measurement.
@@ -732,7 +732,7 @@ calc_null <- FALSE #set to TRUE to calculate null loading
 ```{r load_herit}
 #These imputed transcripts are the fitted values from fit1 
 #with the nearest marker and a kinship correction
-#created by 3b.Imputation.Rmd
+#created by 3a.Imputation.Rmd
 imp.files <- get.files(here("Results", "DO", "Imputed_Transcriptomes"), 
     want = c("Local", "Imputation"), full.names = TRUE)
 tissue.imp.gen <- lapply(imp.files, readRDS)
@@ -1665,10 +1665,15 @@ their phenotype? Here, we multiply the transcript loadings
 by each individual's transcription profile and calculate the
 mean as its predicted position in phenotype space.
 
-## Correlation with phenome score
+We do this for both the measured transcripts and the imputed
+transcripts. The imputed transcripts carry only local genetic
+information.
+
+## Measured Transcripts
 
 The following plots show the correlations between phenome score
-and the predicted phenome score based on individual transcriptome.
+and the predicted phenome score based on individual measured 
+transcriptome.
 
 ```{r ptrs, fig.width = 8, fig.height = 8}
 if(mediation.text == "complete_mediation"){
@@ -1700,6 +1705,34 @@ if(mediation.text == "complete_mediation"){
 }
 ```
 
+## Imputed Transcripts
+
+The following plots show the correlations between phenome score
+and the predicted phenome score based on individual imputed 
+transcriptome.
+
+```{r imputed_prediction, fig.width = 8, fig.height = 8}
+if(mediation.text == "complete_mediation"){
+    transcript.pred <- vector(mode = "list", length = length(tissue.names))
+    names(transcript.pred) <- tissue.names
+
+    par(mfrow = c(2,2))
+    for(tx in 1:length(tissue.names)){
+
+        tx.idx <- which(names(tissue.imp.gen) == tissue.names[tx])
+        if(length(tx.idx) == 0){next()} #we don't have all the tissues imputed yet.
+        
+        common.tx <- intersect(colnames(tissue.imp.gen[[tx.idx]]), rownames(transcript_loadings[[tx]]))
+        transcript.pred[[tx]] <- apply(tissue.imp.gen[[tx.idx]][,common.tx], 1, function(x) x * transcript_loadings[[tx]][common.tx,])
+        mean.pred <- colMeans(transcript.pred[[tx]], na.rm = TRUE)
+        pred.order <- order(mean.pred)    
+        
+        common.ind <- intersect(rownames(ind.scaled.expr), rownames(model_scores[[tx]]))
+        plot.with.model(mean.pred[common.ind], model_scores[[tx]][,"Outcome"],
+            xlab = "Prediction", ylab = "Phenome Score", main = tissue.names[tx])
+    }
+}
+```
 
 ## Distributions for individual extremes  {.tabset .tabset-fade .tabset-pills}
 
@@ -1942,7 +1975,7 @@ transcript.loading.list <- lapply(transcript_loadings, function(x) x[,1])
 
 toa_loadings_file <- file.path(results.dir, paste0("TOA_Transcript_Loadings_", adjust_numeral, "_Results.RDS"))
 if(!file.exists(toa_loadings_file)){
-   toa.results <- cluster_values(value.list = transcript.loading.list, z.thresh = 3, 
+   toa.results <- cluster_values(value.list = transcript.loading.list, z.thresh = 2.5, 
         k.seq = 3:20)
     saveRDS(toa.results, toa_loadings_file)
 }else{
