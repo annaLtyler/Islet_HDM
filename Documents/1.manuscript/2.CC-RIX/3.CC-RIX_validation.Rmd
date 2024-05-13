@@ -199,8 +199,9 @@ if(use.cc.imputed.transcriptome){
     names(imp.expr) <- sapply(strsplit(gsub(".RDS", "", basename(expr.files)), "_"), function(x) x[3])
 
     #expand imputed expression to all individuals in the data set
-    tissue.expr <- vector(mode = "list", length = length(imp.expr))
-    names(tissue.expr) <- names(imp.expr)
+    tissue.expr <- imputed_strain <- vector(mode = "list", length = length(imp.expr))
+    names(tissue.expr) <- names(imputed_strain) <- names(imp.expr)
+    
     for(tx in 1:length(tissue.expr)){
         #get expression for each animal
         u_ind <- unique(annot[,"climb.id"])
@@ -209,12 +210,15 @@ if(use.cc.imputed.transcriptome){
         strain.idx <- match(ind_strains, rownames(imp.expr[[tx]]))
         expanded.mat <- imp.expr[[tx]][strain.idx,]
         rownames(expanded.mat) <- unique.info[,"Barcode.1"]
+        names(ind_strains) <- rownames(expanded.mat)
+        imputed_strain[[tx]] <- ind_strains
 
         #there were quite a few unimputable transcripts in the imputed data
         #remove any transcript for which all entries are NA
         allna <- which(apply(expanded.mat, 2, function(x) all(is.na(x))))
         to.keep <- setdiff(1:ncol(expanded.mat), allna)
         tissue.expr[[tx]] <- expanded.mat[,to.keep]
+
     }
 }else{
     #otherwise read measured expression
@@ -232,6 +236,11 @@ common.expr <- lapply(tissue.expr, function(x) x[common.ind,])
 common.bw <- as.matrix(bw[common.ind,,drop=FALSE])
 common.chem <- num.chem[common.ind,,drop=FALSE]
 covar.groups <- chem.mat[common.ind,1:4]
+
+#keep track of strain identity as well
+if(use.cc.imputed.transcriptome){
+    cc_strains = imputed_strain[[1]][common.ind]
+}
 
 common.pheno <- cbind(common.bw, common.chem) #look at all traits together
 
@@ -345,7 +354,6 @@ that were calculated from unadjusted gene expression and traits.
 Here we plot the rankZ MGE values against the rankZ trait values. 
 
 ```{r mge_and_pheno, results = "asis", fig.width = 12, fig.height = 9}
-
 all.pheno.cor <- vector(mode = "list", length = length(tissue.expr))
 names(all.pheno.cor) <- names(tissue.expr)
 
@@ -515,12 +523,39 @@ for(i in 1:length(tissue.expr)){
     cat("###", names(tissue.expr)[i], "\n")
     par(mfrow = c(3,4))
     mean.mge <- rowMeans(pop.mge[[i]], na.rm = TRUE)
-    pheno.cor <- t(sapply(1:ncol(adj.pheno), 
-        function(x) plot.with.model(rankZ(mean.mge), rankZ(adj.pheno[,x]), 
-        ylab = colnames(adj.pheno)[x], report = "cor.test", 
-        main = colnames(adj.pheno)[x], xlab = "Predicted Metabolic Index")))
+
+    #if we are using imputed gene expression, use strain means
+    if(imp.text == "imputed"){
+        u_strain <- unique(cc_strains)
+        u_strain_idx <- lapply(u_strain, function(x) which(cc_strains == x))
+        names(u_strain_idx) <- u_strain
+        strain.mge <- sapply(u_strain_idx, function(x) mean(mean.mge[x])) #these are all the same for a single strain, but the mean works
+        norm.pheno <- apply(adj.pheno, 2, rankZ)
+        strain.pheno <- t(sapply(u_strain_idx, function(x) colMeans(norm.pheno[x,], na.rm = TRUE)))
+        strain.error <- t(sapply(u_strain_idx, function(x) apply(norm.pheno[x,], 2, function(y) sd(y, na.rm = TRUE))))
+
+        ymin <- min(strain.pheno - strain.error)
+        ymax <- max(strain.pheno + strain.error)
+        pheno.cor  <- matrix(NA, nrow = ncol(strain.pheno), ncol = 2)
+        for(ph in 1:ncol(strain.pheno)){
+            pheno.cor[ph,] <- plot.with.model(strain.mge, strain.pheno[,ph], 
+                ylab = colnames(strain.pheno)[ph], report = "lm", 
+                main = colnames(strain.pheno)[ph], xlab = "Predicted Metabolic Index",
+                ylim = c(ymin, ymax))
+            segments(x0 = strain.mge, y0 = strain.pheno[,ph]+strain.error[,ph], 
+                y1 = strain.pheno[,ph]-strain.error[,ph])
+        }
+    }else{
+        pheno.cor <- t(sapply(1:ncol(adj.pheno), 
+            function(x) plot.with.model(rankZ(mean.mge), rankZ(adj.pheno[,x]), 
+            ylab = colnames(adj.pheno)[x], report = "lm", 
+            main = colnames(adj.pheno)[x], xlab = "Predicted Metabolic Index")))
+
+    }
     rownames(pheno.cor) <- colnames(adj.pheno)
+    colnames(pheno.cor) <- c("R2", "p")
     pop.pheno.cor[[i]] <- pheno.cor
+
     cat("\n\n")
 }
 ```
