@@ -32,15 +32,6 @@ For this workflow there are several parameters to set.
     1. exp.name: will determine the directory in which the results are stored.
     2. merge.tissues: if TRUE, the transcription kernel is an average of 
         all independent tissue kernels.
-    3. use.local.imputation: if TRUE uses locally imputed transcript values 
-        to generate polygenic risk scores, if FALSE, uses transcripts imputed 
-        with full genetic model (local + kinship)
-        The full genetic model gives us better concordance with DO phenotypes,
-        but we can't use kinship in the model if we are going to predict phenotypes
-        in other populations, like inbred founders, or the CC-RIX.
-        This is now set to TRUE by default because we are using a different 
-        imputation model that only allows us to impute the locally controlled
-        portion of transcription for individuals.
 
 
 ```{r get_args}
@@ -55,33 +46,17 @@ args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
 #args <- c(1,1,1,1,0) #merged tissues, local imputation, mediation mode, weight adjusted
 
 merge.tissues <- as.logical(args[1]) #if TRUE tissue transcriptome kernels are averaged. Otherwise they are used separtely
-use.local.imputation <- TRUE #if TRUE, locally imputed transcripts are used to generate polytranscriptomic risk scores. Otherwise transcripts imputed with the full genetic model are used.
 weight.adjusted <- as.logical(args[3]) #if TRUE, body weight is adjusted out of the phenotypes and transcriptome before running mediation
 complete.mediation <- as.logical(args[4]) #if TRUE use a mediation network. If FALSE use a reactive network
 delete_previous <- as.logical(args[5]) #if TRUE, previous results are overwritten
 
-remove.local.effects <- FALSE #if TRUE, the effects of local genotype are
+remove.local.effects <- TRUE #if TRUE, the effects of local genotype are
                              #removed from gene expression before kernelizing.
                              #This allows us to specifically analyze the correlation 
                              #between distal heritability and trait relevance 
 
-kinship.effect.only <- FALSE #if TRUE, locally imputed gene expression is 
-                            #subtracted from the full model imputation to 
-                            #give gene expression imputed only from kinship
-
-#kinship.type = c("germline", "functional") 
-kinship.type = "germline" #The germline kinship matrix is the 
-                            #standard kinship matrix generated from genotype data.
-                            #The functional kinship matrix is a kinship matrix 
-                            #generated from the locally imputed transcripts. This
-                            #captures the part of the genome that is locally 
-                            #controlling gene expression at the time of measurement.
-
 
 if(is.na(merge.tissues)){stop("Please set the parameters for this run.")}
-if(use.local.imputation){
-    kinship.effect.only <- FALSE
-}
 
 #hdm options
 merge.text.options <- c("tissue_sep", "tissue_together")
@@ -97,17 +72,14 @@ if(perm.mat == "kin"){perm.text = "Permuting the kinshp matrix."}
 merge.text <- merge.text.options[(as.numeric(merge.tissues)+1)]
 weight.text <- weight.options[(as.numeric(weight.adjusted)+1)]
 mediation.text <- mediation.options[(as.numeric(complete.mediation)+1)]
-kinship.type.text <- kinship.type
 
-exp.name <- paste(merge.text, weight.text, mediation.text, 
-    paste(kinship.type.text, "kinship", sep = "_"), sep = "-")
+exp.name <- paste(merge.text, weight.text, mediation.text, sep = "-")
 
 if(merge.tissues){
     max.tx <- 1
 }else{
     max.tx <- length(tissue.names)
 }
-
 
 adjust_before_fitting = NULL
 #adjust_before_fitting = "Model_Scores_0.RDS" #we can look for higher dimensions
@@ -116,7 +88,7 @@ adjust_before_fitting = NULL
                             #scores to use for the adjustment.
                             #set to NULL to fit the original model
 if(!is.null(adjust_before_fitting)){
-    adjust.file <- here("Results", "DO", "High_Dim_Med_no_MGE", exp.name, adjust_before_fitting)
+    adjust.file <- here("Results", "DO", "High_Dim_Med", exp.name, adjust_before_fitting)
     check.file <- file.exists(adjust.file)
     if(!check.file){stop("Error in parameter: adjust_before_fitting\nThe model must be fit before the adjustment.")}
     model_scores <- readRDS(adjust.file)
@@ -129,7 +101,6 @@ This run had the following settings:
 * Tissue treatment: `r merge.text`
 * Weight adjustment: `r weight.text`
 * Mediation type: `r mediation.text`
-* Kinship type: `r kinship.type.text`
 * Permutation type: `r perm.text`
 
 
@@ -138,7 +109,7 @@ is.interactive = FALSE
 #is.interactive = TRUE
 library("here")
 
-results.dir <- here("Results", "DO", "High_Dim_Med_no_MGE", exp.name)
+results.dir <- here("Results", "DO", "High_Dim_Med", exp.name)
 if(!file.exists(results.dir)){dir.create(results.dir, recursive = TRUE)}
 
 parsed.data.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data

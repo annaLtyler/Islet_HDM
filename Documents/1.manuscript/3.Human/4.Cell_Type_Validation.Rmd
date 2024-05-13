@@ -42,9 +42,7 @@ rm(list = ls())
 #is.interactive = TRUE
 library("here")
 
-exp.name = "tissue_together-_-complete_mediation-germline_kinship"
-
-prev.results.dir <- here("Results", "DO", "High_Dim_Med_no_MGE", exp.name)
+hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-complete_mediation")
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
@@ -63,9 +61,9 @@ Ehrlund et al. PMID: 29087381
 
 ```{r read_adipose_data}
 
-model_scores <- readRDS(file.path(prev.results.dir, "Model_Scores_0.RDS"))
+model_scores <- readRDS(file.path(hdma.results.dir, "Model_Scores_0.RDS"))
 
-transcript_loadings <- readRDS(file.path(prev.results.dir, "Loadings_Transcripts_0.RDS"))
+transcript_loadings <- readRDS(file.path(hdma.results.dir, "Loadings_Transcripts_0.RDS"))
 tissue.names <- names(transcript_loadings)
 
 #tissue.cols <- c("orange", "#8dd3c7", "tan", "brown") #colors that are not related to the DO/CC colors

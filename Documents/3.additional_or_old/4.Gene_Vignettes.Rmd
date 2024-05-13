@@ -41,8 +41,8 @@ jeff.genes <- c("Pnpla2", "Mogat2", "Hadha", "Cpt2", "Capn3", "Ccl2", "Prkaa1", 
 
 
 ```{r load_data}
-exp.name = "tissue_together-_-complete_mediation-germline_kinship"
-tissue.loadings <- readRDS(here("Results", "DO", "High_Dim_Med_no_MGE", exp.name, "Loadings_Transcripts_0.RDS"))
+hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-complete_mediation")
+tissue.loadings <- readRDS(file.path(hdma.results.dir, "Loadings_Transcripts_0.RDS"))
 ```
 
 

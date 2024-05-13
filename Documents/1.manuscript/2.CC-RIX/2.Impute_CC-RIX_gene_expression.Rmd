@@ -25,6 +25,7 @@ is.interactive = FALSE
 library("here")
 
 data.dir <- here("Data", "CC-RIX") #directory holding original data
+hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-complete_mediation")
 data.results.dir <- here("Results", "CC-RIX", "Data") #directory holding parsed data for downstream workflows
 results.dir <- here("Results", "CC-RIX", "Imputed") #directory holding results from this workflow
 if(!file.exists(results.dir)){dir.create(results.dir)}
@@ -363,8 +364,7 @@ and trait-relevance (loading or max trait correlation).
 
 ```{r trait_rel, fig.width = 5, fig.height = 5, results = "asis"}
 
-transcript.loadings <- readRDS(here("Results", "DO", "High_Dim_Med_no_MGE", 
-  "tissue_together-_-complete_mediation-germline_kinship", "Loadings_Transcripts_0.RDS"))
+transcript.loadings <- readRDS(file.path(hdma.results.dir, "Loadings_Transcripts_0.RDS"))
 
 max.trait.cor.files <- list.files(here("Results", "DO", "Transcriptomes"), 
   pattern = "Maximum_Trait_Correlation", full.names = TRUE)

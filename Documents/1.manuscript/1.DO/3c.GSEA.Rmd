@@ -35,6 +35,8 @@ if(!file.exists(kegg.result.dir)){dir.create(kegg.result.dir, recursive = TRUE)}
 
 go.result.dir <- here("Results", "GO")
 if(!file.exists(go.result.dir)){dir.create(go.result.dir, recursive = TRUE)}
+
+hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-complete_mediation")
 ```
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
@@ -46,8 +48,7 @@ load_libraries(all.packages)
 ```{r load_hdma_results}
 tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
 
-transcript_loadings <- readRDS(here("Results", "DO", "High_Dim_Med_no_MGE", 
-    "tissue_together-_-complete_mediation-germline_kinship", "Loadings_Transcripts_0.RDS"))
+transcript_loadings <- readRDS(file.path(hdma.results.dir, "Loadings_Transcripts_0.RDS"))
 tissue.names <- names(transcript_loadings)
 ```
 

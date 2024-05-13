@@ -12,7 +12,7 @@ bibliography: hdm.bib
 ```{r param}
 rm(list = ls()) #clear out the environment
 min.lod <- 8
-remove.pseudogenes = TRUE #if TRUE, removes pseudogenes and predicted genes 
+remove.pseudogenes = FALSE #if TRUE, removes pseudogenes and predicted genes 
 tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
 
 library(here)
