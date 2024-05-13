@@ -50,7 +50,7 @@ weight.adjusted <- as.logical(args[3]) #if TRUE, body weight is adjusted out of 
 complete.mediation <- as.logical(args[4]) #if TRUE use a mediation network. If FALSE use a reactive network
 delete_previous <- as.logical(args[5]) #if TRUE, previous results are overwritten
 
-remove.local.effects <- TRUE #if TRUE, the effects of local genotype are
+remove.local.effects <- FALSE #if TRUE, the effects of local genotype are
                              #removed from gene expression before kernelizing.
                              #This allows us to specifically analyze the correlation 
                              #between distal heritability and trait relevance 

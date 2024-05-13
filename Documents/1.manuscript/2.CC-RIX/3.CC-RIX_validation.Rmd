@@ -84,7 +84,7 @@ args = commandArgs(trailingOnly=TRUE)
 use.cc.imputed.transcriptome <- as.logical(args[1])
 
 if(is.na(use.cc.imputed.transcriptome)){
-    use.cc.imputed.transcriptome = TRUE #set this to TRUE to do the equivalent of genomic prediction
+    use.cc.imputed.transcriptome = FALSE #set this to TRUE to do the equivalent of genomic prediction
 }
 
 ```
@@ -223,6 +223,11 @@ if(use.cc.imputed.transcriptome){
 }else{
     #otherwise read measured expression
     tissue.expr <- readRDS(file.path(cc.parsed.data.dir, "Expression.by.Tissue.RDS"))
+    #but still keep track of strains
+    u_ind <- unique(annot[,"climb.id"])
+    unique.info <- t(sapply(u_ind, function(x) get_mouse_info(x, manifest, "CLIMB.ID")))
+    ind_strains <- gsub(" x ", "_", gsub(" X ", "_", unique.info[,"User.Defined.Strain"]))
+    names(ind_strains) <- unique.info[,"Barcode.1"]
 }
 
 tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
@@ -240,6 +245,8 @@ covar.groups <- chem.mat[common.ind,1:4]
 #keep track of strain identity as well
 if(use.cc.imputed.transcriptome){
     cc_strains = imputed_strain[[1]][common.ind]
+}else{
+    cc_strains <- ind_strains[match(common.ind, names(ind_strains))]
 }
 
 common.pheno <- cbind(common.bw, common.chem) #look at all traits together
@@ -517,6 +524,8 @@ if(imp.text == "measured"){
     pop.expr <- common.expr
 }
 
+plot.individuals = FALSE #If true, plot all individuals. If FALSE, plot strain means
+
 pop.pheno.cor <- vector(mode = "list", length = length(tissue.expr))
 names(pop.pheno.cor) <- names(tissue.expr)
 for(i in 1:length(tissue.expr)){
@@ -524,33 +533,37 @@ for(i in 1:length(tissue.expr)){
     par(mfrow = c(3,4))
     mean.mge <- rowMeans(pop.mge[[i]], na.rm = TRUE)
 
-    #if we are using imputed gene expression, use strain means
-    if(imp.text == "imputed"){
+    if(plot.individuals){
+        pheno.cor <- t(sapply(1:ncol(adj.pheno), 
+            function(x) plot.with.model(rankZ(mean.mge), rankZ(adj.pheno[,x]), 
+            ylab = colnames(adj.pheno)[x], report = "lm", 
+            main = colnames(adj.pheno)[x], xlab = "Predicted Metabolic Index")))
+    }else{
         u_strain <- unique(cc_strains)
         u_strain_idx <- lapply(u_strain, function(x) which(cc_strains == x))
         names(u_strain_idx) <- u_strain
-        strain.mge <- sapply(u_strain_idx, function(x) mean(mean.mge[x])) #these are all the same for a single strain, but the mean works
+        strain.mge <- sapply(u_strain_idx, function(x) mean(mean.mge[x]))
+        mge.error <- sapply(u_strain_idx, function(x) sd(mean.mge[x]))
         norm.pheno <- apply(adj.pheno, 2, rankZ)
         strain.pheno <- t(sapply(u_strain_idx, function(x) colMeans(norm.pheno[x,], na.rm = TRUE)))
-        strain.error <- t(sapply(u_strain_idx, function(x) apply(norm.pheno[x,], 2, function(y) sd(y, na.rm = TRUE))))
+        pheno.error <- t(sapply(u_strain_idx, function(x) apply(norm.pheno[x,], 2, function(y) sd(y, na.rm = TRUE))))
 
-        ymin <- min(strain.pheno - strain.error)
-        ymax <- max(strain.pheno + strain.error)
+        ymin <- min(strain.pheno - pheno.error)
+        ymax <- max(strain.pheno + pheno.error)
+        xmin <- min(strain.mge - mge.error)
+        xmax <- max(strain.mge + mge.error)
         pheno.cor  <- matrix(NA, nrow = ncol(strain.pheno), ncol = 2)
         for(ph in 1:ncol(strain.pheno)){
             pheno.cor[ph,] <- plot.with.model(strain.mge, strain.pheno[,ph], 
                 ylab = colnames(strain.pheno)[ph], report = "lm", 
                 main = colnames(strain.pheno)[ph], xlab = "Predicted Metabolic Index",
-                ylim = c(ymin, ymax))
-            segments(x0 = strain.mge, y0 = strain.pheno[,ph]+strain.error[,ph], 
-                y1 = strain.pheno[,ph]-strain.error[,ph])
-        }
-    }else{
-        pheno.cor <- t(sapply(1:ncol(adj.pheno), 
-            function(x) plot.with.model(rankZ(mean.mge), rankZ(adj.pheno[,x]), 
-            ylab = colnames(adj.pheno)[x], report = "lm", 
-            main = colnames(adj.pheno)[x], xlab = "Predicted Metabolic Index")))
+                ylim = c(ymin, ymax), xlim = c(xmin, xmax))
+            segments(x0 = strain.mge, y0 = strain.pheno[,ph]+pheno.error[,ph], 
+                y1 = strain.pheno[,ph]-pheno.error[,ph])
+            #segments(x0 = strain.mge-mge.error, x1 = strain.mge+mge.error,
+            #    y0 = strain.pheno[,ph]) #this makes the measured plot look very cluttered
 
+        }
     }
     rownames(pheno.cor) <- colnames(adj.pheno)
     colnames(pheno.cor) <- c("R2", "p")
@@ -562,7 +575,7 @@ for(i in 1:length(tissue.expr)){
 
 
 
-```{r pop_traits_fig, warning = FALSE, eval = FALSE}
+```{r pop_traits_fig, warning = FALSE}
 
 #just plot body weight results for figure
 if(imp.text == "measured"){
@@ -579,30 +592,78 @@ if(use.cc.imputed.transcriptome){
     fig.name <- "Tissue_prediction_measured.pdf"
 }
 
-pdf(paste0("~/Desktop/", fig.name), width = 3.5, height = 9)
-par(mfrow =c(3,1))
-for(i in 1:length(tissue.expr)){
-    mean.mge <- rowMeans(pop.mge[[i]], na.rm = TRUE)
-    plot.new()
-    plot.window(xlim = c(-3, 3), ylim = c(-3, 3))
-    axis(1);axis(2)
-    if(i == 1){
-        points(rankZ(mean.mge), rankZ(adj.pheno[,"Body.Weight"]), col = "gray10")
-        #draw.rectangle(-3, 3, -3, 3, fill = "lightgray", border = NA)
+if(plot.individuals){
+    pdf(paste0(here("Results", "Paper", fig.name)), width = 3.5, height = 9)
+    par(mfrow =c(3,1))
+    for(i in 1:length(tissue.expr)){
+        mean.mge <- rowMeans(pop.mge[[i]], na.rm = TRUE)
+        plot.new()
+        plot.window(xlim = c(-3, 3), ylim = c(-3, 3))
+        axis(1);axis(2)
+        if(i == 1){
+            points(rankZ(mean.mge), rankZ(adj.pheno[,"Body.Weight"]), col = "gray10")
+            #draw.rectangle(-3, 3, -3, 3, fill = "lightgray", border = NA)
+        }
+        stats <- plot.with.model(rankZ(mean.mge), rankZ(adj.pheno[,"Body.Weight"]), 
+            report = "cor.test", main = "", xlab = "", ylab = "", write.results = FALSE,
+            col = tissue.cols[i], add = TRUE, line.col = "darkgray")
+            
+        mtext("Predicted Metabolic Index", side = 1, line = 2.5)
+        mtext("Body Weight", side = 2, line = 2.5)
+
+        draw.rectangle(-3.2, -1, 1.9, 3.3, fill = "white")
+
+        text(x = -3, y = 3, labels = paste0("r = ", stats[1]), adj = 0, cex = 1.2)
+        text(x = -3, y = 2.3, labels = paste0("p = ", stats[2]), adj = 0, cex = 1.2)
     }
-    stats <- plot.with.model(rankZ(mean.mge), rankZ(adj.pheno[,"Body.Weight"]), 
-        report = "cor.test", main = "", xlab = "", ylab = "", write.results = FALSE,
-        col = tissue.cols[i], add = TRUE, line.col = "darkgray")
+    dev.off()
+}else{
+
+    #with strain means
+    pdf(paste0(here("Results", "Paper", fig.name)), width = 3.5, height = 9)
+    par(mfrow =c(3,1))
+    for(i in 1:length(tissue.expr)){
         
-    mtext("Predicted Metabolic Index", side = 1, line = 2.5)
-    mtext("Body Weight", side = 2, line = 2.5)
+        plot.new()
+        plot.window(xlim = c(-2, 2), ylim = c(-2, 2))
+        axis(1);axis(2)
 
-    draw.rectangle(-3.2, -1, 1.9, 3.3, fill = "white")
+        mean.mge <- rankZ(rowMeans(pop.mge[[i]], na.rm = TRUE))
 
-    text(x = -3, y = 3, labels = paste0("r = ", stats[1]), adj = 0, cex = 1.2)
-    text(x = -3, y = 2.3, labels = paste0("p = ", stats[2]), adj = 0, cex = 1.2)
+        u_strain <- unique(cc_strains)
+        u_strain_idx <- lapply(u_strain, function(x) which(cc_strains == x))
+        names(u_strain_idx) <- u_strain
+        
+        strain.mge <- sapply(u_strain_idx, function(x) mean(mean.mge[x]))
+        mge.error <- sapply(u_strain_idx, function(x) sd(mean.mge[x]))
+
+        norm.pheno <- apply(adj.pheno, 2, rankZ)
+        strain.pheno <- t(sapply(u_strain_idx, function(x) colMeans(norm.pheno[x,], na.rm = TRUE)))
+        pheno.error <- t(sapply(u_strain_idx, function(x) apply(norm.pheno[x,], 2, function(y) sd(y, na.rm = TRUE))))
+
+        points(strain.mge, strain.pheno[,"Body.Weight"], col = "gray10", cex = 2)
+        segments(x0 = strain.mge, y0 = strain.pheno[,"Body.Weight"]+pheno.error[,"Body.Weight"], 
+            y1 = strain.pheno[,"Body.Weight"]-pheno.error[,"Body.Weight"], col = "darkgray")
+        #segments(x0 = strain.mge-mge.error, x1 = strain.mge+mge.error,
+        #    y0 = strain.pheno[,ph]) #this makes the measured plot look very cluttered
+
+        #points(rankZ(mean.mge), rankZ(adj.pheno[,"Body.Weight"]), col = "gray10")
+        #draw.rectangle(-3, 3, -3, 3, fill = "lightgray", border = NA)
+
+        stats <- plot.with.model(strain.mge, strain.pheno[,"Body.Weight"], 
+            report = "lm", main = "", xlab = "", ylab = "", write.results = FALSE,
+            col = tissue.cols[i], add = TRUE, line.col = "darkgray", cex = 2)
+            
+        mtext("Predicted Metabolic Index", side = 1, line = 2.5)
+        mtext("Body Weight", side = 2, line = 2.5)
+
+        draw.rectangle(-2.1, -0.7, 1, 2, fill = "white")
+
+        text(x = -2, y = 1.75, labels = bquote(R^2 == .(stats[1])), adj = 0, cex = 1.2)
+        text(x = -2, y = 1.25, labels = paste0("p = ", signif(stats[2], 2)), adj = 0, cex = 1.2)
+    }
+    dev.off()
 }
-dev.off()
 
 ```
 
