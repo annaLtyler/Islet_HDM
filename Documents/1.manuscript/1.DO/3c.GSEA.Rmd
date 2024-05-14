@@ -131,23 +131,24 @@ abline(h = 0)
 
 The top and bottom 10 enrichment scores are shown below.
 
-```{r plot_nes, warning = FALSE, message = FALSE, error = FALSE, results = "asis", fig.width = 9, fig.height = 7}
+```{r plot_nes, warning = FALSE, message = FALSE, error = FALSE, results = "asis", fig.width = 10, fig.height = 6}
 #pdf(file.path(kegg.result.dir, "NES_by_tissue.pdf"), width = 9, height = 7)
 top.scores <- vector(mode = "list", length = length(tissue.names))
 names(top.scores) <- tissue.names
 
-par(mar = c(4,4, 2, 4))
+par(mar = c(4,1, 2, 1))
 for(tx in 1:length(tissue.names)){
     cat("####", tissue.names[tx], "\n")
     sorted.enrich <- path_enrich[order(path_enrich[,tx], decreasing = FALSE),tx]
     extreme.enrich  <- c(head(sorted.enrich, 10), tail(sorted.enrich, 10))
     a <- barplot(extreme.enrich, 
         horiz = TRUE, las = 2, main = tissue.names[tx], 
-        xlim = c(-3, 3), name = NA, col = tissue.cols[tx])
+        xlim = c(-4, 4), name = NA, col = tissue.cols[tx])
     text(x = rep(-0.1, 10), y = tail(a, 10), labels = tail(names(extreme.enrich), 10), adj = 1)
     text(x = rep(0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 0)
     mtext("Normalized Enrichment Score", side = 1, line = 2.5)
     top.scores[[tx]] <- names(extreme.enrich)
+    abline(v = seq(-4, 4, 1), col = "gray", lty = 2)
     cat("\n\n")
 }
 #dev.off()
@@ -373,13 +374,13 @@ abline(h = 0)
 
 Plot top and bottom enrichment scores.
 
-```{r plot_go_enrich, fig.width = 9, fig.height = 7, results = "asis"}
+```{r plot_go_enrich, fig.width = 10, fig.height = 6, results = "asis"}
 #pdf(file.path(go.result.dir, "NES_by_tissue.pdf"), width = 9, height = 7)
 num.top <- 10
 extreme.go <- vector(mode = "list", length = length(tissue.names))
 names(extreme.go) <- tissue.names
 
-par(mar = c(4,4, 2, 4))
+par(mar = c(4,0.5, 2, 0.5))
 for(tx in 1:length(tissue.names)){
     cat("####", tissue.names[tx], "\n")
     enrich.order <- order(go.enrich.nes[,tx], decreasing = FALSE)
@@ -389,7 +390,7 @@ for(tx in 1:length(tissue.names)){
     extreme.onto <- c(head(sorted.onto, num.top), tail(sorted.onto, num.top))
     a <- barplot(extreme.enrich, 
         horiz = TRUE, las = 2, main = tissue.names[tx], 
-        xlim = c(-3, 3), names = NA, col = tissue.cols[tx])
+        xlim = c(-4, 4), names = NA, col = tissue.cols[tx])
     text(x = rep(-0.1, num.top), y = tail(a, num.top), 
         labels = paste0(tail(names(extreme.enrich), num.top), " (", tail(extreme.onto, num.top), ")"), adj = 1)
     text(x = rep(0.1, num.top), y = head(a, num.top), 
@@ -397,6 +398,7 @@ for(tx in 1:length(tissue.names)){
     mtext("Normalized Enrichment Score", side = 1, line = 2.5)
  
     extreme.go[[tx]]  <- extreme.enrich
+    abline(v = seq(-4, 4, 1), col = "gray", lty = 2)
     cat("\n\n")
 }
 #dev.off()
