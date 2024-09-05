@@ -4,7 +4,8 @@
 
 plot.with.model <- function(x, y, xlim = NULL, ylim = NULL, col = "black", 
 line.col = "#a6bddb", pch = 16, main, xlab, ylab, report = c("lm", "cor.test"), 
-cex = 1, plot.results = TRUE, write.results = TRUE, add = FALSE, plot.type = "p"){
+cex = 1, plot.results = TRUE, write.results = TRUE, add = FALSE, plot.type = "p",
+p.value.thresh = 2.2e-16){
 	
 	if(missing(main)){main = ""}
 	if(missing(xlab)){xlab = deparse(substitute(x))}
@@ -17,12 +18,12 @@ cex = 1, plot.results = TRUE, write.results = TRUE, add = FALSE, plot.type = "p"
 	if(!is.na(coef(model)[2])){
 		if(report == "lm"){
 			f <- summary(model)$fstatistic
-			p <- pf(f[1],f[2],f[3],lower.tail=F)
+			p <- threshold_p(pf(f[1],f[2],f[3],lower.tail=F), thresh = p.value.thresh)
 			r2 <- signif(summary(model)$r.squared, 2)
 			rlab <- "R2"
 			}else{
 			test <- cor.test(x,y)	
-			p <- signif(test$p.value, 2)
+			p <- threshold_p(signif(test$p.value, 2))
 			r2 <- signif(test$estimate, 2)
 			rlab <- "r"
 			}
@@ -42,7 +43,11 @@ cex = 1, plot.results = TRUE, write.results = TRUE, add = FALSE, plot.type = "p"
 
 	if(plot.results){
 		if(write.results){
-			new.title <- paste0(main, "\n", rlab, " = ", r2, ", p = ", signif(p, 2))
+			if(p == p.value.thresh){
+				new.title <- paste0(main, "\n", rlab, " = ", r2, ", p < ", signif(p, 2))
+			}else{
+				new.title <- paste0(main, "\n", rlab, " = ", r2, ", p = ", signif(p, 2))
+			}
 		}else{
 			new.title <- ""
 		}

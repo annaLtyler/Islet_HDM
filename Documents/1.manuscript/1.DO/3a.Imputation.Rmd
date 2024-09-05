@@ -252,6 +252,7 @@ tx.distal.herit <- lapply(distal.herit.files, readRDS)
 
 local.var.exp <- lapply(tx.distal.herit, function(x) x[,"local_var"])
 distal.var.exp <- lapply(tx.distal.herit, function(x) x[,"residual_variance"]*x[,"residual_heritability"])
+resid.var <- lapply(1:length(tissue.names), function(x) 1 - (local.var.exp[[x]] + distal.var.exp[[x]]))
 ```
 
 
@@ -379,15 +380,20 @@ herit.cols <- as.matrix(read.delim(here("Data", "general", "heritability_colors.
 local.col <- herit.cols["Local"]
 distal.col <- herit.cols["Distal"]
 plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "Variance Explained",
-    main = "Variance Explained by Local and Distal Components", group.cols = c(local.col, distal.col))
+    main = "Variance Explained by Local and Distal Components", 
+    group.cols = c(local.col, distal.col),
+    plot.type = "vioplot", within.group.sep = 0.9)
 
 saveRDS(local.distal.comp, file.path(imputed.results.dir, "Local_Distal_Comparison.RDS")) #save this to compare to CC-RIX
+saveRDS(local.distal.comp, here("Results", "Paper", "Local_Distal_Comparison.RDS")) #also save for paper stats
 ```
 
 ```{r local_v_distal_fig, eval = FALSE}
-pdf("~/Desktop/local_distal.pdf", width = 8, height = 6)
+pdf("~/Desktop/local_distal.pdf", width = 8, height = 5.5)
 plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "",
-    main = "", group.cols = c(local.col, distal.col), cex.names = 1.5)
+    main = "", group.cols = c(local.col, distal.col), cex.names = 1.5,
+    plot.type = "vioplot", within.group.sep = 0.9, between.group.sep = 1.5,
+    print.vals = "median")
 mtext("Variance Explained", side = 2, line = 2.5, cex = 1.5)
 dev.off()
 ```
@@ -470,7 +476,8 @@ for(tx in 1:length(trait.cor)){
         custom.colors = col.ramp, with.model = TRUE, report = "cor.test", 
         legend.pos = NA, write.results = FALSE, ylim = c(0,1), xlim = c(0, 0.75))
     text(x = 0.44, y = 0.95, labels = paste0("r = ", cor.stats[1]), adj = 0)
-    text(x = 0.44, y = 0.84, labels = paste0("p = ", cor.stats[2]), adj = 0)
+    text(x = 0.44, y = 0.84, labels = threshold_p(cor.stats[2], return.text = TRUE), 
+        adj = 0)
     mtext(tissue.names[tx], side = 3, line = 0.5, font = 2, cex = 1.5)
     mtext("Variance Explained", side = 2, line = 2.5)
     mtext("Max. Trait Correlation", side = 1, line = 2.5)
@@ -527,7 +534,8 @@ for(tx in 1:length(trait.cor)){
         custom.colors = col.ramp, with.model = TRUE, report = "cor.test", 
         legend.pos = NA, write.results = FALSE, ylim = c(0, 1), xlim = c(0, 0.8))
     text(x = 0.44, y = 0.95, labels = paste0("r = ", cor.stats[1]), adj = 0)
-    text(x = 0.44, y = 0.84, labels = paste0("p = ", cor.stats[2]), adj = 0)
+    text(x = 0.44, y = 0.84, labels = threshold_p(cor.stats[2], return.text = TRUE), 
+        adj = 0)
     mtext(tissue.names[tx], side = 3, line = 0.5, font = 2, cex = 1.5)
     mtext("Variance Explained", side = 2, line = 2.5)
     mtext("Max. Trait Correlation", side = 1, line = 2.5)

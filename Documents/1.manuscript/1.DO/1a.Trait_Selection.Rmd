@@ -141,6 +141,8 @@ plot.with.model(bw.decomp$u[,1], ordered.bw[bw.decomp$rows.used,"weight_final"],
 ```{r final_trait_mat}
 #initialize a trait matrix that contains all the traits we want to examine.
 final.trait.mat <- num.pheno[,"weight_final",drop=FALSE]
+
+male.wt <- num.pheno[]
 ```
 
 ## Food consumption
@@ -248,7 +250,7 @@ weight <- num.pheno[, "weight_final"]
 sex <- as.numeric(as.factor(covar[,1]))
 not.outlier <- which(glu < 800)
 
-pdf(file.path(parsed.data.dir, "fig_panels_densities.pdf"), height = 4, width = 4)
+pdf(here("Results", "Paper", "fig_panels_densities.pdf"), height = 4, width = 4)
 
 #fasting glucose as densities
 f.locale <- which(sex == 1)
@@ -331,20 +333,20 @@ legend(45, 0.05, fill = c(fcol, mcol), cex = 0.8,
 
 dev.off()
 
-pdf(file.path(parsed.data.dir, "Fig_panels_boxes.pdf"), height = 4, width = 4)
+pdf(here("Results", "Paper", "Fig_panels_boxes.pdf"), height = 4, width = 4)
 par(mar = c(4,8,4,4))
 boxplot(glu[not.outlier]~sex[not.outlier], names = c("Female", "Male"), xlab = "",
   ylab = "Fasting Glucose (mg/dL)", col = c(fcol, mcol))
 dev.off()
 
-pdf(file.path(parsed.data.dir, "Fig_panels_correlations.pdf"), height = 3, width = 4)
+pdf(here("Results", "Paper", "Fig_panels_correlations.pdf"), height = 3, width = 4)
 par(mar = c(4,4,1,2))
 weight.glu.stats <- plot.with.model(weight[not.outlier], glu[not.outlier], xlab = "",
   ylab = "", col = sex+2, write.results = FALSE)
 mtext("Weight (g)", side = 1, line = 2.5, cex = 1)
 mtext("Fasting Glucose (mg/dL)", side = 2, line = 2.5, cex = 1)
 text(x = 15, y = 365, labels = bquote(R^2 == .(weight.glu.stats[1])), adj = 0)
-text(x = 15, y = 325, labels = bquote(p == .(signif(weight.glu.stats[2], 2))), adj = 0)
+text(x = 15, y = 325, labels = bquote(p < .(signif(weight.glu.stats[2], 2))), adj = 0)
 paper.data <- record_result(weight.glu.stats, paper.data$paper.data, "weight_glu", paper.data$data.idx)
 
 food.weight.stats <- plot.with.model(num.pheno[,"food_ave"], num.pheno[,"weight_final"],
@@ -353,10 +355,12 @@ food.weight.stats <- plot.with.model(num.pheno[,"food_ave"], num.pheno[,"weight_
 mtext("Avg Food Consumption (AU)", side = 1, line = 2.5, cex = 1)
 mtext("Weight (g)", side = 2, line = 2.5, cex = 1)
 text(x = 1.8, y = 68, labels = bquote(R^2 == .(food.weight.stats[1])), adj = 0)
-text(x = 1.8, y = 61, labels = bquote(p == .(signif(food.weight.stats[2], 2))), adj = 0)
+text(x = 1.8, y = 61, labels = bquote(p < .(signif(food.weight.stats[2], 2))), adj = 0)
 paper.data <- record_result(food.weight.stats, paper.data$paper.data, "food_weight", paper.data$data.idx)
 dev.off()
 
+paper.data <- record_result(list("Male" = m.bw, "Female" = f.bw), paper.data$paper.data, 
+  "Body_Weight", paper.data$data.idx)
 ```
 
 

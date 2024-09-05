@@ -177,7 +177,6 @@ tissue.data.file <- lapply(tissue.names,
 tissue.lod <- lapply(tissue.data.file, 
     function(x) readRDS(here("Data", "DO", x))$lod.peaks$additive)
 names(tissue.lod) <- tissue.names
-
 ```
 
 ## Read clinical phenotypes
@@ -445,60 +444,74 @@ if(!file.exists(transcript_loading_file) || delete_previous){
     model_scores <- readRDS(model_file)
 }
 
+
+comp.pheno.herit <- sapply(model_scores, function(x) as.numeric(est_herit(x[,"Outcome"], Kg)))
+comp.pheno.herit.error <- sapply(model_scores, function(x) as.numeric(est_herit_error(x[,"Outcome"], Kg)))
+pheno.herit <- c("Heritability" = comp.pheno.herit[1], "Error" = comp.pheno.herit.error[1])
+saveRDS(pheno.herit, here("Results", "Paper", "Composite_Trait_Heritability.RDS"))
+
+pheno.decomp <- plot.decomp(reg.pheno, pc = ncol(reg.pheno), plot.results = FALSE)
+pheno.pc <- pheno.decomp$u
+pc.var.exp <- pheno.decomp$var.exp
+pheno.model.cor <- lapply(model_scores, function(x) apply(pheno.pc, 2, function(y) cor(x[,"Outcome"], y)))
+model.var.exp <- lapply(pheno.model.cor, function(x) sum(x*pc.var.exp))
+
+saveRDS(lapply(model.var.exp, function(x) x*100), here("Results", "Paper", "Model_Variance_Explained.RDS"))
 ```
 
 
-```{r mediate, eval = FALSE}
+```{r test_mediate, eval = FALSE}
 
-stop()
+#Does the liver expression of Pparg account for the heritability of plasma triglycerides?
 
-trait.herit <- as.numeric(est_herit(scaled.pheno[,"HOMA_B"], Kg))
-trait.scan <- scan1(genoprobs, scaled.pheno[,"HOMA_B"])
-trait.peak <- find_peaks(trait.scan, map = map, threshold = 7)
-best.marker <- pull_genoprobpos(genoprobs, map = map, chr = trait.peak[1,"chr"], pos = trait.peak[1,"pos"])
+gene.name <- "Slc27a4"
+gene.name <- "Arpp19"
+tissue <- "Liver"
+tissue.idx <- which(tissue.names == tissue)
 
-one.fit <- fit1(best.marker, scaled.pheno[,"HOMA_B"])
-common.ind <- intersect(rownames(scaled.pheno), rownames(best.marker))
-plot.with.model(scaled.pheno[common.ind,"HOMA_B"], one.fit$fitted[common.ind])
-var(one.fit$fitted)
-as.numeric(est_herit(one.fit$resid, Kg))
+gene.id <- gene.tables[[tissue.idx]]$gene.id[which(gene.tables[[tissue.idx]]$symbol == gene.name)]
+gene.expr <- scaled.expr[[tissue.idx]][,gene.id,drop=FALSE]
 
-test.scan <- scan1(genoprobs, scaled.pheno)
-#test.scan <- scan1(genoprobs, model_scores[[1]])
+par(mfrow = c(5,4), mar = c(2,2,2,2))
+for(tr in 1:ncol(scaled.pheno)){
+    trait <- scaled.pheno[,tr,drop=FALSE]
 
+    trait.herit <- as.numeric(est_herit(trait, Kg))
 
-pdf("~/Desktop/test.pdf", width = 10, height = 5)
-for(i in 1:ncol(test.scan)){
-    plot(test.scan, map = map, lodcol = i, main = colnames(test.scan)[i])
+    #remove gene expression from trait
+    no.expr <- adjust(trait, gene.expr)
+    no.expr.herit <- as.numeric(est_herit(no.expr, Kg))
+
+    barplot_with_num(signif(c(trait.herit, signif(no.expr.herit)), 2), 
+        main = colnames(scaled.pheno)[tr], ylim = c(0, 0.6))
 }
-dev.off()
+
+#no, the heritability of TG levels is not reduced after accounting for Pparg gene expression
+#In contrast, adipose leptin expression strongly mediates genetic effects of fasting insulin levels
 
 
-adj.scan <- scan1(genoprobs, scaled.pheno, addcovar = model_scores[[2]][,"Mediator"])
-#adj.scan <- scan1(genoprobs, model_scores[[1]][,"Outcome"], addcovar = model_scores[[2]][,"Mediator"])
-#adj.scan <- scan1(genoprobs, model_scores[[1]][,"Mediator"], addcovar = model_scores[[2]][,"Outcome"])
+#what is the best expression mediator of TG in liver?
+trait.name <- "TG_Fasting"
+trait.idx <- which(colnames(scaled.pheno) == trait.name)
+trait <- scaled.pheno[,trait.idx,drop=FALSE]
+trait.herit <- as.numeric(est_herit(trait, Kg))
 
-pdf("~/Desktop/test_adj.pdf", width = 10, height = 5)
-for(i in 1:ncol(adj.scan)){
-    maxy <- max(c(test.scan[,i], adj.scan[,i]))*1.2
-    plot(test.scan, map = map, lodcol = i, main = colnames(adj.scan)[i], ylim = c(0, maxy))
-    plot(adj.scan, map = map, lodcol = i, main = colnames(adj.scan)[i], add = TRUE, col = "red")
-    
-    #plot(test.scan, map = map, lodcol = "Outcome", main = colnames(adj.scan)[i], ylim = c(0, 10))
-    #plot(adj.scan, map = map, lodcol = 1, main = colnames(adj.scan)[i], add = TRUE, col = "red")
+tissue <- "Liver"
+tissue.idx <- which(tissue.names == tissue)
+
+med.herit <- rep(NA, ncol(scaled.expr[[tissue.idx]]))
+names(med.herit) <- colnames(scaled.expr[[tissue.idx]])
+for(tr in 1:ncol(scaled.expr[[tissue.idx]])){
+    report.progress(tr, ncol(scaled.expr[[tissue.idx]]))
+    gene.expr <- scaled.expr[[tissue.idx]][,tr,drop=FALSE]
+    #remove gene expression from trait
+    no.expr <- adjust(trait, gene.expr)
+    med.herit[tr] <- as.numeric(est_herit(no.expr, Kg))
 }
-dev.off()
 
-
-pheno.scan <- scan1(genoprobs, model_scores[[1]][,3])
-mediator.scan <- scan1(genoprobs, model_scores[[1]][,2])
-geno.scan <- scan1(genoprobs, model_scores[[1]][,1])
-
-pdf("Mapped_scores.pdf", width = 10, height = 5)
-plot(pheno.scan, map = map, main = "Phenotype Score")
-plot(mediator.scan, map = map, main = "Mediator Score")
-plot(geno.scan, map = map, main = "Genome Score")
-dev.off()
+herit.drop <- trait.herit-med.herit
+plot(sort(herit.drop))
+which.max(herit.drop)
 ```
 
 ## Causal Networks {.tabset .tabset-fade .tabset-pills}
@@ -529,6 +542,7 @@ for(tx in 1:max.tx){
     if(max.tx > 1){
         cat("\n\n")
     }
+    saveRDS(tx.pcor, here("Results", "Paper", "Pcor.RDS"))
 }
 ```
 
@@ -664,6 +678,8 @@ for(tx in 1:max.tx){
 
     cat("\n\n")
 }
+
+calc.emp.p(tissue.path.coef, all.perms[[tx]][,"path_coef"])
 ```
 
 We also looked at the null distributions of transcript
@@ -785,6 +801,15 @@ on traits than transcripts in the other tissues.
 ```{r loading_vio}
 vioplot(transcript_loadings, col = tissue.cols)
 abline(h = 0)
+```
+
+```{r mediation_test, eval = FALSE}
+bw.herit <- as.numeric(est_herit(scaled.pheno[,"Weight_Final"], Kg))
+high.tx <- tail(rownames(transcript_loadings[[1]])[order(transcript_loadings[[1]])], 10)[7]
+common.ind <- intersect(rownames(scaled.pheno), rownames(scaled.expr[[1]]))
+plot.with.model(scaled.pheno[common.ind,"Weight_Final"], scaled.expr[[1]][common.ind,high.tx])
+adj.weight <- adjust(scaled.pheno[,"Weight_Final",drop=FALSE], scaled.expr[[1]][,high.tx,drop=FALSE])
+as.numeric(est_herit(adj.weight, Kg))
 ```
 
 The following figure shows the distribution of the absolute values
@@ -1447,7 +1472,8 @@ prop.high.loading.lit <- length(which(load.gene.info[,4] >= lit.thresh))/nrow(lo
 prop.high.herit.lit <- length(which(local.gene.info[,4] >= lit.thresh))/nrow(local.gene.info)
 
 #factor lit increase for high loading
-prop.high.loading.lit/prop.high.herit.lit
+loading.herit.enrich <- prop.high.loading.lit/prop.high.herit.lit
+
 ```
 
 Also look at TWAS genes with high correlations to body weight.
@@ -1577,7 +1603,10 @@ prop.high.loading.lit <- length(which(load.gene.info[,4] >= lit.thresh))/nrow(lo
 prop.high.twas.lit <- length(which(twas.gene.info[,4] >= lit.thresh))/nrow(twas.gene.info)
 
 #factor lit increase for high loading
-prop.high.loading.lit/prop.high.twas.lit
+loading.twas.enrich <- prop.high.loading.lit/prop.high.twas.lit
+
+saveRDS(c("loading.twas.enrich" = loading.twas.enrich, "loading.herit.enrich" = loading.herit.enrich),
+    here("Results", "Paper", "Lit_enrich.RDS"))
 
 ```
 
@@ -1802,10 +1831,17 @@ The plots are printed to a pdf with the title TOA_Transcript_Loadings.pdf
 #This function gets the most significant term out of an
 #enrichment table returned from gost.
 
-get_max_enrich <- function(enrichment){
+get_max_enrich <- function(enrichment, max.term.size = NULL){
     if(is.null(enrichment)){
         return("no enrichment")
     }
+
+    if(!is.null(max.term.size)){
+        below.max <- which(enrichment[[1]][,"term_size"] <= max.term.size)
+        if(length(below.max) == 0){return("no enrichment")}
+        enrichment[[1]] <- enrichment[[1]][below.max,]
+    }
+
     min.p.idx <- which.min(enrichment[[1]][,"p_value"])
     sig.term <- enrichment[[1]][min.p.idx,"term_name"]
     return(sig.term)
@@ -1827,7 +1863,7 @@ cluster_values <- function(value.list, z.thresh = 3, k.seq = 3:20){
     #threshold values above Z score threshold
     scaled.values <- lapply(value.list, rankZ)
     high.values <- lapply(scaled.values, function(x) which(abs(x) > z.thresh))
-    all.high <- unique(unlist(lapply(1:length(high.values), function(x) names(value.list[[x]])[high.values[[x]]])))
+    all.high <- Reduce("union", lapply(high.values, names))
     all.high.idx <- sapply(value.list, function(x) match(all.high, names(x)))
 
     #combine into a matrix that contains all unique transcripts
@@ -1836,23 +1872,28 @@ cluster_values <- function(value.list, z.thresh = 3, k.seq = 3:20){
         function(x) value.list[[x]][all.high.idx[,x]])
     rownames(value.mat) <- all.high
     colnames(value.mat) <- tissue.names
+    
+    #remove transcripts not expresed in all tissues
+    #keep.vals <- which(!is.na(rowSums(value.mat)))
+    #value.mat <- value.mat[keep.vals,]
+
     #set NAs to 0
     value.mat[which(is.na(value.mat))] <- 0
 
     #use k-means clustering to figure out how many clusters
     #there are in this matrix. Set the number of clusters to
     #test with k.seq
+    #test.mat <- plot.decomp(value.mat, pc = length(tissue.names), plot.results = FALSE)$u
     test.k <- test.pam.k(value.mat, plot.results = FALSE, kseq = k.seq)
     mean.cl.width <- sapply(test.k$cl.width, mean)
     #barplot(mean.cl.width)
     #select the number of clusters with the best separation among clusters.
     k = as.numeric(names(mean.cl.width)[which.max(mean.cl.width)])
-
-    #cluster the rows of the value matrix
-    gene.clust <- hclust(dist(value.mat))
-
-    #cut the dendrogram based on the best number of clusters selected above.
-    gene.groups <- cutree(gene.clust, k = k)
+    final.clust <- pam(value.mat, k = k)
+    #pheatmap(value.mat[names(final.clust$clustering)[order(final.clust$clustering)],], 
+    #    cluster_rows = FALSE, cluster_cols = FALSE)
+    
+    gene.groups <- final.clust$clustering
 
     group.vals <- lapply(1:k, function(x) value.mat[names(which(gene.groups == x)),,drop=FALSE]) 
 
@@ -1865,59 +1906,104 @@ cluster_values <- function(value.list, z.thresh = 3, k.seq = 3:20){
         
     #select the term with the smallest p value to represent 
     #each group
-    group.labels <- sapply(group.enrich, get_max_enrich)
+    group.labels <- sapply(group.enrich, function(x) get_max_enrich(x, max.term.size = 3000))
     names(group.enrich) <- names(group.gene.names) <- group.labels
 
     results <- list("group_enrich" = group.enrich, "group_genes" = group.gene.names, 
-        "loadings" = value.mat, "grouped_values" = group.vals)
+        "loadings" = value.mat[names(final.clust$clustering)[order(final.clust$clustering)],], 
+        "grouped_values" = group.vals)
     invisible(results)
-
 }
 
-plot_clustered_values <- function(cluster_results){
+
+plot_clustered_values <- function(cluster_results, max.term.size = 3000, 
+    enrichment.tables = TRUE, loading.viols = TRUE, alt.labels = NULL,
+    cluster.borders = c("boxes", "bars", "both")){
+
+    cluster.borders <- cluster.borders[1]
 
     group.enrich <- cluster_results$group_enrich
     value.mat <- cluster_results$loadings
     group.gene.names <- cluster_results$group_genes
-    group.labels <- names(group.enrich)
+    
+    group.labels <- alt.labels
+    if(is.null(group.labels)){
+        group.labels <- names(group.enrich)
+    }
     group.vals <- cluster_results$grouped_values
 
     enrich.labels <- lapply(1:length(group.enrich), 
         function(x) rep(group.labels[x], length(group.gene.names[[x]])))
+    enrich.label.v <- unlist(enrich.labels)
 
-    #create a data frame so we can annotate the groups in pheatmap
-    enrich.df <- data.frame(as.factor(unlist(enrich.labels)))
-    rownames(enrich.df) <- unlist(group.gene.names)
-    colnames(enrich.df) <- "Enrichment"
-    class_cols <- c(brewer.pal(12, "Paired"), brewer.pal(12, "Set3"))
-    
     u_groups <- unique(unlist(enrich.labels))
     names(u_groups) <- paste("Group", 1:length(u_groups))
 
-    ann_cols <- list("Enrichment" = class_cols[1:length(u_groups)])
-    names(ann_cols[[1]]) <- u_groups
-    #par(mar = c(12, 4, 4, 4));barplot(rep(1, length(group.labels)), col = class_cols[1:length(group.labels)], names = group.labels, las = 2)
-
-    pheatmap(value.mat, annotation_row = enrich.df, 
-        show_rownames = FALSE, cluster_cols = FALSE, annotation_colors = ann_cols)
-
-    #further descriptions of enrichments for groups
-    par(mfrow = c(3,1), mar = c(2,4,2,4))
-    group.labels <- levels(enrich.df[,1])
-    for(g in 1:length(group.enrich)){
-        group.enrich.name = get_max_enrich(group.enrich[[g]])
-        group.col <- ann_cols[[1]][which(names(ann_cols[[1]]) == group.enrich.name)]
-        plot.enrichment(group.enrich[[g]], 
-            plot.label = paste("Group:", group.enrich.name),
-            num.terms = 20, title.color = group.col, order.by = "p_value")
+    #place cluster labels in the middle of each cluster
+    row.labels <- rep("", nrow(value.mat))
+    for(g in 1:length(u_groups)){
+        g.idx <- which(enrich.label.v == u_groups[g])
+        row.labels[median(g.idx)] <- u_groups[g]
     }
 
-    #show value distributions per group
-    par(mfrow = c(3,2), mar = c(4,4,4,4))
-    for(g in 1:length(group.vals)){
-        boxplot(group.vals[[g]], main = get_max_enrich(group.enrich[[g]]), col = tissue.cols, las = 2)
-        abline(h = 0)
+    par(mar = c(6,20,2,2))
+    if(cluster.borders == "bars" || cluster.borders == "both"){
+        imageWithText(value.mat, show.text = FALSE, use.pheatmap.colors = TRUE, 
+            row.names = row.labels, row.text.shift = 0.36, col.text.shift = 0.01)
     }
+    
+    if(cluster.borders == "boxes"){
+        imageWithText(value.mat, show.text = FALSE, use.pheatmap.colors = TRUE, 
+            row.names = row.labels, row.text.shift = 0.2, col.text.shift = 0.01)
+    }
+
+    plot.dim <- par("usr")
+
+    #draw boxes to delineate clusters
+    plot.coord <- nrow(value.mat):1
+    for(g in 1:length(u_groups)){
+        g.idx <- which(enrich.label.v == u_groups[g])
+        if(g %% 2 == 0){
+            box.col = "lightgray"
+        }else{
+            box.col = "white"
+        }
+
+        if(cluster.borders == "bars" || cluster.borders == "both"){
+            draw.rectangle(0, 0.5, plot.coord[min(g.idx)], plot.coord[max(g.idx)], 
+                fill = box.col, border.col = "gray35")
+        }
+    
+        if(cluster.borders == "boxes" || cluster.borders == "both"){
+            draw.rectangle(plot.dim[1], plot.dim[2], plot.coord[min(g.idx)], plot.coord[max(g.idx)], 
+                fill = NA, border.col = "black")
+        }
+
+    }
+
+    if(enrichment.tables){
+        #further descriptions of enrichments for groups
+        par(mfrow = c(3,1), mar = c(2,4,2,4))
+        for(g in 1:length(group.enrich)){
+            #group.enrich.name = get_max_enrich(group.enrich[[g]], max.term.size = 3000)
+            group.enrich.name <- names(group.enrich)[g]
+            plot.enrichment(group.enrich[[g]], 
+                plot.label = paste("Group:", group.enrich.name),
+                num.terms = 20, order.by = "p_value", max.term.size = max.term.size)
+        }
+
+    }
+
+    if(loading.viols){
+        #show value distributions per group
+        par(mfrow = c(3,2), mar = c(4,4,4,4))
+        for(g in 1:length(group.vals)){
+            vioplot(group.vals[[g]], main = get_max_enrich(group.enrich[[g]], 
+                max.term.size = max.term.size), col = tissue.cols, las = 2)
+            abline(h = 0)
+        }
+    }
+    invisible(value.mat)
 }
 ```
 
@@ -1955,24 +2041,109 @@ if(!file.exists(toa_loadings_file)){
 
 graphics.off()
 pdf(file.path(results.dir, paste0("TOA_Transcript_Loadings_", adjust_numeral, ".pdf")))
-plot_clustered_values(toa.results)
+val.mat <- plot_clustered_values(toa.results)
+dev.off()
+
+#using the enrichment tables plotted in the above pdf, I saw
+#that the top enrichments aren't always the best description of the
+#cluster. I generated cluster_descriptions.txt by hand as a way to
+#create better descriptions. This file is in Data/general, and we
+#can use it to annotate the clusters for the figure below.
+alt.labels <- read.table(here("Data", "general", "cluster_descriptions.txt"), header = FALSE, sep = "\t")
+
+png(file.path(results.dir, "TOA_Transcript_Loadings_Figure_boxes.png"), width = 6, height = 7, units = "in", res = 300)
+plot_clustered_values(toa.results, enrichment.tables = FALSE, loading.viols = FALSE,
+    alt.labels = alt.labels[,1], cluster.borders = "boxes")
+dev.off()
+
+png(file.path(results.dir, "TOA_Transcript_Loadings_Figure_bars.png"), width = 6, height = 7, units = "in", res = 300)
+val.mat <- plot_clustered_values(toa.results, enrichment.tables = FALSE, loading.viols = FALSE,
+    alt.labels = alt.labels[,1], cluster.borders = "bars")
+dev.off()
+
+png(file.path(results.dir, "TOA_Transcript_Loadings_Figure_both.png"), width = 6, height = 7, units = "in", res = 300)
+val.mat <- plot_clustered_values(toa.results, enrichment.tables = FALSE, loading.viols = FALSE,
+    alt.labels = alt.labels[,1], cluster.borders = "both")
 dev.off()
 
 #write out gene lists for each cluster
 toa.cluster.dir <- file.path(results.dir, "TOA_Clusters")
 if(!file.exists(toa.cluster.dir)){dir.create(toa.cluster.dir)}
 gene.lists <- toa.results[[2]]
+names(gene.lists) <- alt.labels[,1]
 for(g in 1:length(gene.lists)){
-    file.name <- file.path(toa.cluster.dir, paste0(gsub(" ", "_", names(gene.lists)[g]), "_cluster.txt"))
-    write.table(gene.lists[[g]], file.name,
-        sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+    file.name <- file.path(toa.cluster.dir, paste0("Cluster", g, "_", gsub(" ", "_", names(gene.lists)[g]), ".csv"))
+    gene.names <- gene.info[match(gene.lists[[g]], gene.info[,"ensembl_gene_id"]),"external_gene_name"]
+    gene.vals <- val.mat[gene.lists[[g]],]
+    cluster.table <- cbind(gene.lists[[g]], gene.names, gene.vals)
+    colnames(cluster.table) <- c("gene.ID", "gene.name", tissue.names)
+    write.table(cluster.table, file.name,
+        sep = ",", quote = FALSE, row.names = FALSE, col.names = FALSE)
 }
-
 ```
+
+```{r test_kegg, eval = FALSE}
+all.kegg <- readRDS(here("Data", "general", "KEGG.Mouse.RDS"))
+u_path <- gsub(" - Mus musculus (house mouse)", "", all.kegg[[2]][,"to"], fixed = TRUE)
+path.id <- all.kegg[[2]][,1]
+path.idx <- lapply(path.id, function(x) which(all.kegg[[1]][,1] == unlist(x)[1]))
+path.gene.id <- lapply(path.idx, function(x) all.kegg[[1]][x,2])
+names(path.gene.id) <- u_path
+
+path.ensembl <- lapply(path.gene.id, function(x) gene.info[match(x, gene.info[,"entrezgene_id"]),"ensembl_gene_id"])
+
+path.kegg.overlap <- matrix(NA, nrow = length(path.ensembl), ncol = length(gene.lists))
+rownames(path.kegg.overlap) <- names(path.ensembl)
+colnames(path.kegg.overlap) <- names(gene.lists)
+for(i in 1:length(path.ensembl)){
+    for(j in 1:length(gene.lists)){
+        path.kegg.overlap[i,j] <- length(intersect(path.ensembl[[i]], gene.lists[[j]]))
+    }
+}
+pdf("~/Desktop/test_kegg.pdf", width = 12, height = 40)
+pheatmap(path.kegg.overlap, display_numbers = TRUE)
+dev.off()
+
+path.name <- "Apelin signaling pathway"
+path.name <- "Adipocytokine signaling pathway"
+path.name <- "Insulin resistance"
+path.name <- "Oxidative phosphorylation"
+path.name <- "Fatty liver disease"
+pathway.idx <- which(u_path == path.name)
+path.genes <- path.ensembl[[pathway.idx]]
+path.in.top <- intersect(path.genes, rownames(val.mat))
+path.gene.names <- gene.info[match(path.in.top, gene.info[,"ensembl_gene_id"]),"external_gene_name"]
+path.mat <- val.mat[path.in.top,]
+rownames(path.mat) <- path.gene.names
+pheatmap(path.mat)
+boxplot(path.mat);abline(h = 0)
+```
+
+```{r check_loadnig, eval = FALSE}
+top.genes <- gene.info[match(rownames(val.mat), gene.info[,"ensembl_gene_id"]),"external_gene_name"]
+sort(top.genes)
+
+gene.name <- "Lepr"
+gene.id <- gene.info[which(gene.info[,"external_gene_name"] == gene.name),"ensembl_gene_id"]
+gene.loadings <- unlist(sapply(transcript_loadings, function(x) x[which(rownames(x) == gene.id)]))
+barplot(gene.loadings)
+```
+
 
 # Extra
 
-### Loadings vs. LOD {.tabset .tabset-fade .tabset-pills}
+## eQTL predictions in DO
+
+Can we predict phenotype in the DO using loadings and locally
+imputed gene expression? 
+
+```{r pred}
+local.impute <- list.files(here("Results", "DO", "Imputed_Transcriptomes"), 
+    pattern = "Local_Imputation")
+
+```
+
+## Loadings vs. LOD {.tabset .tabset-fade .tabset-pills}
 
 I don't think this is relevant anymore, but I don't want to
 take the code out completely.
@@ -2056,3 +2227,66 @@ if(mediation.text == "complete_mediation"){
 
 ```
 
+### Variance vs. LOD
+
+Local eQTLs tend to be concordant across tissues, whereas
+distal eQTLs do not tend to match. Is there a relationship
+between loading variance across tissues and LOD scores?
+We would expect that genes that need to be differentially
+regulated across tissues would have high variance in loading
+across tissues, and low local heritability. 
+
+```{r var_v_lod, fig.width = 8, fig.height = 8}
+common.tx <- Reduce("intersect", lapply(transcript_loadings, rownames))
+common.tx.mat <- sapply(transcript_loadings, function(x) x[common.tx,1])
+cross.tissue.var <- apply(common.tx.mat, 1, var)
+
+
+#hist(cross.tissue.var)
+
+par(mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    eqtl.table <- tissue.lod[[tx]]
+    gene.lod <- lapply(common.tx, function(x) eqtl.table$lod[which(eqtl.table$gene.id == x)])
+    max.lod <- sapply(gene.lod, function(x) if(length(x) > 0){max(x)}else{3})
+    plot.new()
+    plot.window(xlim = c(0, max(cross.tissue.var)), ylim = c(0, 250))
+    points(cross.tissue.var, max.lod, col = "gray10")
+    plot.with.model(cross.tissue.var, max.lod, report = "cor.test", add = TRUE,
+        col = tissue.cols[tx], line.col = "gray50")
+    axis(1);axis(2)
+    mtext(tissue.names[tx], side = 3)
+    mtext("Cross-Tissue Variance", side = 1, line = 2.5)
+    mtext("Maximum LOD score", side = 2, line = 2.5)
+}
+```
+
+Are transcripts important in individual tissues? Two tissues? More
+Rank Z transform the transcript loadings in each tissue, then count
+the number of tissues that each transcript has a large loading (>= 2.5) 
+in.
+
+The barplot below shows that for most transcripts that have a large
+loading, they have that large loading in only a single tissue.
+
+```{r importance}
+z.thresh <- 2.5
+norm.loadings <- apply(common.tx.mat, 2, rankZ)
+num.tx <- apply(norm.loadings, 1, function(x) length(which(abs(x) >= z.thresh)))
+num.count <- sapply(1:4, function(x) length(which(num.tx == x)))
+
+barplot_with_num(num.count, ylab = "transcript count", xlab = "Number of Tissues")
+```
+
+
+```{r tx_pairs}
+tx.pairs <- which(num.tx > 0)
+pheatmap(common.tx.mat[names(tx.pairs),], show_rownames = FALSE, cluster_cols = FALSE)
+tx.pair.genes <- gene.info[match(names(tx.pairs), gene.info[,1]),]
+pair.enrich <- gost(names(tx.pairs), organism = "mmusculus")
+plot.enrichment(pair.enrich)
+```
+
+Taken together, these results suggest that transcripts that are important
+for traits are differentially regulated across tissues, and thus cannot
+have strong local eQTL. 

@@ -39,6 +39,7 @@ singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here
 #~9.5 hrs
 singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3a.Imputation.Rmd"))'
 
+
 #total time: 9.75 hrs
 
 #================
@@ -47,6 +48,9 @@ singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here
 
 #~4.5 hrs
 singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3b.High_Dimensional_Mediation.Rmd"))'
+
+#look at KEGG and GO enrichments of transcript loadings
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "1.manuscript", "1.DO", "3c.GSEA.Rmd"))' --args "$signed_gsea"
 
 #total time: 4.5 hrs
 

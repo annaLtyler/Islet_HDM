@@ -37,6 +37,23 @@ go.result.dir <- here("Results", "GO")
 if(!file.exists(go.result.dir)){dir.create(go.result.dir, recursive = TRUE)}
 
 hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-complete_mediation")
+
+signed.gsea <- TRUE #If TRUE, GSEA is run on the transcript loadings as is
+        #This means that genes pathways with lots of positive
+        #loadings will have positive enrichments, and those 
+        #with lots of negative loadings will have negative enrichments
+        #if FALSE, GSEA is run on the absolute values of the 
+        #transcript loadings. Some pathways might have complex
+        #regulation, such that importance would only be apparent
+        #when looking at the absolute value of the loadings.
+
+if(signed.gsea){
+    signed.text <- "signed"
+    fgsea.type = "std"
+}else{
+    signed.text <- "unsigned"
+    fgsea.type = "pos"
+}
 ```
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
@@ -50,6 +67,10 @@ tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt")
 
 transcript_loadings <- readRDS(file.path(hdma.results.dir, "Loadings_Transcripts_0.RDS"))
 tissue.names <- names(transcript_loadings)
+
+if(!signed.gsea){
+    transcript_loadings <- lapply(transcript_loadings, abs)
+}
 ```
 
 ## KEGG enrichments
@@ -74,7 +95,7 @@ u_path <- gsub(" - Mus musculus (house mouse)", "", all.kegg[[2]][,"to"], fixed 
 gene.table <- read.table(here("Data", "general", "mouse_gene_info.txt"), sep = "\t", header = TRUE)
 ```
 
-We biult a list of KEGG terms and their gene assignments.
+We built a list of KEGG terms and their gene assignments.
 
 ```{r build_list}
 # build GSEA list
@@ -92,29 +113,35 @@ for each KEGG pathway using the transcript loadings from each of
 the four tissues.
 
 ```{r calc_enrich_kegg}
-path_enrich <- matrix(NA, nrow = length(u_path), ncol = length(tissue.names))
-rownames(path_enrich) <- u_path
-colnames(path_enrich) <- tissue.names
+path_enrich <- path_p <- matrix(NA, nrow = length(u_path), ncol = length(tissue.names))
+rownames(path_enrich) <- rownames(path_p) <- u_path
+colnames(path_enrich) <- colnames(path_p) <- tissue.names
 
 all_min <- min(sapply(transcript_loadings, min))
 all_max <- max(sapply(transcript_loadings, max))
 
-path_enrich_file <- file.path(kegg.result.dir, "KEGG_pathway_enrichments.RDS")
+path_enrich_file <- file.path(kegg.result.dir, paste0("KEGG_pathway_enrichments_", signed.text, ".RDS"))
+path_p_file <- file.path(kegg.result.dir, paste0("KEGG_pathway_enrichment_p_", signed.text, ".RDS"))
 
 if(!file.exists(path_enrich_file)){
     #get enrichment scores for all pathways and all tissues
     for(tx in 1:length(tissue.names)){
-        sorted.tx.loadings <- transcript_loadings[[tx]][order(transcript_loadings[[tx]], decreasing = TRUE),1]
-        gsea.enrich <- fgsea::fgsea(path.gene.ensembl, sorted.tx.loadings, scoreType = "std")
+        sorted.tx.loadings <- transcript_loadings[[tx]][order(transcript_loadings[[tx]], 
+            decreasing = TRUE),1]
+        gsea.enrich <- fgsea::fgsea(path.gene.ensembl, sorted.tx.loadings, scoreType = fgsea.type)
         norm.es <- as.numeric(as.matrix(gsea.enrich[,"NES"]))
-        names(norm.es) <- gsea.enrich$pathway
+        pval <- as.numeric(as.matrix(gsea.enrich[,"padj"]))
+        names(norm.es) <- names(pval) <- gsea.enrich$pathway
 
         name.idx <- match(names(norm.es), rownames(path_enrich))
         path_enrich[name.idx,tx] <- norm.es
+        path_p[name.idx,tx] <- pval
     }
     saveRDS(path_enrich, path_enrich_file)
+    saveRDS(path_p, path_p_file)
 }else{
     path_enrich <- readRDS(path_enrich_file)
+    path_p <- readRDS(path_p_file)
 }
 ```
 
@@ -140,12 +167,20 @@ par(mar = c(4,1, 2, 1))
 for(tx in 1:length(tissue.names)){
     cat("####", tissue.names[tx], "\n")
     sorted.enrich <- path_enrich[order(path_enrich[,tx], decreasing = FALSE),tx]
-    extreme.enrich  <- c(head(sorted.enrich, 10), tail(sorted.enrich, 10))
+    if(signed.gsea){
+        extreme.enrich  <- c(head(sorted.enrich, 10), tail(sorted.enrich, 10))
+    }else{
+        extreme.enrich  <- tail(sorted.enrich, 20)
+    }
     a <- barplot(extreme.enrich, 
         horiz = TRUE, las = 2, main = tissue.names[tx], 
         xlim = c(-4, 4), name = NA, col = tissue.cols[tx])
     text(x = rep(-0.1, 10), y = tail(a, 10), labels = tail(names(extreme.enrich), 10), adj = 1)
-    text(x = rep(0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 0)
+    if(signed.gsea){
+        text(x = rep(0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 0)
+    }else{
+        text(x = rep(-0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 1)
+    }
     mtext("Normalized Enrichment Score", side = 1, line = 2.5)
     top.scores[[tx]] <- names(extreme.enrich)
     abline(v = seq(-4, 4, 1), col = "gray", lty = 2)
@@ -164,16 +199,16 @@ whether the mean loading is non-zero.
 all.extreme.kegg <- unique(unlist(top.scores))
 top.kegg.mat <- path_enrich[match(all.extreme.kegg, rownames(path_enrich)),]
 
-kegg.loading.file <- file.path(kegg.result.dir, "Kegg_Pathway_Loadings.pdf")
+kegg.loading.file <- file.path(kegg.result.dir, paste0("Kegg_Pathway_Loadings_", signed.text, ".pdf"))
 
 if(!file.exists(kegg.loading.file)){
     pdf(kegg.loading.file, width = 12, height = 12)
-    par(mfrow = c(4,4))
-    for(i in 1:length(all.extreme.kegg)){
+    par(mfrow = c(3,3))
+    for(i in 1:length(u_path)){ #just write out all paths so we can check them
         if(is.interactive){
             report.progress(i, length(u_path))
         }
-        search.term <- all.extreme.kegg[i]
+        search.term <- u_path[i]
 
         path.locale <- which(u_path == search.term)
         path.id <- all.kegg[[2]][path.locale,][1]
@@ -189,14 +224,10 @@ if(!file.exists(kegg.loading.file)){
             gene.idx <- match(path.gene.table[,"target"], rownames(transcript_loadings[[tx]]))
             tissue.path.loadings[[tx]] <- transcript_loadings[[tx]][gene.idx]
         }
-
-        #test <- aov_list(tissue.path.loadings)
-        test <- lapply(tissue.path.loadings, function(x) t.test(x))
-        pval_p <- sapply(test, function(x) x$p.value)
-        
+      
         vioplot(tissue.path.loadings, main = paste0(search.term, "\n", length(path.gene.id), " genes"), 
             ylim = c(all_min, all_max), col = tissue.cols)
-        text(x = 1:4, y = all_max, labels = paste0("p = ", signif(pval_p, 2)))
+        text(x = 1:4, y = all_max, labels = paste0("p = ", signif(path_p[path.locale,], 2)))
         abline(h = 0)
     }
     dev.off()
@@ -261,10 +292,11 @@ plot_kegg_picture <- function(search.term, quote.level = "####", fig.width = 100
         cat(quote.level, tissue.names[tx], "\n")
         pv.out <- pathview(gene.data = tissue.path.loadings[[tx]]/scale.factor, 
             pathway.id = path.id, species = "mmu", 
-            out.suffix = paste(tissue.names[tx], gsub(" ", "_", search.term), sep = "_"),
+            out.suffix = paste(tissue.names[tx], gsub(" ", "_", search.term), signed.text, sep = "_"),
             kegg.dir = here("Results", "Kegg"))
 
-        picture.file <- paste0(path.id, ".", tissue.names[tx], "_", gsub(" ", "_", search.term), ".png")
+        picture.file <- paste0(path.id, ".", tissue.names[tx], "_", 
+            gsub(" ", "_", search.term), "_", signed.text, ".png")
         if(file.exists(here(picture.file))){
             system.call <- paste("mv", here(picture.file), file.path(kegg.result.dir, picture.file))
             system(system.call)
@@ -288,9 +320,39 @@ plot_kegg_picture(search.term = "Oxidative phosphorylation", quote.level = "####
 
 ```{r another, results = "asis", error = FALSE, message = FALSE, warning = FALSE}
 plot_kegg_picture("Valine, leucine and isoleucine degradation", quote.level = "#####", fig.width = 75)
-#plot_kegg_picture("Citrate cycle (TCA cycle)", quote.level = "#####", fig.width = 75)
+#plot_kegg_picture("PPAR signaling pathway", quote.level = "#####", fig.width = 75)
 ```
 
+
+### KEGG pathway tissue comparison
+
+We want to compare pathway activation across tissues. Are 
+these pathways equally loaded across tissues, or differentially
+loaded?
+
+Here we take the transcripts from the most strongly enriched pathways 
+in each tissue and compare their loadings across tisssues.
+
+```{r tissue_comparison, eval = FALSE}
+#make a matrix of all transcript loadings across the tissues.
+common.tx <- Reduce("intersect", lapply(transcript_loadings, rownames))
+common.tx.mat <- sapply(transcript_loadings, function(x) x[common.tx,1])
+
+all.top.paths <- vector(mode = "list", length = length(all.extreme.kegg))
+names(all.top.paths) <- all.extreme.kegg
+for(kp in 1:length(all.extreme.kegg)){
+    path.idx <- which(names(path.gene.ensembl) == all.extreme.kegg[kp])
+    path.genes <- path.gene.ensembl[[path.idx]]
+    gene.idx <- match(path.genes, rownames(common.tx.mat))
+    gene.idx <- gene.idx[which(!is.na(gene.idx))]
+    path.loadings <- common.tx.mat[gene.idx,]
+    all.top.paths[[kp]] <- path.loadings
+    pheatmap(path.loadings, show_rownames = FALSE, main = all.extreme.kegg[kp])
+}
+
+top.mat <- unique(Reduce("rbind", all.top.paths))
+pheatmap(top.mat, show_rownames = FALSE)
+```
 
 ## GO Enrichments
 
@@ -343,26 +405,31 @@ names(ensembl.go.list) <- term.names
 
 ```{r go_enrich}
 
-go.enrich.nes.file <- here("Results", "GO", "GO_NES.RDS")
+go.enrich.nes.file <- here("Results", "GO", paste0("GO_NES_", signed.text, ".RDS"))
+go.enrich.p.file <- here("Results", "GO", paste0("GO_p_", signed.text, ".RDS"))
 
 if(!file.exists(go.enrich.nes.file)){
-    go.enrich.nes <- matrix(NA, ncol = length(tissue.names), nrow = length(go.list))
-    colnames(go.enrich.nes) <- tissue.names
-    rownames(go.enrich.nes) <- names(ensembl.go.list)
+    go.enrich.nes <- go.p <- matrix(NA, ncol = length(tissue.names), nrow = length(go.list))
+    colnames(go.enrich.nes) <- colnames(go.p) <- tissue.names
+    rownames(go.enrich.nes) <- rownames(go.p) <- names(ensembl.go.list)
 
     for(tx in 1:length(tissue.names)){
 
         sorted.tx.loadings <- transcript_loadings[[tx]][order(transcript_loadings[[tx]], decreasing = TRUE),1]
-        gsea.enrich <- fgsea::fgsea(ensembl.go.list, sorted.tx.loadings, scoreType = "std")
+        gsea.enrich <- fgsea::fgsea(ensembl.go.list, sorted.tx.loadings, scoreType = fgsea.type)
         norm.es <- as.numeric(as.matrix(gsea.enrich[,"NES"]))
-        names(norm.es) <- gsea.enrich$pathway
-
+        pval <- as.numeric(as.matrix(gsea.enrich[,"padj"]))
+        names(norm.es) <- names(pval) <- gsea.enrich$pathway
+        
         name.idx <- match(names(norm.es), rownames(go.enrich.nes))
         go.enrich.nes[name.idx,tx] <- norm.es
+        go.p[name.idx,tx] <- pval
     }
     saveRDS(go.enrich.nes, go.enrich.nes.file)
+    saveRDS(go.p, go.enrich.p.file)
 }else{
     go.enrich.nes <- readRDS(go.enrich.nes.file)
+    go.p <- readRDS(go.enrich.p.file)
 }
 
 
@@ -386,15 +453,25 @@ for(tx in 1:length(tissue.names)){
     enrich.order <- order(go.enrich.nes[,tx], decreasing = FALSE)
     sorted.enrich <- go.enrich.nes[enrich.order,tx]
     sorted.onto <- term.ontology[enrich.order]
-    extreme.enrich  <- c(head(sorted.enrich, num.top), tail(sorted.enrich, num.top))
-    extreme.onto <- c(head(sorted.onto, num.top), tail(sorted.onto, num.top))
+    if(signed.gsea){
+        extreme.enrich  <- c(head(sorted.enrich, num.top), tail(sorted.enrich, num.top))
+        extreme.onto <- c(head(sorted.onto, num.top), tail(sorted.onto, num.top))
+    }else{
+        extreme.enrich  <- tail(sorted.enrich, num.top*2)
+        extreme.onto <- tail(sorted.onto, num.top*2)
+    }
     a <- barplot(extreme.enrich, 
         horiz = TRUE, las = 2, main = tissue.names[tx], 
         xlim = c(-4, 4), names = NA, col = tissue.cols[tx])
     text(x = rep(-0.1, num.top), y = tail(a, num.top), 
         labels = paste0(tail(names(extreme.enrich), num.top), " (", tail(extreme.onto, num.top), ")"), adj = 1)
+    if(signed.gsea){
     text(x = rep(0.1, num.top), y = head(a, num.top), 
         labels = paste0(head(names(extreme.enrich), num.top), " (", head(extreme.onto, num.top), ")"), adj = 0)
+    }else{
+    text(x = rep(-0.1, num.top), y = head(a, num.top), 
+        labels = paste0(head(names(extreme.enrich), num.top), " (", head(extreme.onto, num.top), ")"), adj = 1)
+    }
     mtext("Normalized Enrichment Score", side = 1, line = 2.5)
  
     extreme.go[[tx]]  <- extreme.enrich
@@ -412,18 +489,15 @@ in GO_Term_Loadings.pdf
 ```{r all_terms, error = FALSE, warning = FALSE, message = FALSE}
 top.go.enrich <- unique(unlist(lapply(extreme.go, names)))
 
-pdf(file.path(go.result.dir, "GO_Term_Loadings.pdf"), width = 12, height = 12)
-par(mfrow = c(4,4))
+pdf(file.path(go.result.dir, paste0("GO_Term_Loadings_", signed.text, ".pdf")), width = 12, height = 12)
+par(mfrow = c(3,3))
 for(i in 1:length(top.go.enrich)){
     go.idx <- which(names(ensembl.go.list) == top.go.enrich[i])
     gene.vals <- lapply(transcript_loadings, function(x) x[match(ensembl.go.list[[go.idx]], rownames(x)),1])
-
-    test <- lapply(gene.vals, function(x) t.test(x))
-    pval_p <- sapply(test, function(x) x$p.value)
     
     vioplot(gene.vals, main = paste0(top.go.enrich[i], "\n", length(ensembl.go.list[[go.idx]])), 
         ylim = c(all_min, all_max), col = tissue.cols)
-    text(x = 1:4, y = all_max, labels = paste0("p = ", signif(pval_p, 2)))
+    text(x = 1:4, y = all_max, labels = paste0("p = ", signif(go.p[go.idx,], 2)))
     abline(h = 0)
 }
 dev.off()

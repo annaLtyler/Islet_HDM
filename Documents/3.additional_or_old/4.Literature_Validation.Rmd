@@ -17,7 +17,7 @@ genes with low MGE.
 ```{r setup}
 rm(list = ls()) #clear R environment
 library(here)
-mge.results <- "tissue_together-_-complete_mediation-germline_kinship"
+mge.results <- "tissue_together-_-complete_mediation"
 mge.results.dir <- here("Results", "High_Dim_Med", mge.results)
 
 if(length(grep("full_imp", mge.results)) > 0){
@@ -43,11 +43,11 @@ all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
 for(i in 1:length(all.fun)){source(all.fun[i])}
 
 all.packages <- c("pheatmap", "easyPubMed", "fgsea")
-load_libraries(all.packages, personal.library = TRUE)
+load_libraries(all.packages)
 ```
 
 ```{r read_previous_results}
-mge <- readRDS(here("Results", "High_Dim_Med", mge.results, "Population_Local_MGE_local_imp_0.RDS"))
+mge <- readRDS(here("Results", "DO", "High_Dim_Med", mge.results, "Population_Local_MGE_local_imp_0.RDS"))
 transcript.loadings <- readRDS(here("Results", "High_Dim_Med", mge.results, "Loadings_Transcripts_0.RDS"))
 gene.tables <- readRDS(here("Results", "Data", "Gene_Tables.RDS"))
 ```

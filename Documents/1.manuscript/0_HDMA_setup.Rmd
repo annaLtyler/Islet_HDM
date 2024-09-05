@@ -25,7 +25,8 @@ all.packages <- c('here', 'pheatmap', 'igraph', 'gprofiler2',
 'qtl2', 'stringr', 'wordcloud', 'wordcloud2', 'hexbin', 
 'regress', 'propagate', 'knitr', 'DT', 'RColorBrewer', 'vioplot', 
 'Matrix', 'RGCCA', 'bnstruct', 'corpcor', 'cluster', 'grid', 
-'easyPubMed', 'abind', 'GEOquery', 'limma', 'pdftools')
+'easyPubMed', 'abind', 'GEOquery', 'limma', 'pdftools', 
+"clusterProfiler", "fgsea", "pathview", "pRoloc", "annotate", "GO.db")
 
 load_libraries(all.packages)
 ```

@@ -657,3 +657,151 @@ for(tx in 1:length(tissue.names)){
 }
 
 ```
+
+
+
+## Drug Targets
+
+We can download information about genes with drugs targeting
+them for particular diseases from OpenTargets.
+
+We downloaded known drug tables for both diabetes:
+https://platform.opentargets.org/disease/EFO_0000400
+
+and metabolic syndrome:
+https://platform.opentargets.org/disease/EFO_0000195
+
+We saved the tables in Data/Human as
+EFO_0000400-diabetes-known-drugs.tsv
+EFO_0000195-metabolic-syndrome-known-drugs.tsv
+
+We can select targets based on different criteria
+and look for enrichment.
+
+```{r targets}
+orthologs <- read.delim(here("Data", "general", "human.mouse.orthologs.txt"))
+
+diabetes.targets <- read.delim(here("Data", "Human", "EFO_0000400-diabetes-known-drugs.tsv"))
+metabolic.targets <- read.delim(here("Data", "Human", "EFO_0000195-metabolic-syndrome-known-drugs.tsv"))
+
+
+find_target_enrichment <- function(human.gene.names, target.table, signed = TRUE){
+    target.data <- target.table[match(human.gene.names, targets[,"symbol"]),]
+    mouse.targets <- orthologs[match(human.gene.names, orthologs[,"Human.Gene.Name"]),]
+    target.ensembl <- list("targets" = mouse.targets[,"Mouse.Ortholog.Ensembl"])
+
+    tx.target.enrich <- matrix(NA, nrow = length(tissue.names), ncol = 2)
+    rownames(tx.target.enrich) <- tissue.names
+    colnames(tx.target.enrich) <- c("NES", "pval")
+    for(tx in 1:length(tissue.names)){
+        
+        if(signed){
+            sorted.tx.loadings <- transcript_loadings[[tx]][order(transcript_loadings[[tx]], 
+                decreasing = TRUE),1]
+            sign.type = "std"
+        }else{
+            sorted.tx.loadings <- abs(transcript_loadings[[tx]])[order(abs(transcript_loadings[[tx]]), 
+                decreasing = TRUE),1]
+            sign.type = "pos"
+        }
+        gsea.enrich <- fgsea::fgsea(target.ensembl, sorted.tx.loadings, scoreType = sign.type)
+        norm.es <- as.numeric(as.matrix(gsea.enrich[,"NES"]))
+        pval <- as.numeric(as.matrix(gsea.enrich[,"padj"]))
+        names(norm.es) <- names(pval) <- gsea.enrich$pathway
+
+        tx.target.enrich[tx,] <- c(norm.es, pval)
+    }
+    return(tx.target.enrich)
+}
+
+signed_v_unsigned <- function(human.gene.names, target.table){
+    
+    #translate targets to mouse orthologs
+    target.with.ortho <- target.table[which(human.gene.names %in% orthologs[,"Human.Gene.Name"]),"symbol"]
+
+    target.enrich.signed <- find_target_enrichment(target.with.ortho, target.table, signed = TRUE)
+    target.enrich.unsigned <- find_target_enrichment(target.with.ortho, target.table, signed = FALSE)
+
+    par(mfrow = c(1,2))
+    barplot(rbind(target.enrich.signed[,"NES"], target.enrich.unsigned[,"NES"]), 
+        beside = TRUE, main = "NES", ylab = "NES", col = c("gray", "#9ecae1"))
+    #legend("topright", fill = c("gray", "#9ecae1"), legend = c("signed", "unsigned"))
+    abline(h = 0)
+
+    barplot(-log10(rbind(target.enrich.signed[,"pval"], target.enrich.unsigned[,"pval"])), 
+        beside =TRUE, main = "-log10(pval)", ylab = "-log10(pval)", col = c("gray", "#9ecae1"))
+    legend("topright", fill = c("gray", "#9ecae1"), legend = c("signed", "unsigned"))
+
+    result <- list("signed" = target.enrich.signed, "unsigned" = target.enrich.signed)
+    invisible(result)
+}
+
+test_drug_targets <- function(target.table, min.targets = 30){
+    u_drugs <- unique(target.table[,"drugName"])
+    drug_lists <- lapply(u_drugs, function(x) target.table[which(target.table[,"drugName"] == x),])
+    num.targets <- sapply(drug_lists, function(x) length(unique(x[,"symbol"])))
+    #sort(num.targets)
+    drugs.to.test <- u_drugs[which(num.targets > min.targets)]
+
+    for(i in 1:length(drugs.to.test)){
+     #signed_v_unsigned(drug_lists[[which(u_drugs == drugs.to.test[i])]][,"symbol"], target.table)
+    plot_target_loadings(unique(drug_lists[[which(u_drugs == drugs.to.test[i])]][,"symbol"]), 
+        target.table, main = u_drugs[i])
+    }
+}
+
+plot_target_loadings <- function(human.gene.names, target.table, main = ""){
+    target.data <- target.table[match(human.gene.names, targets[,"symbol"]),]
+    mouse.targets <- orthologs[match(human.gene.names, orthologs[,"Human.Gene.Name"]),]
+    target.ensembl <- mouse.targets[,"Mouse.Ortholog.Ensembl"]
+
+    tx.target.loading <- vector(mode = "list", length = length(tissue.names))
+    names(tx.target.loading) <- tissue.names
+    
+    for(tx in 1:length(tissue.names)){
+        included.targets <- intersect(target.ensembl, rownames(transcript_loadings[[tx]]))
+        if(length(included.targets) > 0){
+            tx.target.loading[[tx]] <- transcript_loadings[[tx]][included.targets,]
+        }
+    }
+    vioplot(tx.target.loading, main = main, col = tissue.cols)
+    abline(h = 0)
+    invisible(tx.target.loading)
+}
+```
+
+The following plots show the enrichment scores and p values
+for enrichments for any drug tested for diabetes. There 
+aren't any spectacular enrichments.
+
+```{r any_diabetes, fig.width = 8, fig.height = 4, warning = FALSE, message = FALSE, error = FALSE}
+#diabetes.enrich <- signed_v_unsigned(diabetes.targets[,"symbol"], diabetes.targets)
+plot_target_loadings(diabetes.targets[,"symbol"], diabetes.targets, "All Diabetes Targets")
+```
+
+The following plots show scores for all genes targeted for metabolic 
+syndrome. Here, the negative end of the adipose and liver spectrum
+are more enriched, but the p values don't look great.
+
+```{r any_diabetes, fig.width = 8, fig.height = 4, warning = FALSE, message = FALSE, error = FALSE}
+#metabolic.enrich <- signed_v_unsigned(metabolic.targets[,"symbol"], metabolic.targets)
+plot_target_loadings(metabolic.targets[,"symbol"], metabolic.targets, "All Metabolic Syndrome Targets")
+```
+
+```{r test}
+#completed phase 4
+diabetes.passed4 <- diabetes.targets[intersect(which(diabetes.targets[,"phase"] == 4), which(diabetes.targets[,"status"] == "Completed")),"symbol"]
+#signed_v_unsigned(diabetes.passed4, diabetes.targets)
+plot_target_loadings(diabetes.passed4, diabetes.targets, "Diabetes Passed Phase 4")
+
+
+metabolic.passed4 <- metabolic.targets[intersect(which(metabolic.targets[,"phase"] == 4), which(metabolic.targets[,"status"] == "Completed")),"symbol"]
+signed_v_unsigned(metabolic.passed4, metabolic.targets)
+plot_target_loadings(metabolic.passed4, metabolic.targets, "Metabolic syndrome passed phase 4")
+
+par(mfrow = c(2,2))
+test_drug_targets(metabolic.targets, 30)
+
+par(mfrow = c(2,2))
+test_drug_targets(diabetes.targets, 30)
+```
