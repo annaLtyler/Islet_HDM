@@ -321,6 +321,7 @@ plot_kegg_picture(search.term = "Oxidative phosphorylation", quote.level = "####
 ```{r another, results = "asis", error = FALSE, message = FALSE, warning = FALSE}
 plot_kegg_picture("Valine, leucine and isoleucine degradation", quote.level = "#####", fig.width = 75)
 #plot_kegg_picture("PPAR signaling pathway", quote.level = "#####", fig.width = 75)
+plot_kegg_picture("Citrate cycle (TCA cycle)", quote.level = "#####", fig.width = 75)
 ```
 
 

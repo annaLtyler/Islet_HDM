@@ -922,7 +922,7 @@ for(tx in 1:length(tissue.names)){
         main = tissue.names[tx], report = "cor.test")
 
     text(x = max.load*0.63, y = max.var.exp*0.95, labels = paste("r =", signif(cor.result[1], 2)), adj = 0)
-    text(x = max.load*0.63, y = max.var.exp*0.85, labels = paste("p =", signif(cor.result[2], 2)), adj = 0)
+    text(x = max.load*0.63, y = max.var.exp*0.85, labels = paste("p <", threshold_p(signif(cor.result[2], 2))), adj = 0)
 }
 dev.off()
 ```
@@ -2080,6 +2080,9 @@ for(g in 1:length(gene.lists)){
     write.table(cluster.table, file.name,
         sep = ",", quote = FALSE, row.names = FALSE, col.names = FALSE)
 }
+
+#write them all out in one file
+
 ```
 
 ```{r test_kegg, eval = FALSE}
