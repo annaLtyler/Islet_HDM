@@ -28,14 +28,15 @@ for(i in 1:length(all.fun)){source(all.fun[i])}
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
 all.packages <- c("pheatmap", "gprofiler2", "igraph")
-load_libraries(all.packages, personal.library = TRUE)
+load_libraries(all.packages)
 ```
 
 ```{r set_var}
 tissue.names <- c("Adipose", "Islet", "Liver", "SkeletalMuscle")
 gene.cols <- categorical_pal(8)
 
-jeff.genes <- c("Pnpla2", "Mogat2", "Hadha", "Cpt2", "Capn3", "Ccl2", "Prkaa1", "Prkaa2")
+#test.genes <- c("Pnpla2", "Mogat2", "Hadha", "Cpt2", "Capn3", "Ccl2", "Prkaa1", "Prkaa2") #from Jeff Harder
+test.genes <- "Mest"
 
 ```
 
@@ -48,7 +49,7 @@ tissue.loadings <- readRDS(file.path(hdma.results.dir, "Loadings_Transcripts_0.R
 
 ```{r genes, fig.width = 10, fig.height = 5}
 
-gene.table <- gconvert(jeff.genes, organism = "mmusculus")
+gene.table <- gconvert(test.genes, organism = "mmusculus")
 
 gene.loading.table <- NULL
 for(g in 1:nrow(gene.table)){
@@ -64,6 +65,7 @@ rownames(gene.loading.table) <- gene.table[,"input"]
 
 barplot(gene.loading.table, beside = TRUE, col = gene.cols[1:nrow(gene.table)], main = "Loading")
 legend("topright", fill = gene.cols[1:nrow(gene.table)], legend = gene.table[,"input"], cex = 0.7)
+abline(h = 0)
 ```
 
 How large are these loadings?

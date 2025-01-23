@@ -39,9 +39,9 @@ rm(list = ls()) #clear out R environment
 #args <- commandArgs(trailingOnly=T)
 num.perm = 1000
 
-args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
+#args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
 #args <- c(1,0,0,1,0) #merged tissues, full imputation, mediation model
-#args <- c(0,0,0,1,0) #sep tissues, full imputation, mediation model
+args <- c(0,0,0,1,0) #sep tissues, full imputation, mediation model
 
 #args <- c(1,1,1,1,0) #merged tissues, local imputation, mediation mode, weight adjusted
 
@@ -78,7 +78,7 @@ exp.name <- paste(merge.text, weight.text, mediation.text, sep = "-")
 if(merge.tissues){
     max.tx <- 1
 }else{
-    max.tx <- length(tissue.names)
+    max.tx <- 4
 }
 
 adjust_before_fitting = NULL
@@ -453,10 +453,17 @@ saveRDS(pheno.herit, here("Results", "Paper", "Composite_Trait_Heritability.RDS"
 pheno.decomp <- plot.decomp(reg.pheno, pc = ncol(reg.pheno), plot.results = FALSE)
 pheno.pc <- pheno.decomp$u
 pc.var.exp <- pheno.decomp$var.exp
-pheno.model.cor <- lapply(model_scores, function(x) apply(pheno.pc, 2, function(y) cor(x[,"Outcome"], y)))
+common.id <- lapply(model_scores, function(x) intersect(rownames(reg.pheno), rownames(x)))
+common.idx <- lapply(1:length(common.id), 
+    function(x) cbind(match(common.id[[x]], rownames(reg.pheno)), match(common.id[[x]], rownames(model_scores[[x]]))))
+pheno.model.cor <- lapply(1:length(model_scores), 
+    function(x) apply(pheno.pc[common.idx[[x]][,1],], 2, 
+    function(y) cor(model_scores[[x]][common.idx[[x]][,2],"Outcome"], y)))
+names(pheno.model.cor) <- tissue.names
 model.var.exp <- lapply(pheno.model.cor, function(x) sum(x*pc.var.exp))
 
-saveRDS(lapply(model.var.exp, function(x) x*100), here("Results", "Paper", "Model_Variance_Explained.RDS"))
+saveRDS(lapply(model.var.exp, function(x) x*100), here("Results", "Paper", 
+    paste0("Model_Variance_Explained_", basename(results.dir), ".RDS")))
 ```
 
 
@@ -525,12 +532,15 @@ is negative and green is positive.
 If the tissues were run separately, there will be one plot
 per tissue. Otherwise, there will be just one plot for all tissues.
 
-```{r plot_nets, results = "asis"}
+```{r plot_nets, results = "asis", fig.width = 7, fig.height = 7}
+layout(get.layout.mat(max.tx))
 for(tx in 1:max.tx){
  if(max.tx == 1){
         cat("### All Tissues\n")
+        file.append <- "all_tissues"
     }else{
         cat("###", tissue.names[tx], "\n")
+        file.append <- tissue.names[tx]
     }    
     tx.pcor <- pcor.shrink(model_scores[[tx]], verbose = FALSE)
     tx.pcor[lower.tri(tx.pcor, diag = TRUE)] <- 0
@@ -538,11 +548,12 @@ for(tx in 1:max.tx){
     e.weight <- E(net)$weight
     plot(net, edge.width = abs(e.weight*10), edge.color = sign(e.weight)+2, 
         layout = layout_on_grid, edge.label = signif(e.weight, 2),
-        edge.label.cex = 1.5, vertex.size = 30)
+        edge.label.cex = 1.5, vertex.size = 30, main = file.append)
     if(max.tx > 1){
         cat("\n\n")
     }
-    saveRDS(tx.pcor, here("Results", "Paper", "Pcor.RDS"))
+
+    saveRDS(tx.pcor, here("Results", "Paper", paste0("Pcor_", file.append, ".RDS")))
 }
 ```
 
@@ -1398,6 +1409,7 @@ plot_gene_stats <- function(gene.set.stats, loading.lim = NULL, herit.max = 1){
 
 ```{r plot_high_loading}
 #High Loading Genes
+stop()
 png(file.path(results.dir, "gene_stats_combined.png"), width = 5, height = 12, units = "in", res = 300)
 load.gene.info <- plot_gene_stats(gene.stats)
 dev.off()
@@ -1409,7 +1421,7 @@ Compare these stats to those for genes with high local heritability
 #collect minimal stats for genes with high heritability.
 #take twice as many for each tissue, because heritability
 #is not signed 
-
+stop()
 lookup.genes = TRUE
 local.gene.stats <- vector(mode = "list", length = length(tissue.names))
 names(local.gene.stats) <- tissue.names
@@ -2071,6 +2083,7 @@ toa.cluster.dir <- file.path(results.dir, "TOA_Clusters")
 if(!file.exists(toa.cluster.dir)){dir.create(toa.cluster.dir)}
 gene.lists <- toa.results[[2]]
 names(gene.lists) <- alt.labels[,1]
+full.list <- vector(mode = "list", length = length(gene.lists))
 for(g in 1:length(gene.lists)){
     file.name <- file.path(toa.cluster.dir, paste0("Cluster", g, "_", gsub(" ", "_", names(gene.lists)[g]), ".csv"))
     gene.names <- gene.info[match(gene.lists[[g]], gene.info[,"ensembl_gene_id"]),"external_gene_name"]
@@ -2079,10 +2092,22 @@ for(g in 1:length(gene.lists)){
     colnames(cluster.table) <- c("gene.ID", "gene.name", tissue.names)
     write.table(cluster.table, file.name,
         sep = ",", quote = FALSE, row.names = FALSE, col.names = FALSE)
+    full.list[[g]] <- cluster.table
 }
 
 #write them all out in one file
+cluster.labels <- lapply(1:length(full.list), function(x) rep(alt.labels[x,1], nrow(full.list[[x]])))
+full.table <- cbind("Cluster" = unlist(cluster.labels), Reduce("rbind", full.list))
+#some gene names are missing. use gconvert to get all of them.
+gene.names <- gconvert(full.table[,"gene.ID"], organism = "mmusculus")
+#setdiff(full.table[,"gene.ID"], gene.names[,"target"])
+common.genes <- intersect(full.table[,"gene.ID"], gene.names[,"target"])
+table.idx <- match(common.genes, full.table[,"gene.ID"])
+name.idx <- match(common.genes, gene.names[,"target"])
+full.table[table.idx,"gene.name"] <- gene.names[name.idx,"name"]
 
+write.table(full.table, file.path(toa.cluster.dir, "Tissues_of_Action_Genes.txt"), sep = "\t",
+    quote = FALSE, row.names = FALSE)
 ```
 
 ```{r test_kegg, eval = FALSE}

@@ -90,7 +90,7 @@ data.loaded <- as.logical(length(which(all.var == "expr")))
 if(!data.loaded){
     annot <- read.csv(file.path(data.dir, "final_sample_annotations.csv"))
     expr.files <- list.files(here("Data", "CC-RIX"), pattern = "vst")
-    expr <- lapply(expr.files, function(x) read.csv(file.path(data.dir, x), row.names = 1))
+    expr <- lapply(expr.files, function(x) readRDS(file.path(data.dir, x)))
 
     #take out gene names and create matrices
     for(i in 1:length(expr)){
@@ -159,7 +159,6 @@ Read in the phenotypes.
 bw <- as.matrix(read.csv(file.path(data.dir, "Cube Body Weights 8.13.21 FINAL.csv")))
 bw <- bw[which(bw[,1] != ""),]
 food <- as.matrix(read.csv(file.path(data.dir, "Cube Food Intake 7.08.21_FINAL.csv")))
-water <- as.matrix(read.csv(file.path(data.dir, "Cube Water Intake 8.19.21 FINAL.csv")))
 chem <- as.matrix(read.csv(file.path(data.dir, "Cube_RIX_clinical chemistries_FINAL_11.01.2021.csv")))
 chem <- as.matrix(chem[which(chem[,1] != ""),])
 ```
