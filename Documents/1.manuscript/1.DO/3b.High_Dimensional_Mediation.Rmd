@@ -37,7 +37,7 @@ For this workflow there are several parameters to set.
 ```{r get_args}
 rm(list = ls()) #clear out R environment
 #args <- commandArgs(trailingOnly=T)
-num.perm = 1000
+num.perm = 10
 
 #args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
 #args <- c(1,0,0,1,0) #merged tissues, full imputation, mediation model
@@ -591,10 +591,11 @@ if(!file.exists(perm.file) || delete_previous){
             outcome.kernel = Kt[[tx]]
         }
         
+        common.names <- intersect(rownames(mediator.kernel), rownames(outcome.kernel))
         perm_stats <- matrix(NA, nrow = num.perm, ncol = 4)
         colnames(perm_stats) <- c("path_coef", "X-M", "M-Y", "X-Y")
-        null.med.mat <- matrix(NA, nrow = nrow(mediator.kernel), ncol = num.perm)        
-        rownames(null.med.mat) <- rownames(mediator.kernel)
+        null.med.mat <- matrix(NA, nrow = length(common.names), ncol = num.perm)        
+        rownames(null.med.mat) <- common.names
 
         for(p in 1:num.perm){
 
