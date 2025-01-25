@@ -1410,7 +1410,6 @@ plot_gene_stats <- function(gene.set.stats, loading.lim = NULL, herit.max = 1){
 
 ```{r plot_high_loading}
 #High Loading Genes
-stop()
 png(file.path(results.dir, "gene_stats_combined.png"), width = 5, height = 12, units = "in", res = 300)
 load.gene.info <- plot_gene_stats(gene.stats)
 dev.off()
@@ -1422,7 +1421,6 @@ Compare these stats to those for genes with high local heritability
 #collect minimal stats for genes with high heritability.
 #take twice as many for each tissue, because heritability
 #is not signed 
-stop()
 lookup.genes = TRUE
 local.gene.stats <- vector(mode = "list", length = length(tissue.names))
 names(local.gene.stats) <- tissue.names
