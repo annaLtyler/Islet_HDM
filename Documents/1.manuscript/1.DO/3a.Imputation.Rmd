@@ -398,6 +398,41 @@ mtext("Variance Explained", side = 2, line = 2.5, cex = 1.5)
 dev.off()
 ```
 
+```{r local_v_distal_fig2, eval = FALSE}
+#try with overlapping transparent histograms
+par(mfrow = c(1,4), mar = c(4, 4, 4, 0))
+for(tx in 1:length(tissue.names)){
+    local.tx <- local.distal.comp$Local[,tx]
+    distal.tx <- local.distal.comp$Distal[,tx]
+    local.dens <- density(local.tx[which(!is.na(local.tx))])
+    distal.dens <- density(distal.tx[which(!is.na(distal.tx))])
+    plot.new()
+    plot.window(xlim = c(0, max(c(local.dens$x, distal.dens$x))), 
+        ylim = c(0, max(c(local.dens$y, distal.dens$y))))
+    plot.poly.xy(poly.top.x = local.dens$x, poly.top.y = local.dens$y, 
+        poly.bottom.x = local.dens$x, 
+        poly.bottom.y = rep(0, length(local.dens$y)), 
+        col = hex2rgb(local.col, alpha = 0.5))
+    plot.poly.xy(poly.top.x = distal.dens$x, poly.top.y = distal.dens$y, 
+        poly.bottom.x = distal.dens$x, 
+        poly.bottom.y = rep(0, length(distal.dens$y)), 
+        col = hex2rgb(distal.col, alpha = 0.5))
+    mtext(tissue.names[tx], side = 3, line = 1.5, cex = 1.5, font = 2) 
+    mtext("Variance Explained", side = 1, line = 2.5)
+    mtext("Density", side = 2, line = 2.5)
+    axis(1); axis(2)
+    arrows(x0 = median(local.tx, na.rm = TRUE), y0 = max(local.dens$y)*0.1,
+        y1 = 0, lwd = 3, col = local.col, length = 0.1)
+    arrows(x0 = median(distal.tx, na.rm = TRUE), y0 = max(local.dens$y)*0.1,
+        y1 = 0, lwd = 3, col = distal.col, length = 0.1)
+    if(tx == 4){
+        legend("topright", fill = c(local.col, distal.col), 
+            legend = c("Local", "Distal"), cex = 1.5)
+    }
+}
+
+```
+
 ```{r fig, eval = FALSE}
 par(mar = c(3,4,1,2))
 plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "Variance Explained",
@@ -455,37 +490,119 @@ trait.cor <- lapply(trait.cor.files, readRDS)
 names(trait.cor) <- tissue.names
 ```
 
-#### Variance Explained - Linear
+#### Variance Explained - Splines
 
-The following plots are the same as above, but show the linear fit.
+The following figures show the same data as above, but 
+with added lines showing trends. To generate these trends,
+we split the genes into 100 even groups based on the
+percentiles of the variance explained. For each of these
+groups, we calculated the mean trait correlation (lower 
+line) and the 95th percentile of the trait correlation
+(upper line). We then smoothed this line using splines
+and plotted the result. The mean doesn't change much 
+across groups, but the upper 95th percentile changes
+more showing the trend is driven largely by the outlier
+genes.
 
-```{r local_lin_fit, fig.height = 8, fig.width = 8}
-col.ramp <- brewer.pal(9, "BrBG")[c(3,2,2,2)]
-#display.brewer.all()
-#pdf("~/Desktop/local_v_relevance.pdf", width = 6, height = 6)
-par(mfrow = c(2,2))
-for(tx in 1:length(trait.cor)){
-    common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp[[tx]]))
+```{r plot_cor_fun}
 
-#    plot.with.model(local.var.exp[[tx]][common.tx], abs(trait.cor[[tx]][common.tx]),
-#        xlab = "Local Variance Explained", ylab = "Max Correlation with Trait",
-#        main = tissue.names[tx], report = "cor.test")
-    cor.stats <- plot.hexbin.as.plot(x = abs(trait.cor[[tx]][common.tx]), 
-        y = local.var.exp[[tx]][common.tx], ylab = "", xlab = "",
-        main = "", n.bins = 4, use.pheatmap.colors = FALSE, 
-        custom.colors = col.ramp, with.model = TRUE, report = "cor.test", 
-        legend.pos = NA, write.results = FALSE, ylim = c(0,1), xlim = c(0, 0.75))
-    text(x = 0.44, y = 0.95, labels = paste0("r = ", cor.stats[1]), adj = 0)
-    text(x = 0.44, y = 0.84, labels = threshold_p(cor.stats[2], return.text = TRUE), 
-        adj = 0)
-    mtext(tissue.names[tx], side = 3, line = 0.5, font = 2, cex = 1.5)
-    mtext("Variance Explained", side = 2, line = 2.5)
-    mtext("Max. Trait Correlation", side = 1, line = 2.5)
+plot_with_centiles <- function(x, y, main = "", xlab = "", 
+    ylab = "", xlim = NULL, ylim = NULL, 
+    col.ramp = brewer.pal(9, "BrBG")[c(3,2,2,2)], 
+    centile.seq = seq(0, 1, 0.01)){
+
+    plot.hexbin.as.plot(x = x, y = y, 
+    ylab = "", xlab = "",
+    main = "", n.bins = 4, use.pheatmap.colors = FALSE, 
+    custom.colors = col.ramp, with.model = FALSE, 
+    legend.pos = NA, write.results = FALSE, xlim = xlim, 
+    ylim = ylim)
+
+    mtext(main, side = 3, line = 0.5, font = 2, cex = 1.5)
+    mtext(xlab, side = 1, line = 2.5)
+    mtext(ylab, side = 2, line = 2.5)
+
+    #add line for mean of deciles
+    #break genes into deciles based on variance explained
+    x.seq <- centile.seq
+    seq.mids <- rowMeans(consec_pairs(x.seq))
+
+    #find the deciles of variance explained
+    x.deciles <- quantile(x, probs = x.seq, na.rm = TRUE)
+
+    #there may be many transcripts with 0 variance explained.
+    #the centiles will split these into different groups, which
+    #causes problems with plotting. Remove any centiles with 
+    #duplicate values to group all those genes into a single
+    #bin.
+    dups <- which(duplicated(x.deciles))
+    if(length(dups) > 0){
+        x.deciles <- x.deciles[-dups]
+    }
+
+    #use these deciles as break points and find the trait correlations
+    #of the genes that fit into the variance explained deciles
+    y.vals <- bin_by_hist(x = x, y = y, plot.result = FALSE,
+        breaks = x.deciles)
+    #sapply(trait.cor.vals$yvals, length)
+    decile.mids <- rowMeans(consec_pairs(x.deciles))
+    
+    #find the mean trait correlation for these genes
+    decile.means <- sapply(y.vals$yvals, 
+        function(x) mean(x, na.rm = TRUE))    
+    
+    #points(seq.mids, decile.means, type = "b", pch = 16)
+    smoothed.mean <- DescTools::SmoothSpline(decile.mids, decile.means)
+    points(smoothed.mean, type = "l", pch = 16, lwd = 3, col = "gray30")
+
+    #find the 95th percentile of trait correlations for these genes
+    upper.val <- sapply(y.vals$yvals, 
+        function(x) get.percentile(x, 95))
+    smoothed.upper <- DescTools::SmoothSpline(decile.mids, upper.val)
+    points(smoothed.upper, type = "l", pch = 16, lwd = 3, col = "gray30")
 }
-#dev.off() 
 ```
 
-#### LOD - Linear
+```{r local_lin_fit, fig.height = 8, fig.width = 8}
+#points with overlayed mean and 95th percentile
+
+#pdf("~/Desktop/local_var_fig.pdf", width = 6, height = 6)
+#explanatory.var <- "trait.cor"
+explanatory.var <- "var.exp"
+
+col.ramp <- brewer.pal(9, "BrBG")[c(3,2,2,2)]
+par(mfrow = c(2,2), mar = c(4,5,4,1))
+for(tx in 1:length(trait.cor)){
+    
+    common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp[[tx]]))
+    local.herit <- local.var.exp[[tx]][common.tx]
+
+    if(explanatory.var == "trait.cor"){
+        x <- abs(trait.cor[[tx]][common.tx])
+        y <- local.herit[common.tx]; 
+        xlab = "Max. Trait Correlation"
+        ylab = "Variance Explained"
+        xlim = c(0,0.75)
+        ylim = c(0,1)
+    }
+    
+    if(explanatory.var == "var.exp"){
+        y <- abs(trait.cor[[tx]][common.tx])
+        x <- local.herit[common.tx]; 
+        ylab = "Max. Trait Correlation"
+        xlab = "Variance Explained"
+        xlim = c(0,1)
+        ylim = c(0,0.75)
+    }
+
+   plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
+    ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
+    centile.seq = seq(0, 1, 0.01))
+}
+#dev.off()
+```
+
+#### LOD - Splines
 
 The following plots show the relationship between trait
 relevance and local LOD score.
@@ -493,20 +610,33 @@ relevance and local LOD score.
 ```{r herit_lod, fig.width = 8, fig.height = 8}
 par(mfrow = c(2,2))
 for(tx in 1:length(tissue.names)){
+    
     local.lod <- unlist(local.coef[[tx]][,"lod"])
     names(local.lod) <- unlist(local.coef[[tx]][,"gene.id"])
     common.tx <- intersect(names(local.lod), names(trait.cor[[tx]]))
 
-    #plot.with.model(local.lod[common.tx], abs(trait.cor[[tx]][common.tx]),
-    #    xlab = "Local Variance Explained", ylab = "Max Correlation with Trait",
-    #    main = tissue.names[tx], report = "cor.test")
 
-    plot.hexbin.as.plot(abs(trait.cor[[tx]][common.tx]), local.lod[common.tx],
-        ylab = "Local Variance Explained", xlab = "Max Correlation with Trait",
-        main = tissue.names[tx], n.bins = 4, use.pheatmap.colors = FALSE, 
-        custom.colors = col.ramp, with.model = TRUE, report = "cor.test", 
-        legend.bg = "white", ylim = c(0, 240), xlim = c(0, 0.8))
+    if(explanatory.var == "trait.cor"){
+        x <- abs(trait.cor[[tx]][common.tx])
+        y <- local.lod[common.tx]; 
+        xlab = "Max. Trait Correlation"
+        ylab = "LOD"
+        xlim = c(0,0.75)
+        ylim = c(0,200)
+    }
     
+    if(explanatory.var == "var.exp"){
+        y <- abs(trait.cor[[tx]][common.tx])
+        x <- local.lod[common.tx]; 
+        ylab = "Max. Trait Correlation"
+        xlab = "LOD"
+        xlim = c(0,200)
+        ylim = c(0,0.75)
+    }
+
+   plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
+    ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
+    centile.seq = seq(0, 1, 0.01))
 
 }
 
@@ -516,29 +646,56 @@ for(tx in 1:length(tissue.names)){
 ### Distal Variance Explained and Trait Relavance {.tabset .tabset-fade .tabset-pills}
 
 
-#### Variance Explained - Linear
+#### Variance Explained - splines
 
-The following figures show the same data, but with linear fit models.
+The following figures show the same data, but with 
+added lines showing trends. To generate these trends,
+we split the genes into 100 even groups based on the
+percentiles of the variance explained. For each of these
+groups, we calculated the mean trait correlation (lower 
+line) and the 95th percentile of the trait correlation
+(upper line). We then smoothed this line using splines
+and plotted the result. The mean doesn't change much 
+across groups, but the upper 95th percentile changes
+more showing the trend is driven largely by the outlier
+genes.
 
 ```{r lin_fig, fig.width = 8, fig.height = 8}
+
 col.ramp <- brewer.pal(9, "Greys")[c(5,6,6,6)]
 #display.brewer.all()
 #pdf("~/Desktop/distal_v_relevance.pdf", width = 6, height = 6)
-par(mfrow = c(2,2))
+#explanatory.var <- "trait.cor"
+explanatory.var <- "var.exp"
+
+par(mfrow = c(2,2), mar = c(4,5,4,1))
 for(tx in 1:length(trait.cor)){
+
     distal.herit <- tx.distal.herit[[tx]][,"residual_variance"]*tx.distal.herit[[tx]][,"residual_heritability"]
     common.tx <- intersect(names(trait.cor[[tx]]), names(distal.herit))
 
-    cor.stats <- plot.hexbin.as.plot(abs(trait.cor[[tx]][common.tx]), distal.herit[common.tx],
-        ylab = "", xlab = "", main = "", n.bins = 4, use.pheatmap.colors = FALSE, 
-        custom.colors = col.ramp, with.model = TRUE, report = "cor.test", 
-        legend.pos = NA, write.results = FALSE, ylim = c(0, 1), xlim = c(0, 0.8))
-    text(x = 0.44, y = 0.95, labels = paste0("r = ", cor.stats[1]), adj = 0)
-    text(x = 0.44, y = 0.84, labels = threshold_p(cor.stats[2], return.text = TRUE), 
-        adj = 0)
-    mtext(tissue.names[tx], side = 3, line = 0.5, font = 2, cex = 1.5)
-    mtext("Variance Explained", side = 2, line = 2.5)
-    mtext("Max. Trait Correlation", side = 1, line = 2.5)
+    if(explanatory.var == "trait.cor"){
+        x <- abs(trait.cor[[tx]][common.tx])
+        y <- distal.herit[common.tx]; 
+        xlab = "Max. Trait Correlation"
+        ylab = "Variance Explained"
+        xlim = c(0,0.75)
+        ylim = c(0,1)
+    }
+    
+    if(explanatory.var == "var.exp"){
+        y <- abs(trait.cor[[tx]][common.tx])
+        x <- distal.herit[common.tx]; 
+        ylab = "Max. Trait Correlation"
+        xlab = "Variance Explained"
+        xlim = c(0, 1)
+        ylim = c(0, 0.75)
+    }
+   
+    plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
+    ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
+    centile.seq = seq(0, 1, 0.01))
+
 }
 #dev.off() 
 ```

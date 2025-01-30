@@ -39,9 +39,10 @@ rm(list = ls()) #clear out R environment
 #args <- commandArgs(trailingOnly=T)
 num.perm = 1000
 
-#args <- c(1,1,0,1,0) #merged tissues, local imputation, mediation model
-#args <- c(1,0,0,1,0) #merged tissues, full imputation, mediation model
-args <- c(0,0,0,1,0) #sep tissues, full imputation, mediation model
+args <- c(1,1,0,1,0) #merged tissues, mediation model
+#args <- c(0,0,0,1,0) #sep tissues, mediation model
+#args <- c(1,0,0,1,0) #merged tissues, mediation model
+
 
 #args <- c(1,1,1,1,0) #merged tissues, local imputation, mediation mode, weight adjusted
 
@@ -533,14 +534,16 @@ If the tissues were run separately, there will be one plot
 per tissue. Otherwise, there will be just one plot for all tissues.
 
 ```{r plot_nets, results = "asis", fig.width = 7, fig.height = 7}
-layout(get.layout.mat(max.tx))
+#layout(get.layout.mat(max.tx))
 for(tx in 1:max.tx){
  if(max.tx == 1){
         cat("### All Tissues\n")
         file.append <- "all_tissues"
+        node.col = "lightblue"
     }else{
         cat("###", tissue.names[tx], "\n")
         file.append <- tissue.names[tx]
+        node.col = tissue.cols[tx]
     }    
     tx.pcor <- pcor.shrink(model_scores[[tx]], verbose = FALSE)
     tx.pcor[lower.tri(tx.pcor, diag = TRUE)] <- 0
@@ -548,7 +551,8 @@ for(tx in 1:max.tx){
     e.weight <- E(net)$weight
     plot(net, edge.width = abs(e.weight*10), edge.color = sign(e.weight)+2, 
         layout = layout_on_grid, edge.label = signif(e.weight, 2),
-        edge.label.cex = 1.5, vertex.size = 30, main = file.append)
+        edge.label.cex = 1.5, vertex.size = 30, main = file.append,
+        vertex.color = node.col)
     if(max.tx > 1){
         cat("\n\n")
     }
@@ -612,6 +616,7 @@ if(!file.exists(perm.file) || delete_previous){
                     min.weight.diff = 1e-5, max.iter = 15, scheme = "centroid", 
                     verbose = FALSE, kernel.c = TRUE, kernel.m = TRUE, 
                     kernel.o = TRUE)
+                        
             }
             if(perm.mat == "kin"){
                 #permute the mediator
@@ -624,6 +629,7 @@ if(!file.exists(perm.file) || delete_previous){
                     min.weight.diff = 1e-5, max.iter = 15, scheme = "centroid", 
                     verbose = FALSE, kernel.c = TRUE, kernel.m = TRUE, 
                     kernel.o = TRUE)
+                
             }
         
             #keep mediator model scores
@@ -666,8 +672,10 @@ null distribution.
 for(tx in 1:max.tx){
     if(max.tx == 1){
         cat("### All Tissues\n")
+        tissue.col = "darkgray"
     }else{
         cat("###", tissue.names[tx], "\n")
+        tissue.col = tissue.cols[tx]
     }
     
     tissue.path.stats <- path_coef(model_scores[[tx]])
@@ -676,8 +684,10 @@ for(tx in 1:max.tx){
     axis.max <- max(c(all.perms[[tx]][,c("X-M", "M-Y")], tissue.path.stats[c("X-M", "M-Y")]), na.rm = TRUE)
     axis.min <- min(c(all.perms[[tx]][,c("X-M", "M-Y")], tissue.path.stats[c("X-M", "M-Y")]), na.rm = TRUE)
 
-    plot(all.perms[[tx]][,"X-M"], all.perms[[tx]][,"M-Y"], xlim = c(axis.min, axis.max), 
-        ylim = c(axis.min, axis.max), xlab = "X-M correlation", ylab = "M-Y correlation")
+    plot(all.perms[[tx]][,"X-M"], all.perms[[tx]][,"M-Y"], 
+        xlim = c(axis.min, axis.max), 
+        ylim = c(axis.min, axis.max), xlab = "X-M correlation", 
+        ylab = "M-Y correlation", pch = 16, col = tissue.col)
     points(tissue.path.stats["X-M"], tissue.path.stats["M-Y"], 
         col = "red", pch = 16)
     abline(0,1)
@@ -685,7 +695,8 @@ for(tx in 1:max.tx){
     path.min <- min(c(all.perms[[tx]][,"path_coef"], tissue.path.coef), na.rm = TRUE)
     path.max <- max(c(all.perms[[tx]][,"path_coef"], tissue.path.coef), na.rm = TRUE)
     hist(all.perms[[tx]][,"path_coef"], xlim = c(path.min, path.max), 
-        main = "Path Coef. Permutations", xlab = "", breaks = 100)
+        main = "Path Coef. Permutations", xlab = "", breaks = 100,
+        col = tissue.col)
     abline(v = tissue.path.coef, col = "red")
 
     cat("\n\n")
@@ -702,11 +713,11 @@ transcript loadings are well outside the null distribution,
 so there is no cutoff that gives us a few transcripts to 
 analyze.
 
-This code takes a long time to run, the null files are
-huge, and I've seen enough examples, that I don't need
-to keep running this. I am shutting off the code with 
-a flag that can be turned back on to calculate the 
-null loadings. 
+I had turned off this code because it takes a long time
+and results in large files, but I'm turning it back on
+to answer reviewer comments. It can be turned back of 
+by setting calc_null to FALSE.
+
 
 **Note about imputations:** We have found after lots of digging
 that the Bayesian method of imputing transcripts with local
@@ -725,7 +736,7 @@ due to distal factors. We are implementing that to replace the Bayesian
 imputations we tried earlier.
 
 ```{r prep_pop}
-calc_null <- FALSE #set to TRUE to calculate null loading
+calc_null <- TRUE #set to TRUE to calculate null loading
 ```
 
 ```{r load_herit}
@@ -791,7 +802,8 @@ for(tx in 1:length(tissue.names)){
         plot.with.model(adjust(curr_scores[,var1,drop=FALSE], curr_scores[,adj.by,drop=FALSE]), 
             adjust(curr_scores[,var2,drop=FALSE], curr_scores[,adj.by,drop=FALSE]),
             xlab = colnames(curr_scores)[all.pairs[i,1]], 
-            ylab = colnames(curr_scores)[all.pairs[i,2]], report = "cor.test")
+            ylab = colnames(curr_scores)[all.pairs[i,2]], report = "cor.test",
+            col = tissue.cols[tx])
     }
     #test <- check_signs(curr_scores)
     #pairs(test[[1]])
@@ -800,6 +812,78 @@ for(tx in 1:length(tissue.names)){
     cat("\n\n")
 }
 #dev.off()
+```
+
+```{r cor_fig, eval = FALSE}
+pdf("~/Desktop/latent_cor.pdf", width = 9, height = 6  )
+layout.mat <- matrix(c(0,1:4,5,8,11,14,17,6,9,12,15,18,7,10,13,16,19), 
+    ncol = 5, byrow = TRUE)
+layout(layout.mat, widths = c(0.15, rep(1, 4)), 
+    heights = c(0.2, rep(1, 3), 0.2))
+#add tissue headers
+for(tx in 1:length(tissue.names)){
+    par(mar = c(0,4,0,0))
+    plot.text(tissue.names[tx], cex = 2, font = 2, adj = 0.5)
+}
+#add plot labels
+gvt <- expression("G"["C"]-"T"["C"])
+tvp <- expression("T"["C"]-"P"["C"])
+gvp <- expression("G"["C"]-"P"["C"])
+plot.labels <- c(gvt, tvp, gvp)
+for(l in 1:length(plot.labels)){
+    par(mar = c(4,0,0,0))
+    plot.text(plot.labels[l], x = 0.7 , y = 0.5, cex = 2, font = 2, srt = 90, adj = 0.5)
+}
+
+par(mar = c(4,3,0,0))
+panel.counter <- 8
+for(tx in 1:length(tissue.names)){
+    #find the correlations between the scores
+    curr_scores <- model_scores[[tx]]
+    
+    #change from generic names to specific names
+    if(complete.mediation){
+        colnames(curr_scores) <- c("Genome", "Transcriptome", "Phenotype")
+        axis.labels <- c("Comp. Genome", "Comp. Transcriptome", "Comp. Phenome")
+    }else{
+        colnames(curr_scores) <- c("Genome", "Phenotype", "Transcriptome")
+        axis.labels <- c("Comp. Genome", "Comp. Phenome", "Comp. Transcriptome")
+    }
+    
+    path.coef <- path_coef(curr_scores)
+
+    all.pairs <- pair.matrix(1:ncol(curr_scores))
+    all.pairs <- all.pairs[c(1,3,2),]
+    adj.var <- apply(all.pairs, 1, function(x) setdiff(1:3, x))
+    #pdf("~/Desktop/test.pdf") 
+    for(i in 1:nrow(all.pairs)){
+        var1 <- all.pairs[i,1]
+        var2 <- all.pairs[i,2]
+        adj.by <- adj.var[i]
+        adj.x <- adjust(curr_scores[,var1,drop=FALSE], curr_scores[,adj.by,drop=FALSE])
+        adj.y <- adjust(curr_scores[,var2,drop=FALSE], curr_scores[,adj.by,drop=FALSE])
+        model <- lm(adj.y~adj.x)
+        plot(adj.x, adj.y, pch = 16, col = tissue.cols[tx], xlab = "", 
+            ylab = "", axes = FALSE)
+        abline(model, col = "#3182bd", lwd = 3)
+        if(panel.counter %in% c(8, 9, 10)){
+            mtext(axis.labels[var2], side = 2, line = 0.5, adj = 0, cex = 0.8)
+            mtext(axis.labels[var1], side = 1, line = 0.5, adj = 0, cex = 0.8)
+        }
+        #if(panel.counter %in% c(11, 12, 13)){
+            #mtext(colnames(curr_scores)[var1], side = 1)
+        #}
+        plot.dim <- par("usr")
+        draw.rectangle(plot.dim[1], plot.dim[2], plot.dim[3], plot.dim[4])
+        panel.counter <- panel.counter + 1
+    }
+    #test <- check_signs(curr_scores)
+    #pairs(test[[1]])
+
+    #pairs(curr_scores, main = paste(tissue.names[tx], "\nPath  Coef:", round(path.coef, 3)))
+    cat("\n\n")
+}
+dev.off()
 ```
 
 # Transcript Loadings
@@ -838,6 +922,30 @@ vioplot(lapply(transcript_loadings, abs), col = tissue.cols, ylab = "|Loading|")
 #    vertical = TRUE, method = "stack", col = tissue.cols, pch = 16, offset = 0.03)
 ```
 
+```{r overlapping_dist, eval = FALSE}
+#try with overlapping distributions
+tx.dens <- lapply(transcript_loadings, function(x) density(abs(x)))
+xmin <- min(sapply(tx.dens, function(x) min(x$x)))
+xmax <- max(sapply(tx.dens, function(x) max(x$x)))
+ymin <- min(sapply(tx.dens, function(x) min(x$y)))
+ymax <- max(sapply(tx.dens, function(x) max(x$y)))
+
+plot.new()
+plot.window(xlim = c(xmin, xmax), ylim = c(ymin, ymax))
+for(tx in 1:length(tx.dens)){
+    plot.poly.xy(poly.top.x = tx.dens[[tx]]$x, 
+        poly.top.y = tx.dens[[tx]]$y, 
+        poly.bottom.x = tx.dens[[tx]]$x, 
+        poly.bottom.y = rep(0, length(tx.dens[[tx]]$y)),
+        col = hex2rgb(tissue.cols[tx], alpha = 0.5))
+}
+axis(1);axis(2)
+legend("topright", 
+    fill = sapply(tissue.cols, function(x) hex2rgb(x, alpha = 0.5)), 
+    legend = names(tissue.cols))
+mtext("Loading", side = 1, line = 2.5)
+mtext("Density", side = 2, line = 2.5)
+```
 
 The following plots show more detail of these distributions.
 
@@ -888,7 +996,8 @@ for(tx in 1:length(tissue.names)){
     common.tx <- intersect(rownames(transcript_loadings[[tx]]), names(trait.cor[[tx]]))
     plot_with_marginal_hist(abs(trait.cor[[tx]][common.tx]),
         abs(transcript_loadings[[tx]][common.tx,1]),
-        ylab = "|Loading|", xlab = "|Max. Trait Correlation|", main = tissue.names[tx])
+        ylab = "|Loading|", xlab = "|Max. Trait Correlation|", 
+        main = tissue.names[tx])
     cat("\n\n")
 }
 ```
@@ -912,7 +1021,8 @@ for(tx in 1:length(tissue.names)){
     plot_with_marginal_hist(abs(transcript_loadings[[tx]][common.ts,1]),
         local.var.exp[[tx]][common.ts], 
         xlab = "|Loading|", ylab = "Local Variance Explained",
-        main = tissue.names[tx], report = "cor.test")
+        main = tissue.names[tx], report = "cor.test",
+        col = tissue.cols[tx])
     cat("\n\n")
 }
 ```
@@ -931,7 +1041,8 @@ for(tx in 1:length(tissue.names)){
         local.var.exp[[tx]][common.ts], xlim = c(0, max.load),
         ylim = c(0, max.var.exp),
         xlab = "|Loading|", ylab = "Local Variance Explained",
-        main = tissue.names[tx], report = "cor.test")
+        main = tissue.names[tx], report = "cor.test",
+        col = tissue.cols[tx])
 
     text(x = max.load*0.63, y = max.var.exp*0.95, labels = paste("r =", signif(cor.result[1], 2)), adj = 0)
     text(x = max.load*0.63, y = max.var.exp*0.85, labels = paste("p <", threshold_p(signif(cor.result[2], 2))), adj = 0)
@@ -957,7 +1068,7 @@ for(tx in 1:length(tissue.names)){
     plot_with_marginal_hist(abs(transcript_loadings[[tx]][common.ts,1]),
         dist.var.exp[[tx]][common.ts], 
         xlab = "|Loading|", ylab = "Distal Variance Explained",
-        main = tissue.names[tx], report = "cor.test")
+        main = tissue.names[tx], report = "cor.test", col = tissue.cols[tx])
     cat("\n\n")
 }
 #dev.off()
@@ -984,6 +1095,8 @@ for(tx in 1:length(tissue.names)){
 }
 dev.off()
 ```
+
+### Transcript Loading Null Distributions
 
 ```{r calc_null_dist}
 if(calc_null){
@@ -1026,14 +1139,41 @@ if(calc_null){
     xmax <- max(sapply(all.dens, function(x) max(x$x)))
     ymax <- max(sapply(all.dens, function(x) max(x$y)))
 
-    par(mfrow = c(2,2))
+    #quartz(width = 12, height = 3)
+    par(mfrow = c(1,4), mar = c(4,4,4,1))
     for(tx in 1:length(transcript_loadings)){
+        num.high <- length(which(transcript_loadings[[tx]] > max(null_loadings[[tx]])))
+        num.low <- length(which(transcript_loadings[[tx]] < min(null_loadings[[tx]])))
         plot(density(null_loadings[[tx]]), type = "l", col = "gray", lwd = 3,
             xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
-            main = names(transcript_loadings[tx]))
+            main = "", cex.axis = 1.5, cex.lab = 1.3)
+        mtext(tissue.names[tx], side = 3, line = 1.5, font = 2)
         points(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3)
         legend("topleft", col = c(tissue.cols[tx], "gray"), legend = c("observed", "null"), 
-            lty = 1, lwd = 3)
+            lty = 1, lwd = 3, cex = 1.2)
+        plot.dim <- par("usr")
+        plot.width = plot.dim[2] - plot.dim[1]
+        text(x = (plot.dim[2] - (plot.width*0.4)), y = plot.dim[4]*0.3, 
+            labels = paste(num.high, "genes"), adj = 0.5, cex = 1.5)
+        text(x = (plot.dim[2] - (plot.width*0.55)), y = plot.dim[4]*0.3, 
+            labels = paste(num.low, "genes"), adj = 0.5, cex = 1.5)
+        #abline(v = c(min(null_loadings[[tx]]), max(null_loadings[[tx]])))
+        upper.idx <- which(all.dens[[tx]]$x > max(null_loadings[[tx]]))
+        plot.poly.xy(poly.top.x = all.dens[[tx]]$x[upper.idx], 
+            poly.top.y = all.dens[[tx]]$y[upper.idx],
+            poly.bottom.x = all.dens[[tx]]$x[upper.idx], 
+            poly.bottom.y = rep(0, length(upper.idx)), 
+            col = hex2rgb(tissue.cols[tx], alpha = 0.5),
+            border = NA)
+
+        lower.idx <- which(all.dens[[tx]]$x < min(null_loadings[[tx]]))
+        plot.poly.xy(poly.top.x = all.dens[[tx]]$x[lower.idx], 
+            poly.top.y = all.dens[[tx]]$y[lower.idx],
+            poly.bottom.x = all.dens[[tx]]$x[lower.idx], 
+            poly.bottom.y = rep(0, length(lower.idx)), 
+            col = hex2rgb(tissue.cols[tx], alpha = 0.5),
+            border = NA)
+
     }
 }
 ```
@@ -1123,7 +1263,8 @@ for(tx in 1:length(tissue.names)){
     plot.enrichment.wordcloud(enrichment = all.enrich[[tx]]$top, 
         order.by = "p_value",
         plot.label = paste(tissue.names[tx], "Positive Loadings"), 
-        num.terms = 25, max.term.size = max.term.size)
+        num.terms = 25, max.term.size = max.term.size, 
+        vertex.col = hex2rgb(tissue.cols[tx], alpha = 0.5))
     
     top.genes <- sort(transcript_loadings[[tx]][,1], decreasing = TRUE)[1:plot.top]
     herit.idx <- match(names(top.genes), rownames(tx.herit))
@@ -1710,7 +1851,8 @@ if(mediation.text == "complete_mediation"){
         
         common.ind <- intersect(rownames(ind.scaled.expr), rownames(model_scores[[tx]]))
         plot.with.model(mean.pred[common.ind], model_scores[[tx]][,"Outcome"],
-            xlab = "Prediction", ylab = "Phenome Score", main = tissue.names[tx])
+            xlab = "Prediction", ylab = "Phenome Score", 
+            main = tissue.names[tx], col = tissue.cols[tx])
     }
 
 }
@@ -1739,8 +1881,10 @@ if(mediation.text == "complete_mediation"){
         pred.order <- order(mean.pred)    
         
         common.ind <- intersect(rownames(ind.scaled.expr), rownames(model_scores[[tx]]))
-        plot.with.model(mean.pred[common.ind], model_scores[[tx]][,"Outcome"],
-            xlab = "Prediction", ylab = "Phenome Score", main = tissue.names[tx])
+        plot.with.model(mean.pred[common.ind], 
+            model_scores[[tx]][common.ind,"Outcome"],
+            xlab = "Prediction", ylab = "Phenome Score", 
+            main = tissue.names[tx], col = tissue.cols[tx])
     }
 }
 ```
@@ -2081,7 +2225,9 @@ dev.off()
 toa.cluster.dir <- file.path(results.dir, "TOA_Clusters")
 if(!file.exists(toa.cluster.dir)){dir.create(toa.cluster.dir)}
 gene.lists <- toa.results[[2]]
-names(gene.lists) <- alt.labels[,1]
+if(nrow(alt.labels) == length(gene.lists)){
+    names(gene.lists) <- alt.labels[,1]
+}
 full.list <- vector(mode = "list", length = length(gene.lists))
 for(g in 1:length(gene.lists)){
     file.name <- file.path(toa.cluster.dir, paste0("Cluster", g, "_", gsub(" ", "_", names(gene.lists)[g]), ".csv"))
@@ -2146,7 +2292,7 @@ pheatmap(path.mat)
 boxplot(path.mat);abline(h = 0)
 ```
 
-```{r check_loadnig, eval = FALSE}
+```{r check_loading, eval = FALSE}
 top.genes <- gene.info[match(rownames(val.mat), gene.info[,"ensembl_gene_id"]),"external_gene_name"]
 sort(top.genes)
 
@@ -2167,7 +2313,6 @@ imputed gene expression?
 ```{r pred}
 local.impute <- list.files(here("Results", "DO", "Imputed_Transcriptomes"), 
     pattern = "Local_Imputation")
-
 ```
 
 ## Loadings vs. LOD {.tabset .tabset-fade .tabset-pills}

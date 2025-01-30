@@ -805,3 +805,108 @@ test_drug_targets(metabolic.targets, 30)
 par(mfrow = c(2,2))
 test_drug_targets(diabetes.targets, 30)
 ```
+
+Alternatives for visualizing correlation between maximum trait 
+correlation and variance explained. From 3a.Imputation.Rmd
+
+```{r test_vis, eval = FALSE}
+plot.var.exp <- local.var.exp; plot.col = local.col
+#plot.var.exp <- distal.var.exp; plot.col = distal.col
+
+#bar plots or boxes
+show.sig.diff <- FALSE
+par(mfrow = c(2,2), mar = c(4,5,4,0))
+for(tx in 1:length(trait.cor)){
+    common.tx <- intersect(names(trait.cor[[tx]]), names(plot.var.exp[[tx]]))
+    test <- bin_by_hist(y  = abs(trait.cor[[tx]][common.tx]), 
+        x = plot.var.exp[[tx]][common.tx], plot.type = "boxes",
+        breaks = quantile(plot.var.exp[[tx]][common.tx], 
+            probs = seq(0, 1, 0.1), na.rm = TRUE), ylim = c(0,1), 
+        col = plot.col)
+    
+    if(show.sig.diff){
+        pval = threshold_p(anova(aov_list(test$yvals))$"Pr(>F)"[1])
+        tk <- TukeyHSD(aov_list(test$yvals))
+        sig.diff <- which(tk[[1]][,"p adj"] <= 0.05)
+        sig.table <- tk[[1]][sig.diff,]
+        split.diff <- strsplit(names(sig.diff), "-")
+        bin1 <- as.numeric(sapply(split.diff, function(x) gsub("Factor", "", x[1])))
+        bin2 <- as.numeric(sapply(split.diff, function(x) gsub("Factor", "", x[2])))
+        ymax <- max(sapply(test$yvals, function(x) mean(x, na.rm = TRUE)), na.rm = TRUE)
+        yseq <- seq(ymax, par("usr")[4], length.out = length(bin1))
+        for(i in 1:length(bin1)){
+            ypos <- sapply(test$yvals[c(bin1[i], bin2[i])], function(x) mean(x, na.rm = TRUE))
+            segments(x0 = bin1[i], x1 = bin2[i], y0 = yseq[i])
+        }
+    }
+    mtext(tissue.names[tx], side = 3, line = 0.5, font = 2, cex = 1.5)
+    mtext("Variance Explained", side = 1, line = 2.5)
+    mtext("Max. Trait Correlation", side = 2, line = 2.5)
+}
+
+
+#rnd
+show.rnd <- FALSE
+if(show.rnd){
+    par(mfrow = c(2,2))
+    for(tx in 1:length(trait.cor)){
+        common.tx <- intersect(names(trait.cor[[tx]]), names(plot.var.exp[[tx]]))
+        test <- bin_by_hist(y = abs(trait.cor[[tx]][common.tx]), 
+            x = sample(plot.var.exp[[tx]][common.tx]), 
+            breaks = quantile(plot.var.exp[[tx]][common.tx], 
+                probs = seq(0, 1, 0.1), na.rm = TRUE), col = plot.col)
+        pval = threshold_p(anova(aov_list(test$yvals))$"Pr(>F)"[1])
+        tk <- TukeyHSD(aov_list(test$yvals))
+
+        sig.diff <- which(tk[[1]][,"p adj"] <= 0.05)
+        sig.table <- tk[[1]][sig.diff,]
+        split.diff <- strsplit(names(sig.diff), "-")
+        bin1 <- as.numeric(sapply(split.diff, function(x) gsub("Factor", "", x[1])))
+        bin2 <- as.numeric(sapply(split.diff, function(x) gsub("Factor", "", x[2])))
+        yseg <- seq(max(sapply(test$yvals, function(x) mean(x, na.rm = TRUE)), na.rm = TRUE), 
+            par("usr")[4], length.out = length(bin1))
+        for(i in 1:length(bin1)){
+            segments(x0 = bin1[i], x1 = bin2[i], y0 = yseg[i])
+        }
+
+        mtext(tissue.names[tx], side = 3, line = 0.5, font = 2, cex = 1.5)
+        mtext("Variance Explained", side = 2, line = 2.5)
+        mtext("Max. Trait Correlation", side = 1, line = 2.5)
+    }
+}
+
+
+par(mfrow = c(2,2))
+for(tx in 1:4){
+    perm.mat <- matrix(NA, nrow = 100, ncol = 10)
+    common.tx <- intersect(names(trait.cor[[tx]]), names(plot.var.exp[[tx]]))
+    for(p in 1:100){
+        test <- bin_by_hist(y = abs(trait.cor[[tx]][common.tx]), 
+            x = sample(plot.var.exp[[tx]][common.tx]), 
+            breaks = quantile(plot.var.exp[[tx]][common.tx], 
+            probs = seq(0, 1, 0.1), na.rm = TRUE), col = plot.col, 
+            plot.result = FALSE)
+        perm.mat[p,] <- sapply(test$yvals, function(x) mean(x, na.rm = TRUE))
+    }
+
+
+    test <- bin_by_hist(y = abs(trait.cor[[tx]][common.tx]), 
+        x = plot.var.exp[[tx]][common.tx], ylim = NULL,
+        breaks = quantile(plot.var.exp[[tx]][common.tx], 
+            probs = seq(0, 1, 0.1), na.rm = TRUE), col = plot.col)
+    upper.error <- apply(perm.mat, 2, function(x) get.percentile(x,95))
+    lower.error <- apply(perm.mat, 2, function(x) get.percentile(x, 5))
+    plot.poly.xy(poly.top.x = test$xcoord[,1], poly.top.y = upper.error, 
+        poly.bottom.x = test$xcoord[,1], poly.bottom.y = lower.error, 
+        col = rgb(0.9, 0.9, 0.9, alpha = 0.5))
+
+    #for(i in 1:ncol(perm.mat)){
+    #    if(all(is.na(perm.mat[,i]))){
+    #        next()
+    #    }
+    #    vioplot(perm.mat[,i], at = test$xcoord[i], add = TRUE, col = "lightgray")
+    #}
+}
+
+
+```

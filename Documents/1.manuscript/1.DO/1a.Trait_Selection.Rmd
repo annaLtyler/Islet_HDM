@@ -827,7 +827,8 @@ saveRDS(scaled.pheno, file.path(parsed.data.dir, "Clinical_Phenotypes_Adjusted.R
 The following heatmap shows the trait correlations with their final names.
 
 ```{r final_cor, fig.height = 7, fig.width = 7}
-pheatmap(cor(scaled.pheno, use = "pairwise.complete.obs"), cellwidth = 12, cellheight = 12)
+pheno.cor <- cor(scaled.pheno, use = "pairwise.complete.obs")
+pheatmap(pheno.cor, cellwidth = 12, cellheight = 12)
 ```
 
 The following plot shows the heritabilities of the final traits with their 
@@ -878,4 +879,23 @@ par(xpd = TRUE)
 
 ```{r save_paper_data}
 saveRDS(paper.data$paper.data, file.path(paper.data.dir, "pheno_stats.RDS"))
+```
+
+
+The following heat map shows the trait correlations
+in the upper and lower triangles and trait heritabilities
+on the diagonal.
+
+```{r cor_herit}
+#keep the phenotype clustering order
+#trait.order <- hclust(dist(pheno.cor))$order
+herit.cor <- pheno.cor
+diag(herit.cor) <- herit
+
+
+trait.clust <- hclust(dist(pheno.cor)) #ignore heritability on the diagonal
+#trait.clust <- hclust(dist(herit.cor)) #clustering with heritability on diagonal
+
+quartz(width = 5.5, height = 5)
+pheatmap(herit.cor, cluster_cols = trait.clust, cluster_rows = trait.clust)
 ```
