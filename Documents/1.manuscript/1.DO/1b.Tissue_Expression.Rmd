@@ -737,6 +737,55 @@ imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
 mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
 ```
 
+## Subspecies Effects
+
+```{r, eval = FALSE}
+subsp <- list("domesticus" = c("A", "B", "C", "D", "E", "H"), 
+  "castaneus" = "F", "musculus" = "G")
+subsp.pch <- c(16, 3, 11)
+sub.pch <- rep(NA, 8)
+for(i in 1:length(subsp)){
+  sub.pch[which(LETTERS %in% subsp[[i]])] <- subsp.pch[i]
+}
+
+par(mfrow = c(2,2))
+for(tx in 1:length(local.eQTL.pos[[i]])){
+  local.tx.eQTL <- t(sapply(local.eQTL.pos, function(x) if(nrow(x[[tx]]) > 0){as.numeric(x[[tx]])[4:11]}else{rep(NA, 8)}))
+  distal.tx.eQTL <- Reduce("rbind", lapply(distal.eQTL.pos, function(x) if(nrow(x[[tx]]) > 0){as.matrix(x[[tx]][,4:11])}else{matrix(NA, ncol = 8, nrow = 1)}))
+  #boxplot(abs(local.tx.eQTL), names = LETTERS[1:8], col = qtl2::CCcolors)
+  #boxplot(abs(distal.tx.eQTL), names = LETTERS[1:8], col = qtl2::CCcolors)
+  #plot.grouped.boxes(list("local" = abs(local.tx.eQTL), "distal" = abs(distal.tx.eQTL)), type = "matrix")
+  local.counts <- apply(local.tx.eQTL, 2, function(x) length(which(abs(x) > 1))/length(which(!is.na(x))))
+  distal.counts <- apply(distal.tx.eQTL, 2, function(x) length(which(abs(x) > 1))/length(which(!is.na(x))))
+  #barplot(rbind(local.counts, distal.counts), beside = TRUE,
+  #  names = LETTERS[1:8], main = tissue.names[tx],
+  #  col = rep(qtl2::CCcolors, each = 2))
+  #plot(local.counts, distal.counts, col = sub.col, pch = 16, cex = 2,
+  #  main = tissue.names[tx])
+
+  has.vals <- which(apply(local.tx.eQTL, 1, function(x) !all(is.na(x))))
+  scaled.local <- t(apply(local.tx.eQTL[has.vals,], 1, scale))
+  #boxplot(abs(scaled.local), names = LETTERS[1:8], col = qtl2::CCcolors)
+  #boxplot(abs(scaled.local), names = LETTERS[1:8], col = sub.col)
+  
+  has.vals <- which(apply(distal.tx.eQTL, 1, function(x) !all(is.na(x))))
+  scaled.distal <- t(apply(distal.tx.eQTL[has.vals,], 1, scale))
+  #boxplot(abs(scaled.distal), names = LETTERS[1:8], col = qtl2::CCcolors)
+  #boxplot(abs(scaled.distal), names = LETTERS[1:8], col = sub.col)
+
+  #plot.with.model(colMeans(abs(scaled.local)), colMeans(abs(scaled.distal)), 
+  #  col = sub.col, pch = 16, xlab = "Mean of Scaled Local Coefficient", 
+  #  ylab = "Mean of Scaled Distal Coefficents")
+
+  plot.with.model(colMeans(abs(scaled.local)), colMeans(abs(scaled.distal)), 
+    col = qtl2::CCcolors, pch = sub.pch, xlab = "Mean of Scaled Local Coefficient", 
+    ylab = "Mean of Scaled Distal Coefficents", main = tissue.names[tx], cex = 2,
+    xlim = c(0.55, 1.2), ylim = c(0.6, 0.95))
+
+}
+
+```
+
 ## Allele Effects and Expression Correlation
 
 How do allele effects and gene expression correspond across
