@@ -748,42 +748,48 @@ for(i in 1:length(subsp)){
   sub.pch[which(LETTERS %in% subsp[[i]])] <- subsp.pch[i]
 }
 
-par(mfrow = c(2,2))
+plot.type = "boxes"
+#plot.type = "points"
+
+layout(matrix(c(1,2,5,3,4,6), nrow = 2, byrow = TRUE))
 for(tx in 1:length(local.eQTL.pos[[i]])){
   local.tx.eQTL <- t(sapply(local.eQTL.pos, function(x) if(nrow(x[[tx]]) > 0){as.numeric(x[[tx]])[4:11]}else{rep(NA, 8)}))
   distal.tx.eQTL <- Reduce("rbind", lapply(distal.eQTL.pos, function(x) if(nrow(x[[tx]]) > 0){as.matrix(x[[tx]][,4:11])}else{matrix(NA, ncol = 8, nrow = 1)}))
-  #boxplot(abs(local.tx.eQTL), names = LETTERS[1:8], col = qtl2::CCcolors)
-  #boxplot(abs(distal.tx.eQTL), names = LETTERS[1:8], col = qtl2::CCcolors)
-  #plot.grouped.boxes(list("local" = abs(local.tx.eQTL), "distal" = abs(distal.tx.eQTL)), type = "matrix")
-  local.counts <- apply(local.tx.eQTL, 2, function(x) length(which(abs(x) > 1))/length(which(!is.na(x))))
-  distal.counts <- apply(distal.tx.eQTL, 2, function(x) length(which(abs(x) > 1))/length(which(!is.na(x))))
-  #barplot(rbind(local.counts, distal.counts), beside = TRUE,
-  #  names = LETTERS[1:8], main = tissue.names[tx],
-  #  col = rep(qtl2::CCcolors, each = 2))
-  #plot(local.counts, distal.counts, col = sub.col, pch = 16, cex = 2,
-  #  main = tissue.names[tx])
+  local.sqrd <- local.tx.eQTL^2
+  distal.sqrd <- distal.tx.eQTL^2
 
-  has.vals <- which(apply(local.tx.eQTL, 1, function(x) !all(is.na(x))))
-  scaled.local <- t(apply(local.tx.eQTL[has.vals,], 1, scale))
-  #boxplot(abs(scaled.local), names = LETTERS[1:8], col = qtl2::CCcolors)
-  #boxplot(abs(scaled.local), names = LETTERS[1:8], col = sub.col)
-  
-  has.vals <- which(apply(distal.tx.eQTL, 1, function(x) !all(is.na(x))))
-  scaled.distal <- t(apply(distal.tx.eQTL[has.vals,], 1, scale))
-  #boxplot(abs(scaled.distal), names = LETTERS[1:8], col = qtl2::CCcolors)
-  #boxplot(abs(scaled.distal), names = LETTERS[1:8], col = sub.col)
+  if(plot.type == "boxes"){
+    #boxplot(local.sqrd, names = LETTERS[1:8], col = qtl2::CCcolors)
+    #boxplot(distal.sqrd, names = LETTERS[1:8], col = qtl2::CCcolors)
+    #plot.grouped.boxes(list("local" = local.sqrd, "distal" = distal.sqrd), type = "matrix")
+    plot.grouped.boxes(list("local" = abs(local.tx.eQTL), "distal" = abs(distal.tx.eQTL)), type = "matrix",
+      main = tissue.names[tx], ylab = "eQTL Effect Size")
+  }
 
-  #plot.with.model(colMeans(abs(scaled.local)), colMeans(abs(scaled.distal)), 
-  #  col = sub.col, pch = 16, xlab = "Mean of Scaled Local Coefficient", 
-  #  ylab = "Mean of Scaled Distal Coefficents")
+  if(plot.type == "points"){
+    mean.local <- colMeans(local.sqrd, na.rm = TRUE)
+    mean.distal <- colMeans(distal.sqrd, na.rm = TRUE)
+    plot.with.model(mean.local, mean.distal, 
+      col = qtl2::CCcolors, pch = sub.pch, xlab = "Mean Local Haplotype^2", 
+      ylab = "Mean Distal Haplotype^2", main = tissue.names[tx], cex = 2,
+      xlim = c(0.2, 1.1), ylim = c(0.1, 0.4))
 
-  plot.with.model(colMeans(abs(scaled.local)), colMeans(abs(scaled.distal)), 
-    col = qtl2::CCcolors, pch = sub.pch, xlab = "Mean of Scaled Local Coefficient", 
-    ylab = "Mean of Scaled Distal Coefficents", main = tissue.names[tx], cex = 2,
-    xlim = c(0.55, 1.2), ylim = c(0.6, 0.95))
+    se.local <- apply(local.sqrd, 2, function(x) sd(x, na.rm = TRUE)/sqrt(length(which(!is.na(x)))))
+    se.distal <- apply(distal.sqrd, 2, function(x) sd(x, na.rm = TRUE)/sqrt(length(which(!is.na(x)))))
+    segments(x0 = mean.local, y0 = mean.distal - se.distal,
+      y1 = mean.distal + se.distal, col = qtl2::CCcolors)
+    segments(x0 = mean.local - se.local, x1 = mean.local + se.local, y0 = mean.distal, 
+      col = "black", lwd = 3)
+  }
 
 }
+plot.new()
+plot.window(xlim = c(0,1), ylim = c(0,1))
+legend(0, 1, fill = qtl2::CCcolors, legend = names(qtl2::CCcolors), cex = 1.5)
 
+plot.new()
+plot.window(xlim = c(0,1), ylim = c(0,1))
+legend(0, 1, pch = subsp.pch, legend = names(subsp), cex = 1.5)
 ```
 
 ## Allele Effects and Expression Correlation

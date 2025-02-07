@@ -816,7 +816,7 @@ for(tx in 1:length(tissue.names)){
 ```
 
 ```{r cor_fig, eval = FALSE}
-pdf("~/Desktop/latent_cor.pdf", width = 9, height = 6  )
+pdf("~/Desktop/latent_cor.pdf", width = 9, height = 6)
 layout.mat <- matrix(c(0,1:4,5,8,11,14,17,6,9,12,15,18,7,10,13,16,19), 
     ncol = 5, byrow = TRUE)
 layout(layout.mat, widths = c(0.15, rep(1, 4)), 
@@ -845,10 +845,10 @@ for(tx in 1:length(tissue.names)){
     #change from generic names to specific names
     if(complete.mediation){
         colnames(curr_scores) <- c("Genome", "Transcriptome", "Phenotype")
-        axis.labels <- c("Comp. Genome", "Comp. Transcriptome", "Comp. Phenome")
+        axis.labels <- c("Cmpst. Genome", "Cmpst. Transcriptome", "Cmpst. Phenome")
     }else{
         colnames(curr_scores) <- c("Genome", "Phenotype", "Transcriptome")
-        axis.labels <- c("Comp. Genome", "Comp. Phenome", "Comp. Transcriptome")
+        axis.labels <- c("Cmpst. Genome", "Cmpst. Phenome", "Cmpst. Transcriptome")
     }
     
     path.coef <- path_coef(curr_scores)
@@ -925,7 +925,9 @@ vioplot(lapply(transcript_loadings, abs), col = tissue.cols, ylab = "|Loading|")
 
 ```{r overlapping_dist, eval = FALSE}
 #try with overlapping distributions
-tx.dens <- lapply(transcript_loadings, function(x) density(abs(x)))
+quartz(width = 5, height = 5)
+#tx.dens <- lapply(transcript_loadings, function(x) density(abs(x)))
+tx.dens <- lapply(transcript_loadings, function(x) density(x))
 xmin <- min(sapply(tx.dens, function(x) min(x$x)))
 xmax <- max(sapply(tx.dens, function(x) max(x$x)))
 ymin <- min(sapply(tx.dens, function(x) min(x$y)))
@@ -944,7 +946,7 @@ axis(1);axis(2)
 legend("topright", 
     fill = sapply(tissue.cols, function(x) hex2rgb(x, alpha = 0.5)), 
     legend = names(tissue.cols))
-mtext("Loading", side = 1, line = 2.5)
+mtext("Transcript Loading", side = 1, line = 2.5)
 mtext("Density", side = 2, line = 2.5)
 ```
 
@@ -1146,7 +1148,7 @@ if(calc_null){
         num.high <- length(which(transcript_loadings[[tx]] > max(null_loadings[[tx]])))
         num.low <- length(which(transcript_loadings[[tx]] < min(null_loadings[[tx]])))
         plot(density(null_loadings[[tx]]), type = "l", col = "gray", lwd = 3,
-            xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Loading",
+            xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Transcript Loading",
             main = "", cex.axis = 1.5, cex.lab = 1.3)
         mtext(tissue.names[tx], side = 3, line = 1.5, font = 2)
         points(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3)

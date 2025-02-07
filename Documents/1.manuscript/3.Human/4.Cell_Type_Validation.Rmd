@@ -569,6 +569,10 @@ for(i in 1:length(mean_islet_loadings)){
     segments(x0 = xval-0.25, x1 = xval+0.25, y0 = islet.alpha.mat[i,])
 }
 
+all.vals <- c(mean_adipose_loadings, mean_islet_loadings)
+emp.p <- sapply(1:ncol(all_samples), 
+    function(x) length(which(abs(all_samples[,x]) > abs(all.vals[x])))/nrow(all_samples))
+names(emp.p) <- colnames(all_samples)
 ```
 
 ## Subsets

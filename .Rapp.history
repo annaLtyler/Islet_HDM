@@ -1,355 +1,390 @@
-str(pr)
-system.file("extdata", "grav2.zip", package="qtl2")
-?fisher.test
-test <- read.csv("~/Desktop/ingredients_2023-12-30 20 11 23.csv")
-test
-test[which(test == ".")] <- 9
-test <- as.matrix(read.csv("~/Desktop/ingredients_2023-12-30 20 11 23.csv"))
-test[which(test == ".")] <- 0
-test[which(test == "X")] <- 1
-library(pheatmap)
-as.numeric(test)
-test
-test <- as.matrix(read.csv("~/Desktop/ingredients_2023-12-30 20 11 23.csv", row.names = 1))
-test
-test <- as.matrix(read.csv("~/Desktop/ingredients_2023-12-30 20 11 23.csv", row.names = 1))
-test[which(test == "X")] <- 1
-test[which(test == ".")] <- 0
-test
-num.test <- apply(test, 2, as.numeric)
-library(pheatmap)
-pheatmap(num.test)
-source('~/Documents/git_repositories/useful_r_code/plot.decomp.R', chdir = TRUE)
-plot.decomp(num.test, label.points = TRUE)
-num.test
-plot.decomp(t(num.test), label.points = TRUE)
-rownames(num.test) <- rownames(test)
-plot.decomp(num.test, label.points = TRUE)
-plot.decomp(t(num.test), label.points = TRUE)
-plot.decomp(num.test, label.points = TRUE)
-log10(1000)
-test <- readRDS("~/Documents/Projects/Alzheimers/human/cape_AD/Data/CAPE_Geno.RDS")
-str(test)
-dimnames(test)[[3]]
-dimnames(test[[1]])[[3]]
-on19 <- grep("X19", dimnames(test[[1]][[3]]))
-on19
-on19 <- grep("X19", dimnames(test[[1]])[[3]]
-on19 <- grep("X19", dimnames(test[[1]])[[3]])
-on19
-marker.names <- dimnames(test[[1]])[[3]]
-marker.names[on19]
-library(qtl2)
-page(est_herit)
-page(get_common_ids)
+library(cluster)
+?pam
+?silouhette
+?silhouette
+citation("gProfiler2")
+citation("gprofiler2")
+library(shiny)
+?textOutput
 library(qtl2)
 ?scan1perm
-?summary
->scan1perm.summary
-?scan1perm.summary
-?summary.scan1perm
-useful.fun <- list.files("~/Documents/git_repositories/useful_r_code", full.names = TRUE)
-useful.fun
-for(i in 1:length(useful.fun)){source(useful.fun[i])}
-a <- seq(-100, 100, 1)
-acol <- colors.from.values(a, use.pheatmap.colors = TRUE)
-barplot(a, col = acol)
-barplot(a, col = acol, border = NA)
-abline(h = 0)
-a <- rnorm(100)
-acol <- colors.from.values(a, use.pheatmap.colors = TRUE)
-hist(a)
-a <- rnorm(1000)
-hist(a)
-ahist <- hist(a)
-ahist <- hist(a, plot = FALSE)
-ahist
-acol  <- colors.from.values(ahist$mids)
-barplot(ahist$counts, col = acol)
-acol  <- colors.from.values(ahist$mids, use.pheatmap.values = TRUE)
-acol  <- colors.from.values(ahist$mids, use.pheatmap.colors = TRUE)
-barplot(ahist$counts, col = acol)
-barplot(ahist$counts, col = acol, breaks = 100)
-ahist <- hist(a, plot = FALSE, breaks = 100)
-acol  <- colors.from.values(ahist$mids, use.pheatmap.colors = TRUE)
-barplot(ahist$counts, col = acol)
-barplot(ahist$counts, col = acol, border = NA)
-ahist <- hist(a, plot = FALSE, breaks = 25)
-acol  <- colors.from.values(ahist$mids, use.pheatmap.colors = TRUE)
-barplot(ahist$counts, col = acol)
-library(qtl2()
-library(qtl2)
-?read_cross2
-test <- readRDS("~/Documents/Projects/EAE/Data/map.RDS")
+??pathview
+library(cluter)
+library(cluster)
+?pam
+?round
+?formula
+?rm
+?boxplot
+??rank
+test <- readRDS("~/Downloads/annotated_biodomains_Oct23.rds")
 str(test)
-library(stringr)
-?stringr
-?flatten
-library(stringr)
-?trim
+length(test)
+names(test)
+class(test)
+head(test)
+test[1,]
+dim(test)
+test$ensembl_id[1]
+test$Subdomain[1]
+??rank
+?t.test
+?rank
+?ecdf
+?rpois
+library(vioplot)
+?vioplot
 ?par
-test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Data/DO/Clinical_Phenotypes_V11.RDS")
-str(test)
-annot <- test$annot_samples
-annot
-.
-annot <- test$annot.samples
-annot
-head(annot)
-annote[,"DeathDate"] - annot[,"Birthdate"]
-annot[,"DeathDate"] - annot[,"Birthdate"]
-annot[,"DeathDate"] - annot[,"BirthDate"]
-annot[,"DeathDate"] - annot[,"BirthDate"]/7
-days.old <- annot[,"DeathDate"] - annot[,"BirthDate"]
-days.old
-as.numeric(days.old)/7
-hist(as.numeric(days.old)/7)
-?model.matrix
-cross <- readRDS("~/Documents/Projects/LPS/LPS_cape/Results/cape_2ET/cross.RDS")
-names(cross)
-sort(names(cross))
-cross$results_path
-cross$results_path <- "~/Documents/Projects/LPS/LPS_cape/Results/cape_2ET"
-saveRDS(cross, "~/Documents/Projects/LPS/LPS_cape/Results/cape_2ET/cross.RDS")
-?par
-?table
-a <- 2/3
-b <- 1.5
-a/b
-b/a
-?legend
+??Tukey
+all <- readRDS("~/Documents/Projects/Klotho/Results/all/processed_data/Normalized_Expression.RDS")
+dim(all)
+older <- readRDS("~/Documents/Projects/Klotho/Results/age_batch_12/processed_data/Normalized_Expression.RDS")
+dim(older)
+library(MASS)
+?lda
+?entrop
+??entropy
+library(igraph)
+?graph_from_edgelist
+library(igraph)
+?simplify
+?remove.edges
+??remove.edges
+?? delete edges
+?? delete.edges
+?delete_vertices
+??projection
+?which.max
 library(pheatmap)
 ?pheatmap
-?glmnet
-library(glmnet)
-?glmnet
-?glmnet.predict
-?predict.glmnet
-test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/DO/Transcriptomes/Transcript_Heritability.RDS")
+sprintf("%f", pi)
+sprintf("%.3f", pi)
+sprintf("%.0f", pi)
+young <- readRDS("~/Documents/Projects/Klotho/analysis/Results/age_batch_4/gene_Effects_of_genotype.RDS")
+old <- readRDS("~/Documents/Projects/Klotho/analysis/Results/age_batch_12/gene_Effects_of_genotype.RDS")
+str(old[[1]])
+str(old)
+young <- readRDS("~/Documents/Projects/Klotho/analysis/Results/age_batch_4/gene_Effects_of_genotype.RDS")
+old <- readRDS("~/Documents/Projects/Klotho/analysis/Results/age_batch_12/gene_Effects_of_genotype.RDS")
+str(young)
+plot(young$R2, old$R2)
+common.genes <- intersect(names(young$R2), names(old$R2))
+common.genes
+plot(young$R2[common.genes], old$R2[common.genes])
+boxplot(list("4" = young$R2, "12" = old$R2))
+source('~/Documents/Projects/Klotho/analysis/Code/plot.with.model.R')
+plot.with.model(young$R2[common.genes], old$R2[common.genes])
+all.fun <- list.files("~/Documents/Projects/Klotho/analysis/Code")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+all.fun <- list.files("~/Documents/Projects/Klotho/analysis/Code", full.names = TRUE)
+for(i in 1:length(all.fun)){source(all.fun[i])}
+plot.with.model(young$R2[common.genes], old$R2[common.genes])
+plot.with.model(young$R2[common.genes], old$R2[common.genes], report = "cor.test")
+col = rgb(49/256,130/256,189/256, alpha = 0.5))
+plot.with.model(young$R2[common.genes], old$R2[common.genes], report = "cor.test",#
+	col = rgb(49/256,130/256,189/256, alpha = 0.5))
+boxplot(list("4" = young$R2, "12" = old$R2))
+r2.diff <- old$R2 - young$R2
+r2.diff <- old$R2[common.genes] - young$R2[common.genes]
+hist(r2.diff)
+library(gprofiler2)
+head(r2.diff)
+more.in.old <- names(head(sort(r2.diff, decreasing = TRUE), 100))
+more.in.old
+more.in.young <- names(head(sort(r2.diff, decreasing = FALSE), 100))
+more.in.old.enrich <- gost(nore.in.old, organism = "mmusculus",
+sources = c("GO", "KEGG", "REACTOME", "HP", "CORUM"))
+more.in.old.enrich <- gost(more.in.old, organism = "mmusculus", #
+	sources = c("GO", "KEGG", "REACTOME", "HP", "CORUM"))
+plot.enrichment(more.in.old.enrich, plot.label = "More different in old mice")
+plot.enrichment(more.in.old.enrich, plot.label = "More different in old mice", 	#
+	max.term.size = 3000, num.terms = 30)
+plot.enrichment(more.in.young.enrich, plot.label = "More different in old mice", 	#
+	max.term.size = 3000, num.terms = 30)
+more.in.young.enrich <- gost(more.in.young, organism = "mmusculus", #
+	sources = c("GO", "KEGG", "REACTOME", "HP", "CORUM"))
+plot.enrichment(more.in.young.enrich, plot.label = "More different in old mice", 	#
+	max.term.size = 3000, num.terms = 30)
+?boxplot
+?interaction.plot
+?axis
+?knn
+??knn
+library(easyPubMed)#
+library(stringr)#
+library(tm)#
+library(cluster)#
+library(igraph)#
+library(wordcloud)#
+library(topicmodels)#
+library(pheatmap)#
+useful.fun <- list.files("~/Documents/git_repositories/useful_r_code", full.names = TRUE)#
+for(i in 1:length(useful.fun)){source(useful.fun[i])}
+remove.chars <- c(".", ",", "(", ")", '"', "[", "]", ":")#
+#from tm and ones I've noticed#
+remove.words <- c(stopwords("english"), "also", "via", "among", "group", "log", "axis",#
+	"known", "apparently", "role", "forever", "study")
+library(here)
+pub.fun <- list.files(here("Code"), full.names = TRUE)
+for(i in 1:length(pub.fun)){source(useful.fun[i])}
+pub.fun
+q()
+library(igraph)
+?modularity
+install.packages("vcfR")
+install.packages("dplyr")
+library(vcfR)
+library(dplyr)
+read_vcf <- function(file) {#
+  vcf <- read.vcfR(file)#
+  vcf_df <- as.data.frame(vcf@fix)#
+  return(vcf_df)#
+}
+file.name <- "~/Downloads/WSB_EiJ.mgp.v5.indels.dbSNP142.normed.vcf.gz"
+vcf_files <- file.name
+vcf_data <- lapply(vcf_files, read_vcf)
+test <- readRDS("~/Documents/Projects/LPS/LPS_cape/Results/query_cape_heterosis17/cross_pairscan.RDS")
 str(test)
-head(test[[1]])
-str(test[[1]])
-test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/DO/Imputed_Transcriptomes/Distal_Heritability_Adipose.RDS")
-str(test)
-head(~/Documents/Projects/Islets/Islet_HDM/Results/DO/Imputed_Transcriptomes/Distal_Heritability_Adipose.RDS)
-head(test)
-test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/DO/Imputed_Transcriptomes/eQTL_Coef_Adipose.RDS")
-str(Test)
-str(test)
-head(test)
-?barplot
-library(qtl2)
-?genoprobpos
-??genoprobpos
-?legend
+head(test$pairscan_results[[1]])
+str(test$pairscan_results[[1]])
+head(test$pairscan_results[[1]]$pairscan_effects)
+head(test$pairscan_results[[1]]$pairscan_effects, 100)
+tail(test$pairscan_results[[1]]$pairscan_effects)
+unique(test$pairscan_results[[1]]$pairscan_effects[,1])
+test <- readRDS("~/Documents/Projects/LPS/LPS_cape/Results/query_cape_heterosis17/cross_geno.RDS")
+chr2.idx <- which(test$chromosome == 2)
+test <- readRDS("~/Documents/Projects/LPS/LPS_cape/Results/query_cape_heterosis17/cross.RDS")
+chr2.idx <- which(test$chromosome == 2)
+chr2.idx
+test$marker_location[chr2.idx]
 ?text
-library(biomaRt)
-??filters
-?listEnsembl
-?useEnsembl
-library(easyPubMet)
-library(easyPubMed)
-?get_pubmed_ids
-test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/DO/Transcriptomes/TWAS_imputed_expr_trait_cor.RDS")
-str(test)
-str(test[[1]])
-head(test[[1]])
-dim(test[[1]])
-plot(sort(test[[1]][1,]))
-setwd("~/Documents/Projects/Islets/Islet_HDM/")
-list.files()
+library(qtl2)
+?scan1
+?interaction.plot
+library(qtl2)
+?scan1
+?scan1perm
+?scan1.plot
+?qtl2::scan1.plot
+?plot.scan1
+library(qtl2)
+??pull_marker_probpos
+??marker_probpos
+??probpos
+test <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/Paper/Model_Variance_Explained_tissue_sep-_-complete_mediation.RDS")
+sep <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/Paper/Model_Variance_Explained_tissue_sep-_-complete_mediation.RDS")
+tog <- readRDS("~/Documents/Projects/Islets/Islet_HDM/Results/Paper/Model_Variance_Explained_tissue_together-_-complete_mediation.RDS")
+sep
+tog
+var.exp.mat <- rbind(unlist(sep), unlist(tog))
+var.exp.mat
+rownames(var.exp.mat) <- c("Separate", "Together")
+barplot(var.exp.mat, beside = TRUE)
+setwd("~/Documents/Projects/Islets/Islet_HDM")
 library(here)
-.libPaths(c("/Users/atyler/Library/R/arm64/4.3/library", .libPaths()))
-library(here)
+sep <- readRDS(here("Results", "Paper", "Model_Variance_Explained_tissue_sep-_-complete_mediation.RDS"))
+tog <- readRDS(here("Results", "Paper", "Model_Variance_Explained_tissue_together-_-complete_mediation.RDS"))
 tissue.cols <- as.matrix(read.delim(here("Data", "general", "tissue_colors.txt"), header = FALSE, row.names = 1))[,1]
-barplot(rep(1, 4), col = tissue.cols)
-test <- read.csv("~/Documents/Data/DO/Phenotype_Data/svenson850_phenotypes_v2.csv")
-head(test)
-colnames(gest)
-colnames(test)
-grep("glu", colnames(test),)
-colnames(test)[grep("glu", colnames(test))]
-hist(test[,"glucose1"])
-test[,"diet"]
-chow.idx <- which(test[,"diet"] == "chow")
-hist(test[chow.idx,"glucose1"])
-hf.idx <- which(test[,"diet"] == "hf")
-hist(test[hf.idx,"glucose1"])
-max.glu1 <- max(test[,"glucose1"])
-max.glu1
-max.glu1 <- max(test[,"glucose1"], na.rm = TRUE)
-max.glu1
-hist(test[chow.idx,"glucose1"], xlim = c(0, max.glu1))
-hist(test[chow.idx,"glucose1"], xlim = c(0, max.glu1), xlab = "Glucose (mg/dL)")
-hist(test[hf.idx,"glucose1"], col = "#3182bd", add = TRUE)
-dens.chow <- density(test[chow.idx,"glucose1"])
-no.chow.na <- which(!is.na(test[chow.idx,"glucose1"]))
-dens.chow <- density(test[chow.idx[no.chow.na],"glucose1"])
-dens.chow
-no.hf.na <- which(!is.na(test[hf.idx,"glucose1"]))
-no.hf.na <- which(!is.na(test[hf.idx,"glucose1"]))
-dens.hf <- density(test[hf.idx[no.hf.na],"glucose1"])
-dens.hf
-str(dens.hf)
-maxy <- max(c(dens.chow$y, dens.hf$y))
-maxy
-plot(density(test[chow.idx[no.chow.na],"glucose1"]), xlim = c(0, max.glu1), xlab = "Glucose (mg/dL)")
-plot(density(test[chow.idx[no.chow.na],"glucose1"]), xlim = c(0, max.glu1), xlab = "Glucose (mg/dL)", lwd = 3)
-points(density(test[hf.idx[no.hf.na],"glucose1"]), col = "#3182bd", type = "l", lwd = 3)
-abline(v =250)
-abline(v = 250, lwd = 3)
-plot(density(test[chow.idx[no.chow.na],"glucose1"]), xlim = c(0, max.glu1), xlab = "Glucose (mg/dL)", lwd = 3)#
-points(density(test[hf.idx[no.hf.na],"glucose1"]), col = "#3182bd", type = "l", lwd = 3)#
-abline(v = 250, lwd = 2, lty = 2)
-compare_dist <- function(colname){#
-	max.glu1 <- max(test[, colname], na.rm = TRUE)#
-#
-	no.chow.na <- which(!is.na(test[chow.idx, colname]))#
-	dens.chow <- density(test[chow.idx[no.chow.na], colname])#
-#
-	no.hf.na <- which(!is.na(test[hf.idx, colname]))#
-	dens.hf <- density(test[hf.idx[no.hf.na], colname])#
-#
-	maxy <- max(c(dens.chow$y, dens.hf$y))#
-	plot(density(test[chow.idx[no.chow.na], colname]), xlim = c(0, max.glu1), #
-		xlab = colname, lwd = 3, main = paste(colname, " levels in the DO"))#
-	points(density(test[hf.idx[no.hf.na], colname]), col = "#3182bd", type = "l", lwd = 3)#
-	abline(v = 250, lwd = 2, lty = 2)#
-}
-compare_dist("glucose1")
-compare_dist("glucose2")
-par(mfrow = c(1,2))#
-compare_dist("glucose1")#
-compare_dist("glucose2")
-compare_dist <- function(colname){#
-	max.glu1 <- max(test[, colname], na.rm = TRUE)#
-#
-	no.chow.na <- which(!is.na(test[chow.idx, colname]))#
-	dens.chow <- density(test[chow.idx[no.chow.na], colname])#
-#
-	no.hf.na <- which(!is.na(test[hf.idx, colname]))#
-	dens.hf <- density(test[hf.idx[no.hf.na], colname])#
-#
-	maxy <- max(c(dens.chow$y, dens.hf$y))#
-	plot(density(test[chow.idx[no.chow.na], colname]), xlim = c(0, max.glu1), #
-		xlab = colname, lwd = 3, main = paste(colname, " levels in the DO"))#
-	points(density(test[hf.idx[no.hf.na], colname]), col = "#3182bd", type = "l", lwd = 3)#
-	abline(v = 250, lwd = 2, lty = 2)#
-	legend("topright", legend = c("chow", "hf"), col = c("black", "#3182bd"), lty = 1, lwd = 3)#
-}
-par(mfrow = c(1,2))
-par(mfrow = c(1,2))
-compare_dist("glucose1")
-compare_dist("glucose2")
-thresh = 250
-length(which(test[chow.idx[no.chow.na],colname] >= thresh))
-colname = "glucose1"
-length(which(test[chow.idx[no.chow.na],colname] >= thresh))
-below.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] < thresh))
-prop <- above.thresh.chow/length(no.chow.na)
-above.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] >= thresh))
-below.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] < thresh))
-prop <- above.thresh.chow/length(no.chow.na)
-prop
-above.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] >= thresh))#
-	below.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] < thresh))#
-	prop.hf <- above.thresh.hf/length(no.hf.na)
-prop.hf
-c(below.thresh.hf, above.thresh.hf, prop.hf))
-result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), c(below.thresh.hf, above.thresh.hf, prop.hf))
-above.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] >= thresh))#
-	below.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] < thresh))#
-	prop.chow <- above.thresh.chow/length(no.chow.na)#
-#
-	above.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] >= thresh))#
-	below.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] < thresh))#
-	prop.hf <- above.thresh.hf/length(no.hf.na)
-result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), c(below.thresh.hf, above.thresh.hf, prop.hf))
-result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), #
-		c(below.thresh.hf, above.thresh.hf, prop.hf))
-result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), #
-		c(below.thresh.hf, above.thresh.hf, prop.hf))	#
-	colnames(result) <- c("Num Below", "Num Above", "Proportion Above")	#
-	rownames(result) <- c("Chow", "HF")
-result
-compare_dist <- function(colname, thresh = 250){#
-	max.glu1 <- max(test[, colname], na.rm = TRUE)#
-#
-	no.chow.na <- which(!is.na(test[chow.idx, colname]))#
-	dens.chow <- density(test[chow.idx[no.chow.na], colname])#
-#
-	no.hf.na <- which(!is.na(test[hf.idx, colname]))#
-	dens.hf <- density(test[hf.idx[no.hf.na], colname])#
-#
-	maxy <- max(c(dens.chow$y, dens.hf$y))#
-	plot(density(test[chow.idx[no.chow.na], colname]), xlim = c(0, max.glu1), #
-		xlab = colname, lwd = 3, main = paste(colname, " levels in the DO"))#
-	points(density(test[hf.idx[no.hf.na], colname]), col = "#3182bd", type = "l", lwd = 3)#
-	abline(v = thresh, lwd = 2, lty = 2)#
-	legend("topright", legend = c("chow", "hf"), col = c("black", "#3182bd"), lty = 1, lwd = 3)#
-	above.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] >= thresh))#
-	below.thresh.chow <- length(which(test[chow.idx[no.chow.na],colname] < thresh))#
-	prop.chow <- above.thresh.chow/length(no.chow.na)#
-#
-	above.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] >= thresh))#
-	below.thresh.hf <- length(which(test[hf.idx[no.hf.na],colname] < thresh))#
-	prop.hf <- above.thresh.hf/length(no.hf.na)#
-	result <- rbind(c(below.thresh.chow, above.thresh.chow, prop.chow), #
-		c(below.thresh.hf, above.thresh.hf, prop.hf))	#
-	colnames(result) <- c("Num Below", "Num Above", "Proportion Above")	#
-	rownames(result) <- c("Chow", "HF")#
-	return(result)#
-}
-compare_dist("glucose1")
-compare_dist("glucose2")
-compare_dist("glucose1", thresh = 300)
-compare_dist("glucose2", thresh = 300)
-comp.col = "diet"
-groups <- unique(test[,comp.col])
-groups
-comp.col =
-"sex"
-groups <- unique(test[,comp.col])
-groups
-groups <- unique(test[,comp.col])
-g1.idx <- which(test[,"diet"] == groups[1])
-g1.idx <- which(test[,compcol] == groups[1])
-g2.idx <- which(test[,comp.col] == groups[2])
-g1.idx <- which(test[,comp.col] == groups[1])
-no.g1.na <- which(!is.na(test[g1.idx, colname]))
-dens.g1 <- density(test[g1.idx[no.g1.na], colname])
-compare_dist <- function(colname = "glucose1", comp.col = "diet", thresh = 250){#
-	max.glu1 <- max(test[, colname], na.rm = TRUE)#
-#
-	groups <- unique(test[,comp.col])#
-#
-	g1.idx <- which(test[,comp.col] == groups[1])#
-	g2.idx <- which(test[,comp.col] == groups[2])#
-	no.g1.na <- which(!is.na(test[g1.idx, colname]))#
-	dens.g1 <- density(test[g1.idx[no.g1.na], colname])#
-#
-	no.g2.na <- which(!is.na(test[g2.idx, colname]))#
-	dens.g2 <- density(test[g2.idx[no.g2.na], colname])#
-#
-	maxy <- max(c(dens.g1$y, dens.g2$y))#
-	plot(density(test[g1.idx[no.g1.na], colname]), xlim = c(0, max.glu1), #
-		xlab = colname, lwd = 3, main = paste(colname, " levels in the DO"))#
-	points(density(test[g2.idx[no.g2.na], colname]), col = "#3182bd", type = "l", lwd = 3)#
-	abline(v = thresh, lwd = 2, lty = 2)#
-	legend("topright", legend = c(groups), col = c("black", "#3182bd"), lty = 1, lwd = 3)#
-	above.thresh.g1 <- length(which(test[g1.idx[no.g1.na],colname] >= thresh))#
-	below.thresh.g1 <- length(which(test[g1.idx[no.g1.na],colname] < thresh))#
-	prop.g1 <- above.thresh.g1/length(no.g1.na)#
-#
-	above.thresh.g2 <- length(which(test[g2.idx[no.g2.na],colname] >= thresh))#
-	below.thresh.g2 <- length(which(test[g2.idx[no.g2.na],colname] < thresh))#
-	prop.g2 <- above.thresh.g2/length(no.g2.na)#
-	result <- rbind(c(below.thresh.g1, above.thresh.g1, prop.g1), #
-		c(below.thresh.g2, above.thresh.g2, prop.g2))	#
-	colnames(result) <- c("Num Below", "Num Above", "Proportion Above")	#
-	rownames(result) <- groups#
-	return(result)#
-}
-par(mfrow = c(1,2))#
-compare_dist("glucose1", comp.col = "diet", thresh = 250)#
-compare_dist("glucose2", comp.col = "diet", thresh = 250)
+?barplot
+barplot(var.exp.mat, beside = TRUE, density = c(0, 0.5))
+barplot(var.exp.mat, beside = TRUE, density = c(0, 1))
+barplot(var.exp.mat, beside = TRUE, density = c(0, 2))
+barplot(var.exp.mat, beside = TRUE, density = c(0, 3))
+barplot(var.exp.mat, beside = TRUE, density = c(0, 3), col = tissue.cols)
+barplot(var.exp.mat, beside = TRUE, density = c(4, 8), col = tissue.cols)
+barplot(var.exp.mat, beside = TRUE, density = c(4, 8), col = rep(tissue.cols, each = 2))
+barplot(var.exp.mat, beside = TRUE, density = c(8, 18), col = rep(tissue.cols, each = 2))
+barplot(var.exp.mat, beside = TRUE, density = c(8, 18), col = rep(tissue.cols, each = 2), lwd = 2)
+barplot(var.exp.mat, beside = TRUE, density = c(8, 18), col = rep(tissue.cols, each = 2))
+barplot(var.exp.mat, beside = TRUE, density = c(18, 50), col = rep(tissue.cols, each = 2))
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))
+layout(matrix(c(1,2, ncol = 2)), widths = c(1, 0.2))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+par(c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.2))
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+par(c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.2))
+par(mar = c(4,4,4,0))
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))
+par(mar = c(4,0,4,1))
+plot.new()
+plot.window(xlim = c(0,1), ylim = c(0,1))
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.25))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))
+legend(x = 0, y = 0.9, fill = "darkgray", density = c(25, 50), legend = c("separate", "together"))
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))#
+legend(x = 0, y = 0.1, fill = "darkgray", density = c(25, 50), legend = c("separate", "together"))
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))#
+legend(x = 0, y = 0.2, fill = "darkgray", density = c(25, 50), legend = c("separate", "together"))
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))#
+legend(x = 0, y = 0.5, fill = "darkgray", density = c(25, 50), legend = c("separate", "together"))
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2), ylab = "Variance Explained")#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))#
+legend(x = 0, y = 0.5, fill = "darkgray", density = c(25, 50), legend = c("separate", "together"))
+quartz(width = 7, height = 5)#
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+mtext("Variance Explained", side = 2, line = 1.5)#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))#
+legend(x = 0, y = 0.5, fill = "darkgray", density = c(25, 50), legend = c("separate", "together"))
+quartz(width = 9, height = 5)#
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+mtext("Variance Explained", side = 2, line = 2.5)#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = tissue.cols, legend = names(tissue.cols))#
+legend(x = 0, y = 0.5, fill = "darkgray", density = c(25, 50), legend = c("separate", "together"))
+quartz(width = 9, height = 5)#
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+mtext("Variance Explained", side = 2, line = 2.5)#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = "darkgray", density = c(25, 50), legend = c("separate", "together"))
+pcor.files <- list.files(here("Results", "Paper"), pattern = "Pcor", full.names = TRUE)
+pcor.files
+pcor.files <- list.files(here("Results", "Paper"), pattern = "Pcor", full.names = TRUE)
+pcor.files
+pcor.results <- lapply(pcor.files, readRDS)
+pcor.results
+pcor.results <- lapply(pcor.files, function(x) as.matrix(readRDS(x))
+)
+pcor.results
+pcor.results <- lapply(pcor.files, readRDS)
+pcorV <- lapply(pcor.results, function(x) x[upper.tri(x)])
+pcorV
+pcorV <- sapply(pcor.results, function(x) x[upper.tri(x)])
+pcorV
+pcorV <- t(sapply(pcor.results, function(x) x[upper.tri(x)]))
+pcor.mat <- t(sapply(pcor.results, function(x) x[upper.tri(x)]))
+basename(pcor.files)
+gsub(".RDS", "", gsub("Pcor_", "", basename(pcor.files)))
+rownames(pcor.mat) <- gsub(".RDS", "", gsub("Pcor_", "", basename(pcor.files)))
+pheatmap(pcor.mat)
+library(pheatmap)
+pheatmap(pcor.mat)
+pheatmap(t(pcor.mat))
+pheatmap(t(pcor.mat), scale = "rows")
+pheatmap(t(pcor.mat), scale = "row")
+barplot(pcor.mat, beside = TRUE)
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"))
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), each = 3))
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3))
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation")
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", ylim = c(0,1))
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", ylim = c(0,0.8))
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)))
+quartz(width = 9, height = 6)#
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", ylim = c(0,0.8))#
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)))
+quartz(width = 9, height = 5)#
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", ylim = c(0,0.8))#
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)))
+abline(h = seq(0, 0.8, 0.1), lty = 2, col = "darkgray")
+a <- barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", ylim = c(0,0.8))
+a
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", ylim = c(0,0.8))#
+plot.dim <- par("usr")
+plot.dim
+quartz(width = 9, height = 5)#
+plot.new()#
+plot.window(xlim = plot.dim[1:2], ylim = plot.dim[3:4])#
+abline(h = seq(0, 0.8, 0.1), lty = 2, col = "darkgray")#
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", add = TRUE)
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)))
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)), bty = "white")
+?legend
+quartz(width = 9, height = 5)#
+plot.new()#
+plot.window(xlim = plot.dim[1:2], ylim = plot.dim[3:4])#
+abline(h = seq(0, 0.8, 0.1), lty = 2, col = "darkgray")#
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", add = TRUE)#
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)), fill = "white")
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)), bg = "white")
+pdf(here("Results", "Paper", "Correlation_comparison.pdf"), width = 9, height = 5)#
+plot.new()#
+plot.window(xlim = plot.dim[1:2], ylim = plot.dim[3:4])#
+abline(h = seq(0, 0.8, 0.1), lty = 2, col = "darkgray")#
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", add = TRUE)#
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)), bg = "white")#
+dev.off()
+here("Results", "Paper")
+pdf(here("Results", "Paper", "Comparison_Correlation.pdf"), width = 9, height = 5)#
+plot.new()#
+plot.window(xlim = plot.dim[1:2], ylim = plot.dim[3:4])#
+abline(h = seq(0, 0.8, 0.1), lty = 2, col = "darkgray")#
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), ylab = "Correlation", add = TRUE)#
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)), bg = "white")#
+dev.off()
+pdf(here("Results", "Paper", "Comparison_Variance_Explained.pdf"), width = 9, height = 5)#
+layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))#
+par(mar = c(4,4,4,0))#
+barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))#
+mtext("Variance Explained", side = 2, line = 2.5)#
+par(mar = c(4,0,4,1))#
+plot.new()#
+plot.window(xlim = c(0,1), ylim = c(0,1))#
+legend(x = 0, y = 0.9, fill = "darkgray", density = c(25, 50), legend = c("separate", "together"))
+dev.off()
+pdf(here("Results", "Paper", "Comparison_Correlation.pdf"), width = 9, height = 5)#
+plot.new()#
+plot.window(xlim = plot.dim[1:2], ylim = plot.dim[3:4])#
+abline(h = seq(0, 0.8, 0.1), lty = 2, col = "darkgray")#
+barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "Transcriptome-Phenome", "Genome-Phenome"), col = rep(c("darkgray", tissue.cols), 3), add = TRUE)#
+mtext("Correlation", side = 2, line = 2.5)#
+legend("topright", fill = c("darkgray", tissue.cols), legend = c("All Tissues", names(tissue.cols)), bg = "white")#
+dev.off()
