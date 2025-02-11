@@ -84,7 +84,7 @@ args = commandArgs(trailingOnly=TRUE)
 use.cc.imputed.transcriptome <- as.logical(args[1])
 
 if(is.na(use.cc.imputed.transcriptome)){
-    use.cc.imputed.transcriptome = FALSE #set this to TRUE to do the equivalent of genomic prediction
+    use.cc.imputed.transcriptome = TRUE #set this to TRUE to do the equivalent of genomic prediction
 }
 
 ```

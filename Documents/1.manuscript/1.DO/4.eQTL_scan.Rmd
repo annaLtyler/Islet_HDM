@@ -114,9 +114,15 @@ get_coef <- function(peak.table, genoprobs, map, tr.pheno){
     colnames(coef.table) <- LETTERS[1:8]
     for(i in 1:nrow(peak.table)){
         marker.geno <- pull_genoprobpos(genoprobs, map = map, chr = peak.table[i,"chr"], pos = peak.table[i,"pos"])
-        coef.scan <- fit1(marker.geno, tr.pheno, kinship = Kg)
-        coef.table[i,] <- coef.scan$coef[LETTERS[1:8]]
+        coef.scan <- fit1(marker.geno, tr.pheno, kinship = Kg)    
+        marker.coef <- as.numeric(coef.scan$coef[LETTERS[1:8]]) 
+        coef.table[i,] <- marker.coef
+        barplot(marker.coef, col = CCcolors, names = LETTERS[1:8])
+        #var(marker.coef)
+        #sum(marker.coef)
+        #sum(marker.coef^2)
     }
+    
     result <- cbind(peak.table[,2:ncol(peak.table)], coef.table)
     return(result)
 }
@@ -134,7 +140,7 @@ for(tx in 1:length(tissue.names)){
     transcript.id <- colnames(scaled.expr[[tx]])
     
     local.eQTL.coef.file <- file.path(eqtl.results.dir, paste0("local_eQTL_", tissue.names[tx], ".RDS"))
-    local.eQTL.coef.file <- file.path(eqtl.results.dir, paste0("distal_eQTL_", tissue.names[tx], ".RDS"))
+    distal.eQTL.coef.file <- file.path(eqtl.results.dir, paste0("distal_eQTL_", tissue.names[tx], ".RDS"))
 
     #check to see if we've already saved some results that we can use
     #we only need to use one of the files to figure this out
@@ -151,7 +157,7 @@ for(tx in 1:length(tissue.names)){
     sink(file.path(eqtl.results.dir, paste0("progress_", tissue.names[tx], ".txt")))
 
     #if we are starting fresh...
-    if(!file.exists(eQTL.coef.file) || overwrite.results){
+    if(!file.exists(local.eQTL.coef.file) || overwrite.results){
       local.eQTL.coef <- distal.eQTL.coef <- vector(mode = "list", length = length(transcript.id))
       names(local.eQTL.coef) <- names(distal.eQTL.coef) <- transcript.id
     }
@@ -162,6 +168,7 @@ for(tx in 1:length(tissue.names)){
         print(tr)
 
         tr.data <- scaled.expr[[tx]][,tr]
+        #var(tr.data)
         one.scan <- scan1(genoprobs, tr.data)
         #plot(one.scan, map = map)
 
@@ -172,8 +179,10 @@ for(tx in 1:length(tissue.names)){
             gene.chr <- gene.tables[[tx]]$chr[gene.info.idx]
             gene.pos <- gene.tables[[tx]]$start[gene.info.idx]
             loc.dist <- label_local_distal(tr.peak, gene.chr, gene.pos, dist.thresh)
-            qtl.coef <- get_coef(tr.peak, genoprobs, map, tr.data)
+            qtl.coef <- get_coef(peak.table = tr.peak, genoprobs, map, tr.pheno = tr.data)
             qtl.coef[,1] <- rep(transcript.id[tr], nrow(qtl.coef))
+
+            #var(as.numeric(qtl.coef[1,LETTERS[1:8]]))
 
             local.idx <- which(loc.dist == "local")
             if(length(local.idx) > 0){
@@ -183,9 +192,9 @@ for(tx in 1:length(tissue.names)){
             }
             distal.idx <- which(loc.dist == "distal")
             if(length(distal.idx) > 0){
-                local.eQTL.coef[[tr]] <- qtl.coef[distal.idx,,drop=FALSE]
+                distal.eQTL.coef[[tr]] <- qtl.coef[distal.idx,,drop=FALSE]
             }else{
-                local.eQTL.coef[[tr]] <- NA
+                distal.eQTL.coef[[tr]] <- NA
             }
 
         }else{ #if there are no eQTL put NAs for both local and distal
@@ -203,4 +212,19 @@ for(tx in 1:length(tissue.names)){
     sink()
   }
 }
+```
+
+
+## Subspecies contributions
+
+
+```{r subsp}
+
+coef.list <- local.eQTL.coef
+coef.len <- sapply(coef.list, length)
+has.vals <- which(local.len > 1)
+coef.table <- Reduce("rbind", lapply(has.vals, function(x) coef.list[[x]][,LETTERS[1:8]]))
+
+var.exp <- apply(coef.table, 1, function(x) var(as.numeric(x)))
+
 ```

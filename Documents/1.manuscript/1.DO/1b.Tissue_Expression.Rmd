@@ -217,6 +217,29 @@ legend(0, 0.5, legend = c("Female", "Male"), col = "black", pch = unique(sample.
 #dev.off()
 ```
 
+```{r supp_fig2}
+pdf(here("Results", "Paper", "Supp_Fig2A.pdf"), width = 7, height = 5)
+par(mar = c(4,4,4,1))
+layout(matrix(c(1,2), nrow = 1), widths = c(1, 0.3))
+plot(expr.decomp$u,
+  xlab = paste0("PC1 (", round(expr.decomp$var.exp[1]*100), "%)"),
+  ylab = paste0("PC2 (", round(expr.decomp$var.exp[2]*100), "%)"), type = "n")
+abline(v = seq(-0.02, 0.03, 0.01), col = rgb(0.9, 0.9, 0.9), lwd = 0.8)
+abline(v = seq(-0.025, 0.035, 0.01), col = "lightgray", lwd = 0.5, lty = "dotted")
+abline(h = seq(-0.03, 0.03, 0.01), col = rgb(0.9, 0.9, 0.9), lwd = 0.8)
+abline(v = seq(-0.025, 0.035, 0.01), col = "lightgray", lwd = 0.5, lty = "dotted")
+points(expr.decomp$u, col = "black", pch = sample.sex+1)
+points(expr.decomp$u, col = tissue.col, pch = sample.sex+16)
+par(mar = c(4,0,4,0))
+plot.new()
+plot.window(xlim = c(0,1), ylim = c(0,1))
+legend(0, 1, legend = tissue.names, col = "black", pch = 1, adj = 0, title = "Tissue")
+legend(0, 1, legend = tissue.names, col = tissue.cols, pch = 16, adj = 0, title = "Tissue")
+legend(0, 0.5, legend = c("Female", "Male"), col = "black", pch = unique(sample.sex)+16, 
+  adj = 0, title = "Sex")
+dev.off()
+```
+
 ## Tissue-Specific Genes
 
 The following barplot shows the number of transcripts
@@ -328,6 +351,31 @@ for(tx in 1:length(tissue.data)){
 #dev.off()
 ```
 
+```{r supp_fig2B_E}
+pdf(here("Results", "Paper", "Supp_Fig2_B-E.pdf"), width = 7, height = 7)
+for(tx in 1:length(tissue.data)){
+  cat("###", tissue.names[tx], "\n")
+  tissue.eqtl <- tissue.data[[tx]]$lod.peaks$additive
+  tissue.eqtl <- tissue.eqtl[which(tissue.eqtl[,"lod"] >= min.lod),]
+  split.eqtl <- strsplit(tissue.eqtl$marker.id, "_")
+  eqtl.chr <- sapply(split.eqtl, function(x) x[1])
+  eqtl.pos <- as.numeric(sapply(split.eqtl, function(x) x[2]))/1e6
+  allowed.chr <- which(eqtl.chr %in% c(1:19, "X"))
+
+  eqtl.table <- cbind("ID" = tissue.eqtl[allowed.chr,1], "chr" = eqtl.chr[allowed.chr], 
+    "pos" = eqtl.pos[allowed.chr], "lod" = tissue.eqtl[allowed.chr,"lod"])
+  transcript.pos.table <- as.matrix(tissue.data[[tx]]$annot.mrna[,c("gene.id", "chr", "start")])
+
+  lod.col <- colors.from.values(log(log(as.numeric(eqtl.table[,"lod"]))), 
+    col.scale = "blue", grad.dir = "high", light.dark = "d")
+
+  plot.cistrans.table(as.matrix(eqtl.table), as.matrix(transcript.pos.table), 
+    map, col = lod.col, cex = 0.5)
+  cat("\n\n")
+}
+dev.off()
+
+```
 ## eQTL hotspots {.tabset .tabset-fade .tabset-pills}
 
 The following plots show both local and distal eQTL counts 
@@ -513,6 +561,18 @@ plot.window(xlim = c(0,1), ylim = c(0,1))
 legend(x = 0, y = 0.5, legend = c("Distal", "Local"), fill = herit.cols[c("Distal", "Local")])
 ```
 
+```{r supp_fig2F}
+pdf(here("Results", "Paper", "Supp_Fig2F.pdf"), width = 7, height = 5)
+layout(matrix(c(1,2), nrow = 1), widths = c(1,0.2))
+par(mar = c(4,4,4,1))
+barplot(eqtl.count.table[c("Local", "Distal"),], col = herit.cols[c("Local", "Distal")],
+  ylab = "eQTL Count", cex.names = 1.5)
+par(mar = c(4,0,4,1))
+plot.new()
+plot.window(xlim = c(0,1), ylim = c(0,1))
+legend(x = 0, y = 0.5, legend = c("Distal", "Local"), fill = herit.cols[c("Distal", "Local")])
+dev.off()
+```
 
 ## Tissue Specificity {.tabset .tabset-fade .tabset-pills}
 
@@ -698,6 +758,23 @@ imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
 mtext("Shared Local eQTL", side = 3, outer = TRUE, line = -1.5)
 ```
 
+
+```{r supp_fig2G}
+pdf(here("Results", "Paper", "Supp_Fig2G.pdf"), width = 8, height = 5)
+bar.col <- rep("gray", nrow(combo.mat))
+single.tissue <- which(rowSums(combo.mat) == 1)
+bar.col[single.tissue] <- rev(tissue.cols)
+layout(matrix(c(1,2), ncol = 1), heights = c(1, 0.7))
+par(mar = c(0,6,4,4))
+a <- barplot(combo.counts, ylab = "eQTL Count", col = bar.col, ylim = c(0, 5000))
+text(x = a[single.tissue], y = combo.counts[single.tissue]+100, 
+  labels = rev(tissue.names), srt = 90, adj = 0)
+par(mar = c(1,6,0,4))
+imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
+mtext("Shared Local eQTL", side = 3, outer = TRUE, line = -1.5)
+dev.off()
+```
+
 ### Distal eQTL
 
 ```{r shared_distal, fig.width = 8, fig.height = 5}
@@ -737,59 +814,171 @@ imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
 mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
 ```
 
+```{r supp_fig2H}
+pdf(here("Result", "Paper", "Supp_Fig2H.pdf"), width = 8, height = 5)
+bar.col <- rep("gray", nrow(combo.mat))
+single.tissue <- which(rowSums(combo.mat) == 1)
+bar.col[single.tissue] <- rev(tissue.cols)
+layout(matrix(c(1,2), ncol = 1), heights = c(1, 0.7))
+par(mar = c(0,6,4,4))
+a <- barplot(combo.counts, ylab = "eQTL Count", col = bar.col, ylim = c(0, 5000))
+text(x = a[single.tissue], y = combo.counts[single.tissue]+100, 
+  labels = rev(tissue.names), srt = 90, adj = 0)
+par(mar = c(1,6,0,4))
+imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
+mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
+dev.off()
+```
+
 ## Subspecies Effects
 
 ```{r, eval = FALSE}
 subsp <- list("domesticus" = c("A", "B", "C", "D", "E", "H"), 
   "castaneus" = "F", "musculus" = "G")
+subsp.col <- c("domesticus" = "#7fc97f", "castaneus" = "#beaed4", "musculus" = "#fdc086")
 subsp.pch <- c(16, 3, 11)
-sub.pch <- rep(NA, 8)
+sub.pch <- sub.col <- rep(NA, 8)
+
 for(i in 1:length(subsp)){
   sub.pch[which(LETTERS %in% subsp[[i]])] <- subsp.pch[i]
+  sub.col[which(LETTERS %in% subsp[[i]])] <- subsp.col[i]
 }
 
 plot.type = "boxes"
 #plot.type = "points"
 
-layout(matrix(c(1,2,5,3,4,6), nrow = 2, byrow = TRUE))
-for(tx in 1:length(local.eQTL.pos[[i]])){
-  local.tx.eQTL <- t(sapply(local.eQTL.pos, function(x) if(nrow(x[[tx]]) > 0){as.numeric(x[[tx]])[4:11]}else{rep(NA, 8)}))
-  distal.tx.eQTL <- Reduce("rbind", lapply(distal.eQTL.pos, function(x) if(nrow(x[[tx]]) > 0){as.matrix(x[[tx]][,4:11])}else{matrix(NA, ncol = 8, nrow = 1)}))
-  local.sqrd <- local.tx.eQTL^2
-  distal.sqrd <- distal.tx.eQTL^2
 
-  if(plot.type == "boxes"){
-    #boxplot(local.sqrd, names = LETTERS[1:8], col = qtl2::CCcolors)
-    #boxplot(distal.sqrd, names = LETTERS[1:8], col = qtl2::CCcolors)
-    #plot.grouped.boxes(list("local" = local.sqrd, "distal" = distal.sqrd), type = "matrix")
-    plot.grouped.boxes(list("local" = abs(local.tx.eQTL), "distal" = abs(distal.tx.eQTL)), type = "matrix",
-      main = tissue.names[tx], ylab = "eQTL Effect Size")
+extract_coef <- function(tx.eqtl, lodthresh = 8){
+  if(nrow(tx.eqtl) == 0){
+    return(rep(NA, 8))
   }
-
-  if(plot.type == "points"){
-    mean.local <- colMeans(local.sqrd, na.rm = TRUE)
-    mean.distal <- colMeans(distal.sqrd, na.rm = TRUE)
-    plot.with.model(mean.local, mean.distal, 
-      col = qtl2::CCcolors, pch = sub.pch, xlab = "Mean Local Haplotype^2", 
-      ylab = "Mean Distal Haplotype^2", main = tissue.names[tx], cex = 2,
-      xlim = c(0.2, 1.1), ylim = c(0.1, 0.4))
-
-    se.local <- apply(local.sqrd, 2, function(x) sd(x, na.rm = TRUE)/sqrt(length(which(!is.na(x)))))
-    se.distal <- apply(distal.sqrd, 2, function(x) sd(x, na.rm = TRUE)/sqrt(length(which(!is.na(x)))))
-    segments(x0 = mean.local, y0 = mean.distal - se.distal,
-      y1 = mean.distal + se.distal, col = qtl2::CCcolors)
-    segments(x0 = mean.local - se.local, x1 = mean.local + se.local, y0 = mean.distal, 
-      col = "black", lwd = 3)
+  pass.thresh <- which(tx.eqtl$lod >= lodthresh)
+  if(length(pass.thresh) == 0){
+    return(rep(NA, 8))
   }
-
+  return(as.matrix(tx.eqtl[pass.thresh,4:11]))
 }
-plot.new()
-plot.window(xlim = c(0,1), ylim = c(0,1))
-legend(0, 1, fill = qtl2::CCcolors, legend = names(qtl2::CCcolors), cex = 1.5)
 
-plot.new()
-plot.window(xlim = c(0,1), ylim = c(0,1))
-legend(0, 1, pch = subsp.pch, legend = names(subsp), cex = 1.5)
+
+lodthresh.seq = seq(8, 52, 4)
+rel.local.list <- vector(mode = "list", length = length(lodthresh.seq))
+for(l in 1:length(lodthresh.seq)){
+  pdf(paste0("~/Desktop/relative_subspecies_contributions_", lodthresh.seq[l], ".pdf"), width = 10, height = 8)
+  #layout(matrix(c(1,2,5,3,4,6), nrow = 2, byrow = TRUE))
+  layout(matrix(c(1,2,3,4,5,5,5,5), nrow = 2, byrow = TRUE), widths = c(1, 0.2, 1, 0.2))
+  rel.local.mat <- matrix(NA, ncol = 8, nrow = length(tissue.names))
+
+  for(tx in 1:length(local.eQTL.pos[[i]])){
+    rownames(rel.local.mat) <- tissue.names
+    colnames(rel.local.mat) <- LETTERS[1:8]
+
+    local.tx.eQTL <- t(sapply(local.eQTL.pos, function(x) extract_coef(x[[tx]], lodthresh = lodthresh.seq[l])))
+    distal.tx.eQTL <- Reduce("rbind", lapply(distal.eQTL.pos, function(x) extract_coef(x[[tx]], lodthresh = lodthresh.seq[l])))
+
+    local.std <- t(apply(local.tx.eQTL, 1, function(x) x/sd(x)))
+    distal.std <- t(apply(distal.tx.eQTL, 1, function(x) x/sd(x)))
+
+    local.sqrd <- local.std^2
+    distal.sqrd <- distal.std^2
+
+    mean.local.hap <- colMeans(local.sqrd, na.rm = TRUE)
+    mean.distal.hap <- colMeans(distal.sqrd, na.rm = TRUE)
+
+    rel.distal <- mean.distal.hap/(mean.local.hap+mean.distal.hap)
+    rel.local <- mean.local.hap/(mean.local.hap+mean.distal.hap)
+    rel.local.mat[tx,] <- rel.local
+
+    #barplot(rel.distal, beside = TRUE, col = CCcolors, ylab = "Relative Cotribution of Distal Effects")
+    #abline(h = 0.5)
+    #barplot(rel.distal, beside = TRUE, col = sub.col, ylab = "Relative Cotribution of Distal Effects")
+    #abline(h = 0.5)
+
+    par(mar = c(4,4,4,0))
+    barplot(rel.local, beside = TRUE, col = CCcolors, ylab = "Relative Cotribution of Local Effects")
+    abline(h = 0.5)
+    par(mar = c(4,0,4,2))
+    plot.new()
+    plot.window(xlim = c(0,1), ylim = c(0,1))
+    legend(0, 1, fill = qtl2::CCcolors, legend = names(qtl2::CCcolors))
+
+    par(mar = c(4,4,4,0))
+    barplot(rel.local, beside = TRUE, col = sub.col, ylab = "Relative Cotribution of Local Effects")
+    abline(h = 0.5)
+    par(mar = c(4,0,4,2))
+    plot.new()
+    plot.window(xlim = c(0,1), ylim = c(0,1))
+    legend(0, 1, fill = subsp.col, legend = names(subsp))
+
+
+    if(plot.type == "boxes"){
+      #boxplot(local.sqrd, names = LETTERS[1:8], col = qtl2::CCcolors)
+      #boxplot(distal.sqrd, names = LETTERS[1:8], col = qtl2::CCcolors)
+      #plot.grouped.boxes(list("local" = local.sqrd, "distal" = distal.sqrd), type = "matrix")
+      par(mar = c(4,4,4,4))
+      plot.grouped.boxes(list("local" = abs(local.tx.eQTL), "distal" = abs(distal.tx.eQTL)), type = "matrix",
+        main = tissue.names[tx], ylab = "eQTL Effect Size")
+    
+    }
+
+    if(plot.type == "points"){
+      mean.local <- colMeans(local.sqrd, na.rm = TRUE)
+      mean.distal <- colMeans(distal.sqrd, na.rm = TRUE)
+      plot.with.model(mean.local, mean.distal, 
+        col = qtl2::CCcolors, pch = sub.pch, xlab = "Mean Local Haplotype^2", 
+        ylab = "Mean Distal Haplotype^2", main = tissue.names[tx], cex = 2)
+
+      #se.local <- apply(local.sqrd, 2, function(x) sd(x, na.rm = TRUE))
+      #se.distal <- apply(distal.sqrd, 2, function(x) sd(x, na.rm = TRUE))
+      #segments(x0 = mean.local, y0 = mean.distal - se.distal,
+      #  y1 = mean.distal + se.distal, col = qtl2::CCcolors)
+      #segments(x0 = mean.local - se.local, x1 = mean.local + se.local, y0 = mean.distal, 
+      #  col = CCcolors, lwd = 3)
+    }
+
+    mtext(tissue.names[tx], side = 3, line = -2.5, outer = TRUE, font = 2)
+  }
+  dev.off()
+  rel.local.list[[l]] <- rel.local.mat
+} #end looping through lodthresh.seq
+
+
+lod.cols <- colorRampPalette(c("white", "blue"))(length(lodthresh.seq))
+#barplot(1:length(gray.scale), col = gray.scale)
+pdf("~/Desktop/local_comparison_boxes.pdf", width = 12, height = 5)
+names(rel.local.list) <- lodthresh.seq
+plot.grouped.boxes(rel.local.list, type = "matrix", print.vals = NA, legend.horiz = TRUE,
+  ylab = "Relative Contribution to Local eQTL", group.cols = lod.cols, 
+  legend.title = "LOD threshold")
+plot.dim <- par("usr")
+segments(x0 = plot.dim[1], x1 = plot.dim[2], y0 = 0.5)
+..................................
+x.seq <- seq(plot.dim[4], plot.dim[2], 9)
+for(i in 1:(length(x.seq)-1)){
+  draw.rectangle(min.x = x.seq[i], max.x = x.seq[(i+1)], min.y = 0.24, max.y = plot.dim[3], fill = CCcolors[i])
+  draw.rectangle(min.x = x.seq[i], max.x = x.seq[(i+1)], min.y = 0.18, max.y = 0.208, fill = sub.col[i])
+}
+dev.off()
+
+#maybe better as a dot plot, so we can see all the data?
+#plot each tissue separately
+pdf("~/Desktop/Tissues_separate.pdf", width = 9, height = 5)
+for(tx in 1:length(tissue.names)){
+  tissue.mat <- sapply(rel.local.list, function(x) x[tx,])
+  plot.new()
+  plot.window(xlim = c(1,ncol(tissue.mat)), ylim = c(0.3, 0.65))
+  for(st in 1:nrow(tissue.mat)){
+    #points(x = 1:ncol(tissue.mat), y = tissue.mat[st,], col = CCcolors[st], lwd = 3, type = "b")
+    points(x = 1:ncol(tissue.mat), y = tissue.mat[st,], col = sub.col[st], lwd = 3, type = "b")
+  }
+  axis(1, at = 1:ncol(tissue.mat), labels = lodthresh.seq)
+  axis(2)
+  mtext(tissue.names[tx], side = 3)
+  mtext("LOD threshold", side = 1, line = 2.5)
+  mtext("Relative Contribution to Local eQTL", side = 2, line = 2.5)
+  abline(h = 0.5)
+  legend("topright", fill = subsp.col, legend = names(subsp.col))
+}
+dev.off()
 ```
 
 ## Allele Effects and Expression Correlation

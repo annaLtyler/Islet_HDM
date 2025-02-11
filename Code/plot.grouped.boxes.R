@@ -3,7 +3,8 @@ group.cols = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f",
 main = "", type = c("list", "matrix"), plot.grouping = c("outer", "inner"),
 plot.type = c("box", "stripchart", "vioplot"), strip.method = "jitter", strip.offset = 0.1, 
 print.vals = c("mean", "median"), ylab = "",
-stats.cex = 0.7, label.srt = 0, legend.x = NULL, legend.y = NULL, notch = FALSE,
+stats.cex = 0.7, label.srt = 0, legend.x = NULL, legend.y = NULL, legend.title = NULL, 
+legend.horiz = FALSE, notch = FALSE,
 cex = 1, cex.names = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group.sep = 1.3){
 
 	oldPar <- par(no.readonly = TRUE)
@@ -120,9 +121,9 @@ cex = 1, cex.names = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group
 
 	par(xpd = NA)
 	if(is.null(legend.x) || is.null(legend.y)){
-		legend("topleft", fill = group.cols, legend = group.labels)
+		legend("topleft", fill = group.cols, legend = group.labels, horiz = legend.horiz, title = legend.title)
 	}else{
-		legend(legend.x, legend.y, fill = group.cols, legend = group.labels)
+		legend(legend.x, legend.y, fill = group.cols, legend = group.labels, horiz = legend.horiz, title = legend.title)
 	}
 	par(xpd = TRUE)	
 

@@ -253,7 +253,7 @@ weight <- num.pheno[, "weight_final"]
 sex <- as.numeric(as.factor(covar[,1]))
 not.outlier <- which(glu < 800)
 
-pdf(here("Results", "Paper", "fig_panels_densities.pdf"), height = 3, width = 4)
+pdf(here("Results", "Paper", "Fig1A_B.pdf"), height = 3, width = 4)
 
 #fasting glucose as densities
 f.locale <- which(sex == 1)
@@ -336,13 +336,13 @@ legend(45, 0.05, fill = c(fcol, mcol), cex = 0.8,
 
 dev.off()
 
-pdf(here("Results", "Paper", "Fig_panels_boxes.pdf"), height = 4, width = 4)
+pdf(here("Results", "Paper", "Fig1C.pdf"), height = 4, width = 4)
 par(mar = c(4,8,4,4))
 boxplot(glu[not.outlier]~sex[not.outlier], names = c("Female", "Male"), xlab = "",
   ylab = "Fasting Glucose (mg/dL)", col = c(fcol, mcol))
 dev.off()
 
-pdf(here("Results", "Paper", "Fig_panels_correlations.pdf"), height = 3, width = 4)
+pdf(here("Results", "Paper", "Fig1D_E.pdf"), height = 3, width = 4)
 par(mar = c(4,4,1,2))
 weight.glu.stats <- plot.with.model(weight[not.outlier], glu[not.outlier], xlab = "",
   ylab = "", col = sex+2, write.results = FALSE)
@@ -861,6 +861,7 @@ par(xpd = TRUE)
 
 
 #horizontal
+pdf(here("Results", "Paper", "Fig1F.pdf"), width = 10, height = 5)
 herit.order <- order(as.numeric(herit), decreasing = TRUE)
 par(mar = c(8, 4, 4, 2))
 plot.new()
@@ -875,6 +876,7 @@ mtext("Heritability", side = 2, line = 2.5)
 par(xpd = NA)
 text(y = min(min.herit)-0.02, x = 1:length(herit), gsub("_", " ", names(max.herit)[herit.order]), adj = 1, srt = 90)
 par(xpd = TRUE)
+dev.off()
 ```
 
 ```{r save_paper_data}
@@ -896,6 +898,8 @@ diag(herit.cor) <- herit
 trait.clust <- hclust(dist(pheno.cor)) #ignore heritability on the diagonal
 #trait.clust <- hclust(dist(herit.cor)) #clustering with heritability on diagonal
 
-quartz(width = 5.5, height = 5)
+#quartz(width = 5.5, height = 5)
+pdf(here("Results", "Paper", "Fig1G.pdf"), width = 5.5, height = 5)
 pheatmap(herit.cor, cluster_cols = trait.clust, cluster_rows = trait.clust)
+dev.off()
 ```
