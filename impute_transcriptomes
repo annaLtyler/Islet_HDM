@@ -14,4 +14,4 @@ cd $SLURM_SUBMIT_DIR
 
 module load singularity
 
-singularity exec ../../../Containers/R.sif R -e 'rmarkdown::render(here::here("Documents", "manuscript", "1.DO", "3a.Imputation.Rmd"))'
+singularity exec ../../../Containers/islet_hdma.sif R -e 'rmarkdown::render(here::here("Documents", "manuscript", "1.DO", "3a.Imputation.Rmd"))'
