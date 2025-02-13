@@ -217,6 +217,7 @@ legend(0, 0.5, legend = c("Female", "Male"), col = "black", pch = unique(sample.
 #dev.off()
 ```
 
+
 ```{r supp_fig2}
 pdf(here("Results", "Paper", "Supp_Fig2A.pdf"), width = 7, height = 5)
 par(mar = c(4,4,4,1))
@@ -760,7 +761,7 @@ mtext("Shared Local eQTL", side = 3, outer = TRUE, line = -1.5)
 
 
 ```{r supp_fig2G}
-pdf(here("Results", "Paper", "Supp_Fig2G.pdf"), width = 8, height = 5)
+png(here("Results", "Paper", "Supp_Fig2G.png"), width = 8, height = 5, units = "in", res = 300)
 bar.col <- rep("gray", nrow(combo.mat))
 single.tissue <- which(rowSums(combo.mat) == 1)
 bar.col[single.tissue] <- rev(tissue.cols)
@@ -815,7 +816,7 @@ mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
 ```
 
 ```{r supp_fig2H}
-pdf(here("Result", "Paper", "Supp_Fig2H.pdf"), width = 8, height = 5)
+png(here("Results", "Paper", "Supp_Fig2H.png"), width = 8, height = 5, units = "in", res = 300)
 bar.col <- rep("gray", nrow(combo.mat))
 single.tissue <- which(rowSums(combo.mat) == 1)
 bar.col[single.tissue] <- rev(tissue.cols)
@@ -951,7 +952,6 @@ plot.grouped.boxes(rel.local.list, type = "matrix", print.vals = NA, legend.hori
   legend.title = "LOD threshold")
 plot.dim <- par("usr")
 segments(x0 = plot.dim[1], x1 = plot.dim[2], y0 = 0.5)
-..................................
 x.seq <- seq(plot.dim[4], plot.dim[2], 9)
 for(i in 1:(length(x.seq)-1)){
   draw.rectangle(min.x = x.seq[i], max.x = x.seq[(i+1)], min.y = 0.24, max.y = plot.dim[3], fill = CCcolors[i])

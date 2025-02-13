@@ -338,8 +338,12 @@ dev.off()
 
 pdf(here("Results", "Paper", "Fig1C.pdf"), height = 4, width = 4)
 par(mar = c(4,8,4,4))
+model <- lm(glu[not.outlier]~sex[not.outlier]) 
+f <- summary(model)$fstatistic
+p.text <- threshold_p(pf(f[1],f[2],f[3],lower.tail=F), return.text = TRUE)
 boxplot(glu[not.outlier]~sex[not.outlier], names = c("Female", "Male"), xlab = "",
   ylab = "Fasting Glucose (mg/dL)", col = c(fcol, mcol))
+plot.text(p.text, rel.x = 0.02, rel.y = 0.95, add = TRUE, adj = 0)
 dev.off()
 
 pdf(here("Results", "Paper", "Fig1D_E.pdf"), height = 3, width = 4)
@@ -891,8 +895,8 @@ on the diagonal.
 ```{r cor_herit}
 #keep the phenotype clustering order
 #trait.order <- hclust(dist(pheno.cor))$order
-herit.cor <- pheno.cor
-diag(herit.cor) <- herit
+#herit.cor <- pheno.cor
+#diag(herit.cor) <- herit
 
 
 trait.clust <- hclust(dist(pheno.cor)) #ignore heritability on the diagonal
@@ -900,6 +904,6 @@ trait.clust <- hclust(dist(pheno.cor)) #ignore heritability on the diagonal
 
 #quartz(width = 5.5, height = 5)
 pdf(here("Results", "Paper", "Fig1G.pdf"), width = 5.5, height = 5)
-pheatmap(herit.cor, cluster_cols = trait.clust, cluster_rows = trait.clust)
+pheatmap(pheno.cor, cluster_cols = trait.clust, cluster_rows = trait.clust)
 dev.off()
 ```
