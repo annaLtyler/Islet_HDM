@@ -84,7 +84,7 @@ args = commandArgs(trailingOnly=TRUE)
 use.cc.imputed.transcriptome <- as.logical(args[1])
 
 if(is.na(use.cc.imputed.transcriptome)){
-    use.cc.imputed.transcriptome = TRUE #set this to TRUE to do the equivalent of genomic prediction
+    use.cc.imputed.transcriptome = FALSE #set this to TRUE to do the equivalent of genomic prediction
 }
 
 ```
@@ -587,9 +587,9 @@ if(imp.text == "measured"){
 }
 
 if(use.cc.imputed.transcriptome){
-    fig.name <- "Tissue_prediction_imputed.pdf"
+    fig.name <- "Fig7C.pdf"
 }else{
-    fig.name <- "Tissue_prediction_measured.pdf"
+    fig.name <- "Fig7B.pdf"
 }
 
 if(plot.individuals){

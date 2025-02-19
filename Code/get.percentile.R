@@ -3,6 +3,7 @@
 
 
 	get.percentile <- function(distX, percentile){
+		distX <- distX[which(!is.na(distX))]
 		ranked <- rank(distX)
 		#find the position that the percentile should be in the ranked list
 		perc.pos <- round(length(distX)*(percentile/100))

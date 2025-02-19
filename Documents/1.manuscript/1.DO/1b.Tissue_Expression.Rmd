@@ -6,6 +6,8 @@ output:
   html_document:
     code_folding: hide
     collapsed: no
+    toc: yes
+    toc_float: yes
 bibliography: hdm.bib 
 ---
 
@@ -567,7 +569,7 @@ pdf(here("Results", "Paper", "Supp_Fig2F.pdf"), width = 7, height = 5)
 layout(matrix(c(1,2), nrow = 1), widths = c(1,0.2))
 par(mar = c(4,4,4,1))
 barplot(eqtl.count.table[c("Local", "Distal"),], col = herit.cols[c("Local", "Distal")],
-  ylab = "eQTL Count", cex.names = 1.5)
+  ylab = "eQTL Count", cex.names = 1.2)
 par(mar = c(4,0,4,1))
 plot.new()
 plot.window(xlim = c(0,1), ylim = c(0,1))
@@ -762,6 +764,7 @@ mtext("Shared Local eQTL", side = 3, outer = TRUE, line = -1.5)
 
 ```{r supp_fig2G}
 png(here("Results", "Paper", "Supp_Fig2G.png"), width = 8, height = 5, units = "in", res = 300)
+par(bg = NA)
 bar.col <- rep("gray", nrow(combo.mat))
 single.tissue <- which(rowSums(combo.mat) == 1)
 bar.col[single.tissue] <- rev(tissue.cols)
@@ -817,6 +820,7 @@ mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
 
 ```{r supp_fig2H}
 png(here("Results", "Paper", "Supp_Fig2H.png"), width = 8, height = 5, units = "in", res = 300)
+par(bg = NA)
 bar.col <- rep("gray", nrow(combo.mat))
 single.tissue <- which(rowSums(combo.mat) == 1)
 bar.col[single.tissue] <- rev(tissue.cols)
@@ -831,12 +835,47 @@ mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
 dev.off()
 ```
 
-## Subspecies Effects
+## Subspecies Effects {.tabset .tabset-fade .tabset-pills}
 
-```{r, eval = FALSE}
+We looked at whether local and distal eQTLs had varying contributions
+to heritability across the subspecies (domesticus, musculus, and castaneus).
+We looked at eQTLs across several LOD score thresholds ranging from 8 to
+12.
+
+At each threshold we collected the haplotype coefficients for all local
+and distal eQTLs. This resulted in two matrices. In each the rows represented
+eQTLs, either local or distal, and the columns were haplotypes.
+We compared the mean of the squares of the coefficients across the haplotypes.
+
+The castaneus and musculus subspecies tended to have large local 
+coefficients, as has been shown multiple times previously. Interestingly,
+the distal coefficients were relatively constant across the three 
+subspecies.
+
+
+We calculated the relative contribution of local haplotype ($R_L$) 
+as follows:
+
+1. Calculate the mean squared local coefficient ($L$) for each strain ($S$): ($L_S^2$)
+2. Calculate the mean squared distal coefficient ($D$) for each strain ($S$): ($D_S^2$)
+3. Calculate the relative strength of the local coefficients ($L_R$): ($L_R = \frac{L_S^2}{L_S^2+D_S^2}$)
+
+The local haplotype tended to have a relatively larger effect in the
+castaneus and musculus subspecies ($R_L > 0.5$) than in the domesticus 
+subspecies ($R_L < 0.5$). This may be because there are many more local
+variants affecting transcription in the two more distant subspecies, which
+translates into high local heritability. However, the effects of distal
+variants are buffered by the transcriptional network and thus have a 
+relatively constant effect across subspecies.
+
+
+```{r, subspecies_effects, fig.width = 10, fig.height = 7, results = "asis"}
 subsp <- list("domesticus" = c("A", "B", "C", "D", "E", "H"), 
   "castaneus" = "F", "musculus" = "G")
-subsp.col <- c("domesticus" = "#7fc97f", "castaneus" = "#beaed4", "musculus" = "#fdc086")
+#subsp.col <- c("domesticus" = "#7fc97f", "castaneus" = "#beaed4", "musculus" = "#fdc086")
+subsp.col <- c("domesticus" = "gray90", 
+  "castaneus" = as.vector(CCcolors["CAST"]), 
+  "musculus" = as.vector(CCcolors["PWK"]))
 subsp.pch <- c(16, 3, 11)
 sub.pch <- sub.col <- rep(NA, 8)
 
@@ -847,7 +886,6 @@ for(i in 1:length(subsp)){
 
 plot.type = "boxes"
 #plot.type = "points"
-
 
 extract_coef <- function(tx.eqtl, lodthresh = 8){
   if(nrow(tx.eqtl) == 0){
@@ -860,110 +898,244 @@ extract_coef <- function(tx.eqtl, lodthresh = 8){
   return(as.matrix(tx.eqtl[pass.thresh,4:11]))
 }
 
-
-lodthresh.seq = seq(8, 52, 4)
-rel.local.list <- vector(mode = "list", length = length(lodthresh.seq))
-for(l in 1:length(lodthresh.seq)){
-  pdf(paste0("~/Desktop/relative_subspecies_contributions_", lodthresh.seq[l], ".pdf"), width = 10, height = 8)
-  #layout(matrix(c(1,2,5,3,4,6), nrow = 2, byrow = TRUE))
-  layout(matrix(c(1,2,3,4,5,5,5,5), nrow = 2, byrow = TRUE), widths = c(1, 0.2, 1, 0.2))
-  rel.local.mat <- matrix(NA, ncol = 8, nrow = length(tissue.names))
-
-  for(tx in 1:length(local.eQTL.pos[[i]])){
-    rownames(rel.local.mat) <- tissue.names
-    colnames(rel.local.mat) <- LETTERS[1:8]
-
-    local.tx.eQTL <- t(sapply(local.eQTL.pos, function(x) extract_coef(x[[tx]], lodthresh = lodthresh.seq[l])))
-    distal.tx.eQTL <- Reduce("rbind", lapply(distal.eQTL.pos, function(x) extract_coef(x[[tx]], lodthresh = lodthresh.seq[l])))
-
-    local.std <- t(apply(local.tx.eQTL, 1, function(x) x/sd(x)))
-    distal.std <- t(apply(distal.tx.eQTL, 1, function(x) x/sd(x)))
-
-    local.sqrd <- local.std^2
-    distal.sqrd <- distal.std^2
-
-    mean.local.hap <- colMeans(local.sqrd, na.rm = TRUE)
-    mean.distal.hap <- colMeans(distal.sqrd, na.rm = TRUE)
-
-    rel.distal <- mean.distal.hap/(mean.local.hap+mean.distal.hap)
-    rel.local <- mean.local.hap/(mean.local.hap+mean.distal.hap)
-    rel.local.mat[tx,] <- rel.local
-
-    #barplot(rel.distal, beside = TRUE, col = CCcolors, ylab = "Relative Cotribution of Distal Effects")
-    #abline(h = 0.5)
-    #barplot(rel.distal, beside = TRUE, col = sub.col, ylab = "Relative Cotribution of Distal Effects")
-    #abline(h = 0.5)
-
-    par(mar = c(4,4,4,0))
-    barplot(rel.local, beside = TRUE, col = CCcolors, ylab = "Relative Cotribution of Local Effects")
-    abline(h = 0.5)
-    par(mar = c(4,0,4,2))
-    plot.new()
-    plot.window(xlim = c(0,1), ylim = c(0,1))
-    legend(0, 1, fill = qtl2::CCcolors, legend = names(qtl2::CCcolors))
-
-    par(mar = c(4,4,4,0))
-    barplot(rel.local, beside = TRUE, col = sub.col, ylab = "Relative Cotribution of Local Effects")
-    abline(h = 0.5)
-    par(mar = c(4,0,4,2))
-    plot.new()
-    plot.window(xlim = c(0,1), ylim = c(0,1))
-    legend(0, 1, fill = subsp.col, legend = names(subsp))
-
-
-    if(plot.type == "boxes"){
-      #boxplot(local.sqrd, names = LETTERS[1:8], col = qtl2::CCcolors)
-      #boxplot(distal.sqrd, names = LETTERS[1:8], col = qtl2::CCcolors)
-      #plot.grouped.boxes(list("local" = local.sqrd, "distal" = distal.sqrd), type = "matrix")
-      par(mar = c(4,4,4,4))
-      plot.grouped.boxes(list("local" = abs(local.tx.eQTL), "distal" = abs(distal.tx.eQTL)), type = "matrix",
-        main = tissue.names[tx], ylab = "eQTL Effect Size")
+plot_rel <- function(local.distal.list, plot.type = c("local", "distal"), title = ""){
     
+    plot.type = plot.type[1]
+    mean.local.hap <- colMeans(local.distal.list$local, na.rm = TRUE)
+    mean.distal.hap <- colMeans(local.distal.list$distal, na.rm = TRUE)
+    total.hap <- colMeans(rbind(local.distal.list$local, local.distal.list$distal), na.rm = TRUE)
+    #total.hap <- mean.distal.hap+mean.local.hap #gives outsized weight to distal component
+
+    rel.distal <- mean.distal.hap/total.hap
+    rel.local <- mean.local.hap/total.hap
+
+    if(plot.type == "local"){
+      plot.this <- rel.local
+    }else{
+      plot.this <- rel.distal
     }
 
-    if(plot.type == "points"){
-      mean.local <- colMeans(local.sqrd, na.rm = TRUE)
-      mean.distal <- colMeans(distal.sqrd, na.rm = TRUE)
-      plot.with.model(mean.local, mean.distal, 
-        col = qtl2::CCcolors, pch = sub.pch, xlab = "Mean Local Haplotype^2", 
-        ylab = "Mean Distal Haplotype^2", main = tissue.names[tx], cex = 2)
+    layout(matrix(c(3,3,3,1,2,0), nrow = 2, byrow = TRUE), widths = c(1, 1, 0.2), heights = c(1, 0.7))
 
-      #se.local <- apply(local.sqrd, 2, function(x) sd(x, na.rm = TRUE))
-      #se.distal <- apply(distal.sqrd, 2, function(x) sd(x, na.rm = TRUE))
-      #segments(x0 = mean.local, y0 = mean.distal - se.distal,
-      #  y1 = mean.distal + se.distal, col = qtl2::CCcolors)
-      #segments(x0 = mean.local - se.local, x1 = mean.local + se.local, y0 = mean.distal, 
-      #  col = CCcolors, lwd = 3)
+    good.ylim <- get_plot_bounds(0, max(plot.this, na.rm = TRUE), scale.factor = 10)
+
+    par(mar = c(6,6,0,0))
+    a <- barplot(plot.this, beside = TRUE, col = sub.col, 
+      ylab = paste(local.or.distal, "contribution"), ylim = good.ylim,
+      cex.lab = 1.5, cex.names = 1.5, las = 2, cex.axis = 1.5)
+    plot.dim <- par("usr")
+    segments(x0 = plot.dim[1], x1 = plot.dim[2], y0 = 1)
+
+    par(mar = c(4,4,4,2))
+    plot.new()
+    plot.window(xlim = c(0,1), ylim = c(0,1))
+    legend(0, 1, fill = subsp.col, legend = names(subsp), cex = 1.5)
+
+    par(mar = c(6,4,4,4))
+    plot.grouped.boxes(local.distal.list, type = "matrix",
+      main = "", ylab = "eQTL Coef. Squared", 
+      group.cols = c("local" = local.col, "distal" = distal.col), print.vals = NA)
+    
+    plot.dim <- par("usr")
+    plot.height <- plot.dim[4] - plot.dim[3]
+    box.x <- seq((plot.dim[1]+1.2), (plot.dim[2]-1.5), length.out = 9)
+    box.min.y <- plot.dim[3] - (plot.height*0.05)
+    box.max.y <- plot.dim[3] - (plot.height*0.02)
+    for(i in 1:length(box.x)){
+      draw.rectangle(min.x = box.x[i], max.x = box.x[(i+1)], min.y = box.min.y, max.y = box.max.y, fill = sub.col[i])
     }
 
-    mtext(tissue.names[tx], side = 3, line = -2.5, outer = TRUE, font = 2)
+    mtext(title, side = 3, line = -2.5, outer = TRUE, font = 2)
+    invisible(plot.this)
+}
+
+
+lodthresh.seq = seq(8, 12)
+local.or.distal <- "local"
+
+#lodthresh.seq = seq(8, 52, 4)
+rel.val.list <- num.val.list <- vector(mode = "list", length = length(lodthresh.seq))
+
+for(l in 1:length(lodthresh.seq)){
+  #pdf(paste0("~/Desktop/relative_subspecies_contributions_", lodthresh.seq[l], ".pdf"), width = 10, height = 8)
+  #layout(matrix(c(1,2,5,3,4,6), nrow = 2, byrow = TRUE))
+  cat("### LOD:", lodthresh.seq[l], "{.tabset .tabset-fade .tabset-pills}\n")
+  rel.val.mat <- matrix(NA, ncol = 8, nrow = length(tissue.names))
+  colnames(rel.val.mat) <- names(CCcolors)
+  rownames(rel.val.mat) <- tissue.names
+  num.eqtl.mat <- matrix(NA, ncol = 2, nrow = length(tissue.names))
+  colnames(num.eqtl.mat) <- c("local", "distal")
+  rownames(num.eqtl.mat) <- tissue.names
+  for(tx in 1:length(local.eQTL.pos[[i]])){
+    cat("####", tissue.names[tx], "\n")
+
+    local.distal.file <- file.path(results.dir, 
+      paste0("Local.Distal.Coef.Sqrd.", tissue.names[tx], ".LOD", lodthresh.seq[l], ".RDS"))
+    if(!file.exists(local.distal.file)){
+
+      rownames(rel.val.mat) <- tissue.names
+      colnames(rel.val.mat) <- names(CCcolors)
+
+      local.tx.eQTL <- t(sapply(local.eQTL.pos, function(x) extract_coef(x[[tx]], lodthresh = lodthresh.seq[l])))
+      distal.tx.eQTL <- Reduce("rbind", lapply(distal.eQTL.pos, function(x) extract_coef(x[[tx]], lodthresh = lodthresh.seq[l])))
+      colnames(local.tx.eQTL) <- colnames(distal.tx.eQTL) <- names(CCcolors)
+
+      #local.sqrd <- local.tx.eQTL^2
+      #distal.sqrd <- distal.tx.eQTL^2
+
+      local.sqrd <- abs(local.tx.eQTL)
+      distal.sqrd <- abs(distal.tx.eQTL)
+
+      local.distal.sqrd <- list("local" = local.sqrd, "distal" = distal.sqrd)
+      saveRDS(local.distal.sqrd, local.distal.file)
+    }else{
+      local.distal.sqrd <- readRDS(local.distal.file)
+    }
+    num.local.distal <- sapply(local.distal.sqrd, function(x) length(which(!is.na(rowSums(x)))))
+    num.eqtl.mat[tx,] <- num.local.distal
+    rel.vals <- plot_rel(local.distal.sqrd, plot.type = local.or.distal, title = tissue.names[tx])
+    rel.val.mat[tx,] <- rel.vals
+    cat("\n\n")
   }
-  dev.off()
-  rel.local.list[[l]] <- rel.local.mat
+  rel.val.list[[l]] <- rel.val.mat
+  num.val.list[[l]] <- num.eqtl.mat
+  cat("\n\n")
 } #end looping through lodthresh.seq
+```
+ 
+
+```{r supp_fig_local_distal, eval = FALSE}
+l = 1
+tx = 1
+
+pdf(here("Results", "Paper", "Supp_Fig_Distal_Comparison1.pdf"), width = 10, height = 6)
+local.distal.file <- file.path(results.dir, 
+  paste0("Local.Distal.Coef.Sqrd.", tissue.names[tx], ".LOD", lodthresh.seq[l], ".RDS"))
+local.distal.sqrd <- readRDS(local.distal.file)
+plot_rel(local.distal.sqrd, plot.type = "distal", title = "Adipose, LOD:8")
+dev.off()
+
+pdf(here("Results", "Paper", "Supp_Fig_Local_Comparison1.pdf"), width = 10, height = 6)
+local.distal.file <- file.path(results.dir, 
+  paste0("Local.Distal.Coef.Sqrd.", tissue.names[tx], ".LOD", lodthresh.seq[l], ".RDS"))
+local.distal.sqrd <- readRDS(local.distal.file)
+plot_rel(local.distal.sqrd, plot.type = "local", title = "Adipose, LOD:8")
+dev.off()
+```
 
 
+```{r direct_comparison}
+
+test_diff <- function(coef.mat, plot.label = ""){
+  test.diff <- aov.by.matrix(coef.mat, return.which = "aov")
+  diff.tukey <- TukeyHSD(test.diff)
+  neg.p <- -log10(diff.tukey$fact[,"p adj"]+1e-6)
+  neg.p.mat <- matrix(NA, nrow = 8, ncol = 8)
+  rownames(neg.p.mat) <- colnames(neg.p.mat) <- colnames(coef.mat)
+  for(i in 1:length(neg.p)){
+    split.name <- strsplit(names(neg.p)[i], "-")
+    row.num <- as.numeric(split.name[[1]][1])
+    col.num <- as.numeric(split.name[[1]][2])
+    neg.p.mat[row.num,col.num] <- neg.p[i]
+    neg.p.mat[col.num,row.num] <- neg.p[i]
+  }
+  imageWithText(signif(neg.p.mat, 2), use.pheatmap.colors = TRUE, cex = 0.8,
+    row.text.shift = 0.08, col.text.shift = 0.1, col.text.rotation = 0, col.text.adj = 0.5,
+    main = plot.label)
+}
+
+
+
+png(here("Results", "Paper", "Reviewer_Response_Subspecies.png"), width = 10, height = 10, units = "in", res = 300)
+par(mfrow = c(2,2), mar = c(4,4,4,4))
+boxplot(local.distal.sqrd$local, col = sub.col, main = "Local Coefficients", ylab = "|eQTL Coefficients|", las = 2)
+legend("topleft", fill = subsp.col, legend = names(subsp.col))
+test_diff(local.distal.sqrd$local, plot.label = "-log10 (p+1e-6) for Local Differences Tukey's HSD")
+par(mar = c(4,4,4,4))
+boxplot(local.distal.sqrd$distal, col = sub.col, main = "Distal Coefficients", ylab = "|eQTL Coefficients|", las = 2)
+legend("topleft", fill = subsp.col, legend = names(subsp.col))
+test_diff(local.distal.sqrd$distal, plot.label = "-log10 (p+1e-6) for Distal Differences Tukey's HSD")
+dev.off()
+
+```
+
+## Subspecies means
+
+We collected the mean contributions across all LOD thresholds
+and combined them in the following figures. 
+
+The bar plot shows how many local and distal eQTLs there are
+at each threshold.
+
+```{r num_eqtl}
+num.local.eqtl <- sapply(num.val.list, function(x) x[,1])
+num.distal.eqtl <- sapply(num.val.list, function(x) x[,2])
+colnames(num.local.eqtl) <- colnames(num.distal.eqtl) <- lodthresh.seq
+
+barplot(num.local.eqtl, beside = TRUE, col = tissue.cols, ylab = "Num eQTL", main = "Number of Local eQTL", xlab = "LOD threshold")
+abline(h = seq(0, 10000, 1000), lty = 2, col = "darkgray")
+legend("topright", fill = tissue.cols, legend = tissue.names, bg = "white")
+
+barplot(num.distal.eqtl, beside = TRUE, col = tissue.cols, ylab = "Num eQTL", main = "Number of Distal eQTL", xlab = "LOD threshold", ylim = c(0, 2000))
+abline(h = seq(0, 2000, 250), lty = 2, col = "darkgray")
+
+perc.distal <- num.distal.eqtl*100/(num.distal.eqtl+num.local.eqtl)
+barplot(perc.distal, beside = TRUE, col = tissue.cols, ylab = "Percent Distal eQTL", 
+  main = "Percent Distal eQTL", xlab = "LOD threshold", ylim = c(0, 15))
+abline(h = seq(0, 14, 2), lty = 2, col = "darkgray")
+```
+
+Each box shows the
+mean values across the tissues for that threshold.
+
+
+```{r susp_collected, fig.width = 12, fig.height = 5}
 lod.cols <- colorRampPalette(c("white", "blue"))(length(lodthresh.seq))
-#barplot(1:length(gray.scale), col = gray.scale)
-pdf("~/Desktop/local_comparison_boxes.pdf", width = 12, height = 5)
-names(rel.local.list) <- lodthresh.seq
-plot.grouped.boxes(rel.local.list, type = "matrix", print.vals = NA, legend.horiz = TRUE,
+names(rel.val.list) <- lodthresh.seq
+plot.grouped.boxes(rel.val.list, type = "matrix", print.vals = NA, legend.horiz = TRUE,
   ylab = "Relative Contribution to Local eQTL", group.cols = lod.cols, 
   legend.title = "LOD threshold")
 plot.dim <- par("usr")
-segments(x0 = plot.dim[1], x1 = plot.dim[2], y0 = 0.5)
-x.seq <- seq(plot.dim[4], plot.dim[2], 9)
+plot.height <- plot.dim[4] - plot.dim[3]
+plot.length <- plot.dim[2] - plot.dim[1]
+segments(x0 = plot.dim[1], x1 = plot.dim[2], y0 = 1)
+x.seq <- seq((plot.dim[1]+(plot.length*0.04)), (plot.dim[2] - (plot.length*0.04)), length.out = 9)
 for(i in 1:(length(x.seq)-1)){
-  draw.rectangle(min.x = x.seq[i], max.x = x.seq[(i+1)], min.y = 0.24, max.y = plot.dim[3], fill = CCcolors[i])
-  draw.rectangle(min.x = x.seq[i], max.x = x.seq[(i+1)], min.y = 0.18, max.y = 0.208, fill = sub.col[i])
+  #text(x = mean(c(x.seq[i], x.seq[(i+1)])), y = 0.84, labels = names(CCcolors)[i])
+  draw.rectangle(min.x = x.seq[i], max.x = x.seq[(i+1)], 
+    min.y = (plot.dim[3]-(plot.height*0.06)), max.y = (plot.dim[3]-(plot.height*0.03)), fill = sub.col[i])
 }
-dev.off()
+legend("topright", fill = subsp.col, legend = names(subsp.col), title = "Susbpscies")
+#dev.off()
+```
 
+```{r lod_thresh, eval = FALSE}
+pdf(here("Results", "Paper", paste0("Supp_Fig_", local.or.distal, "_Comparison2.pdf")), width = 10, height = 5)
+lod.cols <- colorRampPalette(c("white", "blue"))(length(lodthresh.seq))
+names(rel.val.list) <- lodthresh.seq
+plot.grouped.boxes(rel.val.list, type = "matrix", print.vals = NA, legend.horiz = TRUE,
+  ylab = "Relative Contribution to Distal eQTL", group.cols = lod.cols, 
+  legend.title = "LOD threshold")
+plot.dim <- par("usr")
+plot.height <- plot.dim[4] - plot.dim[3]
+plot.length <- plot.dim[2] - plot.dim[1]
+segments(x0 = plot.dim[1], x1 = plot.dim[2], y0 = 1)
+x.seq <- seq((plot.dim[1]+(plot.length*0.04)), (plot.dim[2] - (plot.length*0.04)), length.out = 9)
+for(i in 1:(length(x.seq)-1)){
+  #text(x = mean(c(x.seq[i], x.seq[(i+1)])), y = 0.84, labels = names(CCcolors)[i])
+  draw.rectangle(min.x = x.seq[i], max.x = x.seq[(i+1)], 
+    min.y = (plot.dim[3]-(plot.height*0.06)), max.y = (plot.dim[3]-(plot.height*0.03)), fill = sub.col[i])
+}
+legend("topright", fill = subsp.col, legend = names(subsp.col), title = "Susbpscies")
+dev.off()
+```
+
+```{r dots, eval = FALSE}
 #maybe better as a dot plot, so we can see all the data?
 #plot each tissue separately
 pdf("~/Desktop/Tissues_separate.pdf", width = 9, height = 5)
 for(tx in 1:length(tissue.names)){
-  tissue.mat <- sapply(rel.local.list, function(x) x[tx,])
+  tissue.mat <- sapply(rel.val.list, function(x) x[tx,])
   plot.new()
   plot.window(xlim = c(1,ncol(tissue.mat)), ylim = c(0.3, 0.65))
   for(st in 1:nrow(tissue.mat)){

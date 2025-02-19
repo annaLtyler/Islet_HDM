@@ -152,9 +152,11 @@ if(!file.exists(transcript.herit.file)){
 ## Imputation
 
 Here we use the nearest marker to each gene to impute
-gene expression. We use fit1 with a kinship correction
+gene expression. We use fit1 without a kinship correction
 and take the fitted values of the model as the imputed
-expression.
+expression. We excluded the kinship correction because
+we did not want distal factors to be included in the estimate
+of locally determined expression.
 
 We also calculate variance explained by the distal component 
 of gene expression. To get this we estimates the heritability 
@@ -249,13 +251,15 @@ for(tx in 1:length(tissue.names)){
 #Other genes are mostly the same, but they've shifted spots. 
 
 tx = 1
+transcript.id <- colnames(adj.expr[[tx]])
+
 gene.name <- "Wfdc21"; gene.id <- "ENSMUSG00000051748"
-gene.name <- "Pimreg"; gene.id <- "ENSMUSG00000020808"
+#gene.name <- "Pimreg"; gene.id <- "ENSMUSG00000020808"
 
 gene.idx <- which(transcript.id == gene.id)
 gene.expr <- scaled.expr[[tx]][,gene.id]
 
-gene.info.idx <- which(gene.tables[[tx]]$gene.id == transcript.id[tr])
+gene.info.idx <- which(gene.tables[[tx]]$gene.id == gene.id)
 nearest.marker <- gene.tables[[tx]]$nearest.marker.id[gene.info.idx]
 
 marker.geno <- pull_genoprobpos(genoprobs, marker = nearest.marker)
@@ -273,7 +277,7 @@ fitted <- model$fitted
 
 quartz(width = 9, height = 3)
 par(mfrow = c(1,3))
-plot.with.model(gene.adj[common.ind], clin.pheno[common.ind,"HOMA_IR"], main = "expression vs. pheno",
+plot.with.model(gene.expr[common.ind], clin.pheno[common.ind,"HOMA_IR"], main = "expression vs. pheno",
     xlab = "expr", ylab = "pheno")
 plot.with.model(fitted.kin[common.ind], clin.pheno[common.ind,"HOMA_IR"], main = "fitted kin vs. pheno",
     xlab = "fitted kin", ylab = "pheno")
@@ -430,8 +434,8 @@ saveRDS(local.distal.comp, file.path(imputed.results.dir, "Local_Distal_Comparis
 saveRDS(local.distal.comp, here("Results", "Paper", "Local_Distal_Comparison.RDS")) #also save for paper stats
 ```
 
-```{r local_v_distal_fig, eval = FALSE}
-pdf("~/Desktop/local_distal.pdf", width = 8, height = 5.5)
+```{r fig2A}
+pdf(here("Results", "Paper", "Fig2A.pdf"), width = 8, height = 5)
 plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "",
     main = "", group.cols = c(local.col, distal.col), cex.names = 1.5,
     plot.type = "vioplot", within.group.sep = 0.9, between.group.sep = 1.5,
@@ -440,8 +444,9 @@ mtext("Variance Explained", side = 2, line = 2.5, cex = 1.5)
 dev.off()
 ```
 
-```{r local_v_distal_fig2, eval = FALSE}
+```{r fig2A_alt, eval = FALSE}
 #try with overlapping transparent histograms
+pdf(here("Results", "Paper", "Fig2A_alt.pdf"), width = 12, height = 3)
 par(mfrow = c(1,4), mar = c(4, 4, 4, 0))
 for(tx in 1:length(tissue.names)){
     local.tx <- local.distal.comp$Local[,tx]
@@ -472,7 +477,7 @@ for(tx in 1:length(tissue.names)){
             legend = c("Local", "Distal"), cex = 1.5)
     }
 }
-
+dev.off()
 ```
 
 ```{r fig, eval = FALSE}
@@ -532,7 +537,7 @@ trait.cor <- lapply(trait.cor.files, readRDS)
 names(trait.cor) <- tissue.names
 ```
 
-#### Variance Explained - Splines
+#### Variance Explained - with line
 
 The following figures show the same data as above, but 
 with added lines showing trends. To generate these trends,
@@ -551,7 +556,7 @@ genes.
 plot_with_centiles <- function(x, y, main = "", xlab = "", 
     ylab = "", xlim = NULL, ylim = NULL, 
     col.ramp = brewer.pal(9, "BrBG")[c(3,2,2,2)], 
-    centile.seq = seq(0, 1, 0.01)){
+    centile.seq = seq(0, 1, 0.01), lwd = 2){
 
     plot.hexbin.as.plot(x = x, y = y, 
     ylab = "", xlab = "",
@@ -595,23 +600,63 @@ plot_with_centiles <- function(x, y, main = "", xlab = "",
     
     #points(seq.mids, decile.means, type = "b", pch = 16)
     smoothed.mean <- DescTools::SmoothSpline(decile.mids, decile.means)
-    points(smoothed.mean, type = "l", pch = 16, lwd = 3, col = "gray30")
+    points(smoothed.mean, type = "l", lwd = lwd, col = "gray30")
 
     #find the 95th percentile of trait correlations for these genes
     upper.val <- sapply(y.vals$yvals, 
         function(x) get.percentile(x, 95))
     smoothed.upper <- DescTools::SmoothSpline(decile.mids, upper.val)
-    points(smoothed.upper, type = "l", pch = 16, lwd = 3, col = "gray30")
+    points(smoothed.upper, type = "l", lwd = lwd, col = "gray30", lty = 2)
+
+    lower.val <- sapply(y.vals$yvals, 
+        function(x) get.percentile(x, 5))
+    smoothed.lower <- DescTools::SmoothSpline(decile.mids, lower.val)
+    points(smoothed.lower, type = "l", lwd = lwd, col = "gray30", lty = 2)
+
+    spear.cor <- cor.test(x, y, use = "pairwise.complete.obs", method = "spearman")
+    spear.p <- threshold_p(spear.cor$p.value, return.text = TRUE)
+    spear.rho <- spear.cor$estimate
+    plot.text(paste("rho =", signif(spear.rho, 2)), rel.x = 0.95, rel.y = 0.95, add = TRUE, adj = 1)
+    plot.text(spear.p, rel.x = 0.95, rel.y = 0.85, add = TRUE, adj = 1)
+
+}
+
+plot_linear <- function(x, y, main = "", xlab = "", 
+    ylab = "", xlim = NULL, ylim = NULL, 
+    col.ramp = brewer.pal(9, "BrBG")[c(3,2,2,2)], lwd = 2){
+
+    plot.hexbin.as.plot(x = x, y = y, 
+    ylab = "", xlab = "",
+    main = "", n.bins = 4, use.pheatmap.colors = FALSE, 
+    custom.colors = col.ramp, with.model = FALSE, 
+    legend.pos = NA, write.results = FALSE, xlim = xlim, 
+    ylim = ylim)
+
+    mtext(main, side = 3, line = 0.5, font = 2, cex = 1.5)
+    mtext(xlab, side = 1, line = 2.5)
+    mtext(ylab, side = 2, line = 2.5)
+
+    #add line of best fit
+    model <- lm(y~x)
+    abline(model, lwd = lwd)
+    xy.cor <- cor(x,y, use = "pairwise.complete.obs")
+    f <- summary(model)$fstatistic
+	p <- pf(f[1],f[2],f[3],lower.tail=F)
+    p.text <- threshold_p(p, return.text = TRUE)
+    plot.text(paste("r =", signif(xy.cor, 2)), rel.x = 0.95, rel.y = 0.95, add = TRUE, adj = 1)
+    plot.text(p.text, rel.x = 0.95, rel.y = 0.85, add = TRUE, adj = 1)
 }
 ```
 
 ```{r local_lin_fit, fig.height = 8, fig.width = 8}
 #points with overlayed mean and 95th percentile
-
 #pdf("~/Desktop/local_var_fig.pdf", width = 6, height = 6)
-#explanatory.var <- "trait.cor"
-explanatory.var <- "var.exp"
+explanatory.var <- "trait.cor"
+#explanatory.var <- "var.exp"
+#fit.type = "linear"
+fit.type = "splines"
 
+#quartz(width = 7, height = 6)
 col.ramp <- brewer.pal(9, "BrBG")[c(3,2,2,2)]
 par(mfrow = c(2,2), mar = c(4,5,4,1))
 for(tx in 1:length(trait.cor)){
@@ -637,19 +682,66 @@ for(tx in 1:length(trait.cor)){
         ylim = c(0,0.75)
     }
 
-   plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
-    ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
-    centile.seq = seq(0, 1, 0.01))
+    if(fit.type == "splines"){
+        plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
+            centile.seq = seq(0, 1, 0.01), lwd = 3)
+    }else{
+        plot_linear(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp)
+    }
 }
 #dev.off()
 ```
 
-#### LOD - Splines
+```{r fig2B}
+
+pdf(here("Results", "Paper", "Fig2B.pdf"), width = 7, height = 6)
+col.ramp <- brewer.pal(9, "BrBG")[c(3,2,2,2)]
+par(mfrow = c(2,2), mar = c(4,5,4,1))
+for(tx in 1:length(trait.cor)){
+    
+    common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp[[tx]]))
+    local.herit <- local.var.exp[[tx]][common.tx]
+
+    if(explanatory.var == "trait.cor"){
+        x <- abs(trait.cor[[tx]][common.tx])
+        y <- local.herit[common.tx]; 
+        xlab = "Max. Trait Correlation"
+        ylab = "Variance Explained"
+        xlim = c(0,0.75)
+        ylim = c(0,1)
+    }
+    
+    if(explanatory.var == "var.exp"){
+        y <- abs(trait.cor[[tx]][common.tx])
+        x <- local.herit[common.tx]; 
+        ylab = "Max. Trait Correlation"
+        xlab = "Variance Explained"
+        xlim = c(0,1)
+        ylim = c(0,0.75)
+    }
+
+    if(fit.type == "splines"){
+        plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
+            centile.seq = seq(0, 1, 0.01), lwd = 3)
+    }else{
+        plot_linear(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp)
+    }
+}
+dev.off()
+
+```
+
+#### LOD - with line
 
 The following plots show the relationship between trait
 relevance and local LOD score.
 
 ```{r herit_lod, fig.width = 8, fig.height = 8}
+#quartz(width = 7, height = 7)
 par(mfrow = c(2,2))
 for(tx in 1:length(tissue.names)){
     
@@ -676,10 +768,14 @@ for(tx in 1:length(tissue.names)){
         ylim = c(0,0.75)
     }
 
-   plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
-    ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
-    centile.seq = seq(0, 1, 0.01))
-
+    if(fit.type == "splines"){
+        plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
+            centile.seq = seq(0, 1, 0.001), lwd = 3)
+    }else{
+        plot_linear(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp)
+    }
 }
 
 ```
@@ -688,7 +784,7 @@ for(tx in 1:length(tissue.names)){
 ### Distal Variance Explained and Trait Relavance {.tabset .tabset-fade .tabset-pills}
 
 
-#### Variance Explained - splines
+#### Variance Explained - with trend line
 
 The following figures show the same data, but with 
 added lines showing trends. To generate these trends,
@@ -708,8 +804,9 @@ col.ramp <- brewer.pal(9, "Greys")[c(5,6,6,6)]
 #display.brewer.all()
 #pdf("~/Desktop/distal_v_relevance.pdf", width = 6, height = 6)
 #explanatory.var <- "trait.cor"
-explanatory.var <- "var.exp"
+#explanatory.var <- "var.exp"
 
+#quartz(width = 7, height = 7)
 par(mfrow = c(2,2), mar = c(4,5,4,1))
 for(tx in 1:length(trait.cor)){
 
@@ -734,14 +831,78 @@ for(tx in 1:length(trait.cor)){
         ylim = c(0, 0.75)
     }
    
-    plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
-    ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
-    centile.seq = seq(0, 1, 0.01))
+   if(fit.type == "splines"){
+        plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
+            centile.seq = seq(0, 1, 0.1))
+   }else{
+        plot_linear(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp)
+   }
 
 }
 #dev.off() 
 ```
 
+```{r fig2C}
+pdf(here("Results", "Paper", "Fig2C.pdf"), width = 7, height = 6)
+col.ramp <- brewer.pal(9, "Greys")[c(5,6,6,6)]
+par(mfrow = c(2,2), mar = c(4,5,4,1))
+for(tx in 1:length(trait.cor)){
+
+    distal.herit <- tx.distal.herit[[tx]][,"residual_variance"]*tx.distal.herit[[tx]][,"residual_heritability"]
+    common.tx <- intersect(names(trait.cor[[tx]]), names(distal.herit))
+
+    if(explanatory.var == "trait.cor"){
+        x <- abs(trait.cor[[tx]][common.tx])
+        y <- distal.herit[common.tx]; 
+        xlab = "Max. Trait Correlation"
+        ylab = "Variance Explained"
+        xlim = c(0,0.75)
+        ylim = c(0,1)
+    }
+    
+    if(explanatory.var == "var.exp"){
+        y <- abs(trait.cor[[tx]][common.tx])
+        x <- distal.herit[common.tx]; 
+        ylab = "Max. Trait Correlation"
+        xlab = "Variance Explained"
+        xlim = c(0, 1)
+        ylim = c(0, 0.75)
+    }
+   
+   if(fit.type == "splines"){
+        plot_with_centiles(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp,
+            centile.seq = seq(0, 1, 0.1), lwd = 3)
+   }else{
+        plot_linear(x, y, main = tissue.names[tx], xlab = xlab, 
+            ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp)
+   }
+
+}
+dev.off() 
+```
+
+
+```{r fig6C}
+gene.name = "Pparg"
+gene.idx <- which(gene.tables[[1]]$symbol == gene.name)
+gene.id <- gene.tables[[1]]$gene.id[gene.idx]
+gene.local <- sapply(local.var.exp, function(x) x[gene.id])
+gene.distal <- sapply(distal.var.exp, function(x) x[gene.id])
+herit.table <- rbind(gene.local, gene.distal)
+
+pdf(here("Results", "paper", "Fig6C.pdf"), width = 7, height = 5.5)
+a <- barplot(herit.table, beside = TRUE, col = c(local.col, distal.col), 
+    names = gsub("Skeletal", "", tissue.names), ylab = "Heritability", 
+    ylim = c(0, 0.5), cex.names = 1.5, cex.lab = 1.5)
+for(i in 1:nrow(herit.table)){
+    text(a[i,], herit.table[i,]+0.015, labels = signif(herit.table[i,], 2))
+}
+legend("topright", legend = c("Local", "distal"), fill = herit.cols, cex = 1.5)
+dev.off()
+```
 
 ## Distal Tails {.tabset .tabset-fade .tabset-pills}
 
@@ -978,8 +1139,8 @@ if(!file.exists(cor.perm.file)){
 ```
 
 ```{r plot_comparison, results = "asis", fig.width = 10, fig.height = 7, warning = FALSE}
-#plot_comparison = FALSE
-plot_comparison = TRUE
+plot_comparison = FALSE
+#plot_comparison = TRUE
 #calculate sigificant correlations for imputed transcripts
 #pdf("~/Desktop/twas.pdf", width = 10, height = 7)
 sig.tx <- vector(mode = "list", length = length(tissue.names))
@@ -1038,13 +1199,22 @@ for(tx in 1:length(tx.local.imp)){
         tx.idx <- match(names(emp.p), gene.tables[[tx]]$gene.id)
         tx.table <- cbind(gene.tables[[tx]][tx.idx,c(1,2,4,5)], "Correlation" = tr.obs.cor, "Empirical_p" = emp.p)
         tx.table$chr[which(tx.table$chr == "X")] <- 20
+        #tx.table$chr[which(tx.table$chr == "Y")] <- 21
+        #tx.table$chr[which(tx.table$chr == "MT")] <- 22
         sorted.table <- sort.by.then.by(tx.table, c(3,4), c("n", "n"))
 
         neg.log.p <- -log10(sorted.table[,"Empirical_p"])
         max.p <- max(neg.log.p[which(is.finite(neg.log.p))])
-        neg.log.p[which(!is.finite(neg.log.p))] <- max.p + 1
+        above.max <- which(!is.finite(neg.log.p))
+        #sorted.table[above.max,]
+        neg.log.p[above.max] <- max.p + 1
 
-        sig.table <- sorted.table[which(neg.log.p >= max.p),]
+        sig.p <- get.percentile(neg.log.p, 99.9)
+        #sig.table <- sorted.table[which(neg.log.p >= max.p),]
+        sig.table <- sorted.table[which(neg.log.p >= sig.p),]
+
+        #sig.order <- order(-log10(sig.table[,"Empirical_p"]))
+        #barplot(-log10(sig.table[sig.order,"Empirical_p"]+1e-6), names = sig.table[sig.order,"symbol"], las = 2)
         tr.sig[[tr]] <- sig.table
 
         if(plot_comparison){

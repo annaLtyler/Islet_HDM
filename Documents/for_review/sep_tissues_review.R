@@ -10,7 +10,7 @@ tog <- readRDS(here("Results", "Paper", "Model_Variance_Explained_tissue_togethe
 var.exp.mat <- rbind(unlist(sep), unlist(tog))
 rownames(var.exp.mat) <- c("Separate", "Together")
 
-pdf(here("Results", "Paper", "Comparison_Variance_Explained.pdf"), width = 9, height = 5)
+pdf(here("Results", "Paper", "Review_Response_Comparison_Variance_Explained.pdf"), width = 9, height = 5)
 layout(matrix(c(1,2), ncol = 2), widths = c(1, 0.3))
 par(mar = c(4,4,4,0))
 barplot(var.exp.mat, beside = TRUE, density = c(25, 50), col = rep(tissue.cols, each = 2))
@@ -29,7 +29,7 @@ barplot(pcor.mat[,c(1,3,2)], beside = TRUE, names = c("Genome-Transcriptome", "T
 plot.dim <- par("usr")
 dev.off()
 
-pdf(here("Results", "Paper", "Comparison_Correlation.pdf"), width = 9, height = 5)
+pdf(here("Results", "Paper", "Review_Response_Comparison_Correlation.pdf"), width = 9, height = 5)
 plot.new()
 plot.window(xlim = plot.dim[1:2], ylim = plot.dim[3:4])
 abline(h = seq(0, 0.8, 0.1), lty = 2, col = "darkgray")

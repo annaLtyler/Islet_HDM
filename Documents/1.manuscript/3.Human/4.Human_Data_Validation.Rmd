@@ -55,6 +55,9 @@ hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-com
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
+
+fig.label.cex = 1.8
+fig.main.cex = 1.8
 ```
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
@@ -345,6 +348,23 @@ abline(h = 0)
 
 ```
 
+```{r fig8D4}
+pdf(here("Results", "Paper", "Fig8D4.pdf"), width = 5, height = 5)
+par(mar = c(4,4,6,4))
+boxplot(status_list[mean.order], xlab = "", ylab = "", 
+    main = "", names = NA)
+mtext("score", side = 2, line = 2.5, cex = 2)
+abline(h = 0)
+par(xpd = NA)
+mtext("diabetic vs. non-diabetic", side = 3, line = 1, cex = fig.main.cex)
+text(x = c(1,2), y = rep(-4.5e-4, 2), 
+    labels = str_to_lower(gsub("_", "\n", names(status_list[mean.order]))), 
+    cex = fig.label.cex)
+plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
+    adj = 1, cex = 2)
+dev.off()
+```
+
 ## Obesity Status in post-menopausal women
 
 Accession number: GSE44000
@@ -404,6 +424,24 @@ boxplot(status_list[mean.order], xlab = "", ylab = "Prediction",
     main = paste("p =", signif(p, 2)))
 abline(h = 0)
 #dev.off()
+```
+
+
+```{r fig8D2}
+pdf(here("Results", "Paper", "Fig8D2.pdf"), width = 5, height = 5)
+par(mar = c(4,4,6,4))
+boxplot(status_list[mean.order], xlab = "", ylab = "", 
+    main = "", names = NA)
+mtext("score", side = 2, line = 2.5, cex = 2)
+abline(h = 0)
+par(xpd = NA)
+mtext("obesity in post-menopausal women", side = 3, line = 1, cex = fig.main.cex)
+text(x = c(1,2), y = rep(-0.0055, 2), 
+    labels = str_to_lower(gsub("_", "\n", names(status_list[mean.order]))), 
+    cex = fig.label.cex)
+plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
+    adj = 1, cex = 2)
+dev.off()
 ```
 
 ## Obesity in Children
@@ -479,8 +517,23 @@ mean.order <- order(sapply(status_list, mean))
 boxplot(status_list[mean.order], xlab = "", ylab = "Prediction", 
     main = paste("p =", signif(p, 2)))
 abline(h = 0)
+```
 
-
+```{r fig8D1}
+pdf(here("Results", "Paper", "Fig8D1.pdf"), width = 5, height = 5)
+par(mar = c(4,4,6,4))
+boxplot(status_list[mean.order], xlab = "", ylab = "", 
+    main = "", names = NA)
+mtext("obesity in children", side = 3, line = 1, cex = fig.main.cex)
+mtext("score", side = 2, line = 2.5, cex = 2)
+abline(h = 0)
+par(xpd = NA)
+text(x = c(1,2), y = rep(-0.0019, 2), 
+    labels = str_to_lower(gsub("_", "\n", names(status_list[mean.order]))), 
+    cex = fig.label.cex)
+plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
+    adj = 1, cex = 2)
+dev.off()
 ```
 
 
@@ -586,4 +639,19 @@ abline(h = 0)
 
 ```
 
-
+```{r fig8D3}
+pdf(here("Results", "Paper", "Fig8D3.pdf"), width = 5, height = 5)
+par(mar = c(4,4,6,4))
+boxplot(status_list[mean.order], xlab = "", ylab = "", 
+    main = "", names = NA)
+mtext("score", side = 2, line = 2.5, cex = 2)
+abline(h = 0)
+par(xpd = NA)
+mtext("diabetic vs. non-diabetic", side = 3, line = 1, cex = fig.main.cex)
+text(x = c(1,2), y = rep(-0.0025, 2), 
+    labels = str_to_lower(gsub("visceral", "", gsub("_", "\n", names(status_list[mean.order])))), 
+    cex = fig.label.cex)
+plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
+    adj = 1, cex = 2)
+dev.off()
+```

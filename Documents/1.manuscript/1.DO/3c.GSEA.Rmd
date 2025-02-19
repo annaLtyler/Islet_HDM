@@ -189,6 +189,35 @@ for(tx in 1:length(tissue.names)){
 #dev.off()
 ```
 
+```{r supp_fig_kegg_enrichment}
+pdf(here("Results", "Paper", "Supp_Fig_enrichments_KEGG.pdf"), width = 16, height = 9)
+par(mar = c(4,1, 2, 1), mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    sorted.enrich <- path_enrich[order(path_enrich[,tx], decreasing = FALSE),tx]
+    if(signed.gsea){
+        extreme.enrich  <- c(head(sorted.enrich, 10), tail(sorted.enrich, 10))
+    }else{
+        extreme.enrich  <- tail(sorted.enrich, 20)
+    }
+    a <- barplot(extreme.enrich, 
+        horiz = TRUE, las = 2, main = tissue.names[tx], 
+        xlim = c(-4, 4), name = NA, col = tissue.cols[tx])
+    text(x = rep(-0.1, 10), y = tail(a, 10), labels = tail(names(extreme.enrich), 10), adj = 1)
+    if(signed.gsea){
+        text(x = rep(0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 0)
+    }else{
+        text(x = rep(-0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 1)
+    }
+    mtext("Normalized Enrichment Score", side = 1, line = 2.5)
+    top.scores[[tx]] <- names(extreme.enrich)
+    abline(v = seq(-4, 4, 1), col = "gray", lty = 2)
+    cat("\n\n")
+}
+dev.off()
+
+```
+
+
 ### Loadings for KEGG pathways
 
 Plot the loading distributions for the most extreme pathways. 
@@ -480,6 +509,42 @@ for(tx in 1:length(tissue.names)){
     cat("\n\n")
 }
 #dev.off()
+```
+
+```{r supp_fig_go_enrichments}
+pdf(here("Results", "Paper", "Supp_Fig_enrichments_GO.pdf"), width = 16, height = 9)
+par(mar = c(4,0.5, 2, 0.5), mfrow = c(2,2))
+for(tx in 1:length(tissue.names)){
+    cat("####", tissue.names[tx], "\n")
+    enrich.order <- order(go.enrich.nes[,tx], decreasing = FALSE)
+    sorted.enrich <- go.enrich.nes[enrich.order,tx]
+    sorted.onto <- term.ontology[enrich.order]
+    if(signed.gsea){
+        extreme.enrich  <- c(head(sorted.enrich, num.top), tail(sorted.enrich, num.top))
+        extreme.onto <- c(head(sorted.onto, num.top), tail(sorted.onto, num.top))
+    }else{
+        extreme.enrich  <- tail(sorted.enrich, num.top*2)
+        extreme.onto <- tail(sorted.onto, num.top*2)
+    }
+    a <- barplot(extreme.enrich, 
+        horiz = TRUE, las = 2, main = tissue.names[tx], 
+        xlim = c(-4, 4), names = NA, col = tissue.cols[tx])
+    text(x = rep(-0.1, num.top), y = tail(a, num.top), 
+        labels = paste0(tail(names(extreme.enrich), num.top), " (", tail(extreme.onto, num.top), ")"), adj = 1)
+    if(signed.gsea){
+    text(x = rep(0.1, num.top), y = head(a, num.top), 
+        labels = paste0(head(names(extreme.enrich), num.top), " (", head(extreme.onto, num.top), ")"), adj = 0)
+    }else{
+    text(x = rep(-0.1, num.top), y = head(a, num.top), 
+        labels = paste0(head(names(extreme.enrich), num.top), " (", head(extreme.onto, num.top), ")"), adj = 1)
+    }
+    mtext("Normalized Enrichment Score", side = 1, line = 2.5)
+ 
+    extreme.go[[tx]]  <- extreme.enrich
+    abline(v = seq(-4, 4, 1), col = "gray", lty = 2)
+    cat("\n\n")
+}
+dev.off()
 ```
 
 ### GO Term Loading Distributions

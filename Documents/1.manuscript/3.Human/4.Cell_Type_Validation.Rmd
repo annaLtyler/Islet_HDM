@@ -299,16 +299,13 @@ first set of cells and more alpha cells are at risk for obesity.
 Does this make sense?
 
 
-The following plots are for figures either showing all
-data on the same axes in separate plots or showing all
-data on a single plot.
 
-```{r single_plot}
+```{r fig8A}
 all.types <- c(adipose_type_loadings, islet_cell_loadings)
 all.min <- min(sapply(all.types, function(x) min(x, na.rm = TRUE)))
 all.max <- max(sapply(all.types, function(x) max(x, na.rm = TRUE)))
 
-#pdf("~/Desktop/adipose_type_loadings.pdf", width = 5, height = 5)
+pdf(here("Results", "Paper", "Fig8A.pdf"), width = 5, height = 5)
 par(mar = c(11,7,2,2))
 boxplot(adipose_type_loadings[adipose.order], las = 2, ylim = c(all.min, all.max),
     cex.axis = 1.5, col = tissue.cols[1])
@@ -317,12 +314,14 @@ boxplot(adipose_type_loadings[adipose.order], las = 2, ylim = c(all.min, all.max
 #a <- lapply(1:length(adipose_type_loadings), function(x) points(xjitter[[x]], adipose_type_loadings[[adipose.order[x]]], pch = 21, col = "gray20"))
 stripchart(adipose_type_loadings[adipose.order],
     vertical = TRUE, add = TRUE, pch = 16,
-    col = "darkgray", method = "jitter")
+    col = "gray50", method = "jitter")
 mtext("Loading", side = 2, line = 4.5, cex = 1.5)
 abline(h = 0)
-#dev.off()
+dev.off()
+```
 
-#pdf("~/Desktop/islet_type_loadings.pdf", width = 8, height = 5)
+```{r fig8B}
+pdf(here("Results", "Paper", "Fig8B.pdf"), width = 8, height = 5)
 par(mar = c(11,7,2,2))
 boxplot(islet_cell_loadings[islet.order], las = 2, ylim = c(all.min, all.max),
     cex.axis = 1.5, col = tissue.cols[2])
@@ -331,10 +330,13 @@ boxplot(islet_cell_loadings[islet.order], las = 2, ylim = c(all.min, all.max),
 #a <- lapply(1:length(islet_cell_loadings), function(x) points(xjitter[[x]], islet_cell_loadings[[islet.order[x]]], pch = 21, col = "gray20"))
 stripchart(islet_cell_loadings[islet.order],
     vertical = TRUE, add = TRUE, pch = 16,
-    col = "gray30", method = "jitter")
+    col = "gray50", method = "jitter")
 mtext("Loading", side = 2, line = 4.5, cex = 1.5)
 abline(h = 0)
-#dev.off()
+dev.off()
+```
+
+```{r fig_together}
 
 type.cols <- c(rep(tissue.cols[1], length(adipose_type_loadings)), rep(tissue.cols[2], length(islet_cell_loadings)))
 all.order <- order(sapply(all.types,  function(x) mean(x, na.rm = TRUE)))
@@ -573,7 +575,34 @@ all.vals <- c(mean_adipose_loadings, mean_islet_loadings)
 emp.p <- sapply(1:ncol(all_samples), 
     function(x) length(which(abs(all_samples[,x]) > abs(all.vals[x])))/nrow(all_samples))
 names(emp.p) <- colnames(all_samples)
+signif(p.adjust(emp.p, method = "holm"), 2)
 ```
+
+
+```{r fig8C}
+pdf(here("Results", "Paper", "Fig8C.pdf"), height = 6, width = 10)
+asterisk.col <- "red"
+par(mar = c(11,8,2,4))
+vioplot(all_samples, col = plot.cols, ylim = c(xmin, xmax), axes = FALSE,
+    main = "", las = 2, cex.axis = 1.5)
+mtext("Loading", side = 2, line = 5, cex = 1.5)
+#add the mean loading value for each adipose cell type along with alpha 
+#cutoff lines
+for(i in 1:length(mean_adipose_loadings)){
+    points(x = i, y = mean_adipose_loadings[i], pch = "*", col = asterisk.col, cex = 3)
+    segments(x0 = i-0.25, x1 = i+0.25, y0 = adipose.alpha.mat[i,])
+}
+
+#add the mean loading value for each islet cell type along with alpha 
+#cutoff lines
+for(i in 1:length(mean_islet_loadings)){
+    xval <- i+length(mean_adipose_loadings)
+    points(x = xval, y = mean_islet_loadings[i], pch = "*", col = asterisk.col, cex = 3)
+    segments(x0 = xval-0.25, x1 = xval+0.25, y0 = islet.alpha.mat[i,])
+}
+dev.off()
+```
+
 
 ## Subsets
 

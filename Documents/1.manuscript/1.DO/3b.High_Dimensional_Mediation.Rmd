@@ -1012,6 +1012,35 @@ if(max.tx == 4){
 }
 ```
 
+# Metabolic Disease Index {.tabset .tabset-fade .tabset-pills}
+
+We are calling the composite phenotype score and Metabolic 
+Disease Index, or MDI. This score is highly correlated with
+the first principal component of the trait matrix, which is
+dominated by body weight and insulin resistance. 
+
+The following plot shows the distribution of MDI across
+individuals.
+
+```{r mdi_dist}
+for(tx in 1:max.tx){
+    if(max.tx == 1){
+        cat("## All Tissues\n") 
+    }else{
+        cat("##", tissue.names[tx], "\n")
+    }
+    hist(model_scores[[tx]][,"Outcome"], breaks = 50, ylab = "Number of Mice",
+        xlab = "", main = "")
+}
+```
+
+```{r fig4B}
+pdf(here("Results", "Paper", "Fig4B.pdf"), width = 5, height = 6)
+hist(model_scores[[1]][,"Outcome"], breaks = 50, ylab = "Number of Mice",
+        xlab = "", main = "")
+dev.off()
+```
+
 # Transcript Loadings
 
 The following plot shows the distributions of transcript
@@ -1048,31 +1077,38 @@ vioplot(lapply(transcript_loadings, abs), col = tissue.cols, ylab = "|Loading|")
 #    vertical = TRUE, method = "stack", col = tissue.cols, pch = 16, offset = 0.03)
 ```
 
-```{r overlapping_dist, eval = FALSE}
+```{r overlapping_dist}
 #try with overlapping distributions
-quartz(width = 5, height = 5)
-#tx.dens <- lapply(transcript_loadings, function(x) density(abs(x)))
-tx.dens <- lapply(transcript_loadings, function(x) density(x))
-xmin <- min(sapply(tx.dens, function(x) min(x$x)))
-xmax <- max(sapply(tx.dens, function(x) max(x$x)))
-ymin <- min(sapply(tx.dens, function(x) min(x$y)))
-ymax <- max(sapply(tx.dens, function(x) max(x$y)))
+plot_overlapping_dist <- function(tx.loadings){
 
-plot.new()
-plot.window(xlim = c(xmin, xmax), ylim = c(ymin, ymax))
-for(tx in 1:length(tx.dens)){
-    plot.poly.xy(poly.top.x = tx.dens[[tx]]$x, 
-        poly.top.y = tx.dens[[tx]]$y, 
-        poly.bottom.x = tx.dens[[tx]]$x, 
-        poly.bottom.y = rep(0, length(tx.dens[[tx]]$y)),
-        col = hex2rgb(tissue.cols[tx], alpha = 0.5))
+    tx.dens <- lapply(tx.loadings, function(x) density(x))
+    xmin <- min(sapply(tx.dens, function(x) min(x$x)))
+    xmax <- max(sapply(tx.dens, function(x) max(x$x)))
+    ymin <- min(sapply(tx.dens, function(x) min(x$y)))
+    ymax <- max(sapply(tx.dens, function(x) max(x$y)))
+
+    plot.new()
+    plot.window(xlim = c(xmin, xmax), ylim = c(ymin, ymax))
+    for(tx in 1:length(tx.dens)){
+        plot.poly.xy(poly.top.x = tx.dens[[tx]]$x, 
+            poly.top.y = tx.dens[[tx]]$y, 
+            poly.bottom.x = tx.dens[[tx]]$x, 
+            poly.bottom.y = rep(0, length(tx.dens[[tx]]$y)),
+            col = hex2rgb(tissue.cols[tx], alpha = 0.5))
+    }
+    axis(1);axis(2)
+    legend("topright", 
+        fill = sapply(tissue.cols, function(x) hex2rgb(x, alpha = 0.5)), 
+        legend = names(tissue.cols))
+    mtext("Transcript Loading", side = 1, line = 2.5)
+    mtext("Density", side = 2, line = 2.5)
 }
-axis(1);axis(2)
-legend("topright", 
-    fill = sapply(tissue.cols, function(x) hex2rgb(x, alpha = 0.5)), 
-    legend = names(tissue.cols))
-mtext("Transcript Loading", side = 1, line = 2.5)
-mtext("Density", side = 2, line = 2.5)
+
+pdf(here("Results", "Paper", "Reviewer_Response_Overlapping_Transcript_Dists.pdf"), width = 10, height = 5)
+par(mfrow = c(1,2))
+plot_overlapping_dist(transcript_loadings)
+plot_overlapping_dist(lapply(transcript_loadings, abs))
+dev.off()
 ```
 
 The following plots show more detail of these distributions.
@@ -1085,6 +1121,14 @@ for(tx in 1:length(tissue.names)){
     main = tissue.names[tx], col = tissue.cols[tx])
     abline(v = 0, col = "red")
 }
+```
+
+```{r fig4C}
+pdf(here("Results", "Paper", "Fig4C.pdf"), width = 5, height = 5)
+hist(transcript_loadings[[1]], breaks = 50, , xlab = "Loading",
+    main = tissue.names[1], col = tissue.cols[1])
+    abline(v = 0, col = "#3182bd", lwd = 2)
+dev.off()
 ```
 
 ## Transcript Loadings and Heritability
@@ -1304,6 +1348,56 @@ if(calc_null){
 
     }
 }
+
+```
+
+```{r fig4D}
+pdf(here("Results", "Paper", "Fig4D.pdf"), width = 12, height = 3)
+
+if(calc_null){
+    all.dens <- c(lapply(transcript_loadings, density), lapply(null_loadings, density))
+    xmin <- min(sapply(all.dens, function(x) min(x$x)))
+    xmax <- max(sapply(all.dens, function(x) max(x$x)))
+    ymax <- max(sapply(all.dens, function(x) max(x$y)))
+
+    #quartz(width = 12, height = 3)
+    par(mfrow = c(1,4), mar = c(4,4,4,1))
+    for(tx in 1:length(transcript_loadings)){
+        num.high <- length(which(transcript_loadings[[tx]] > max(null_loadings[[tx]])))
+        num.low <- length(which(transcript_loadings[[tx]] < min(null_loadings[[tx]])))
+        plot(density(null_loadings[[tx]]), type = "l", col = "gray", lwd = 3,
+            xlim = c(xmin, xmax), ylim = c(0, ymax), xlab = "Transcript Loading",
+            main = "", cex.axis = 1.5, cex.lab = 1.3)
+        mtext(tissue.names[tx], side = 3, line = 1.5, font = 2)
+        points(all.dens[[tx]], type = "l", col = tissue.cols[tx], lwd = 3)
+        legend("topleft", col = c(tissue.cols[tx], "gray"), legend = c("observed", "null"), 
+            lty = 1, lwd = 3, cex = 1.2)
+        plot.dim <- par("usr")
+        plot.width = plot.dim[2] - plot.dim[1]
+        text(x = (plot.dim[2] - (plot.width*0.4)), y = plot.dim[4]*0.3, 
+            labels = paste(num.high, "genes"), adj = 0, cex = 1.5)
+        text(x = (plot.dim[2] - (plot.width*0.6)), y = plot.dim[4]*0.3, 
+            labels = paste(num.low, "genes"), adj = 1, cex = 1.5)
+        #abline(v = c(min(null_loadings[[tx]]), max(null_loadings[[tx]])))
+        upper.idx <- which(all.dens[[tx]]$x > max(null_loadings[[tx]]))
+        plot.poly.xy(poly.top.x = all.dens[[tx]]$x[upper.idx], 
+            poly.top.y = all.dens[[tx]]$y[upper.idx],
+            poly.bottom.x = all.dens[[tx]]$x[upper.idx], 
+            poly.bottom.y = rep(0, length(upper.idx)), 
+            col = hex2rgb(tissue.cols[tx], alpha = 0.5),
+            border = NA)
+
+        lower.idx <- which(all.dens[[tx]]$x < min(null_loadings[[tx]]))
+        plot.poly.xy(poly.top.x = all.dens[[tx]]$x[lower.idx], 
+            poly.top.y = all.dens[[tx]]$y[lower.idx],
+            poly.bottom.x = all.dens[[tx]]$x[lower.idx], 
+            poly.bottom.y = rep(0, length(lower.idx)), 
+            col = hex2rgb(tissue.cols[tx], alpha = 0.5),
+            border = NA)
+
+    }
+}
+dev.off()
 
 ```
 
@@ -1787,7 +1881,6 @@ high local heritability alone.
 ```{r high_twas}
 #collect stats for genes with significant TWAS
 #correlations.
-stop()
 
 twas.results <- read.csv(here("Results", "DO", "Imputed_Transcriptomes", "TWAS_results.csv"))
 
@@ -1953,7 +2046,7 @@ The following plot shows the loadings on traits.
 This shows which traits are most affected by the 
 genome -> transcriptome path.
 
-```{r trait_loadings, fig.width = 7, fig.height = 7}
+```{r trait_loadings, fig.width = 3.5, fig.height = 6}
 all.loadings <- Reduce("cbind", trait_loadings)
 colnames(all.loadings) <- tissue.names
 
@@ -1965,6 +2058,13 @@ if(merge.tissues){
     pheatmap(all.loadings)
 }
 #dev.off()
+```
+
+```{r fig4A}
+pdf(here("Results", "Paper", "Fig4A.pdf"), width = 3.5, height = 6)
+par(mar = c(4, 8, 4, 2))
+barplot(sort(all.loadings[,1]), las = 2, horiz = TRUE, xlab = "Trait Loading")
+dev.off()
 ```
 
 # Polytranscriptomic risk scores
@@ -2412,6 +2512,14 @@ write.table(full.table, file.path(toa.cluster.dir, "Tissues_of_Action_Genes.txt"
     quote = FALSE, row.names = FALSE)
 ```
 
+```{r Fig6A}
+png(here("Results", "Paper", "Fig6A.png"), width = 6, height = 7, units = "in", res = 300)
+plot_clustered_values(toa.results, enrichment.tables = FALSE, loading.viols = FALSE,
+    alt.labels = alt.labels[,1], cluster.borders = "boxes")
+dev.off()
+```
+
+
 ```{r test_kegg, eval = FALSE}
 all.kegg <- readRDS(here("Data", "general", "KEGG.Mouse.RDS"))
 u_path <- gsub(" - Mus musculus (house mouse)", "", all.kegg[[2]][,"to"], fixed = TRUE)
@@ -2457,6 +2565,18 @@ gene.name <- "Lepr"
 gene.id <- gene.info[which(gene.info[,"external_gene_name"] == gene.name),"ensembl_gene_id"]
 gene.loadings <- unlist(sapply(transcript_loadings, function(x) x[which(rownames(x) == gene.id)]))
 barplot(gene.loadings)
+```
+
+```{r fig6B}
+
+gene.name <- "Pparg"
+gene.id <- gene.info[which(gene.info[,"external_gene_name"] == gene.name),"ensembl_gene_id"]
+gene.loadings <- unlist(sapply(transcript_loadings, function(x) x[which(rownames(x) == gene.id)]))
+
+pdf(here("Results", "Paper", "Fig6B.pdf"), width = 6, height = 5.5)
+barplot_with_num(signif(gene.loadings, 2), col = tissue.cols, ylab = "Loading",
+    main = gene.name)
+dev.off()
 ```
 
 
