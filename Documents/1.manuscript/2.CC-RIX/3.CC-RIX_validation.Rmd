@@ -261,6 +261,7 @@ adj.pheno <- adjust(common.pheno, common.covar)
 if(imp.text == "measured"){
     adj.expr <- lapply(common.expr, function(x) adjust(x, common.covar))
 }
+
 ```
 
 ## Calculate MGE

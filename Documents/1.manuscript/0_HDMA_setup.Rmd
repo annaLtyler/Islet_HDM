@@ -30,3 +30,9 @@ all.packages <- c('here', 'pheatmap', 'igraph', 'gprofiler2',
 
 load_libraries(all.packages)
 ```
+
+```{r write_session_info}
+sink(here("Session_Info.txt"))
+sessionInfo()
+sink()
+```

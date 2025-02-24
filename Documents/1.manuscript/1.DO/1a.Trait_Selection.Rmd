@@ -85,6 +85,7 @@ covar <- as.matrix(pheno.data$annot.samples[,c("Sex", "Wave", "Generation")])
 num.covar <- dummy_covar(covar)
 rownames(num.covar) <- rownames(num.pheno)
 saveRDS(num.covar, file.path(parsed.data.dir, "Clinical_Phenotype_Covariates.RDS"))
+
 ```
 
 ## Body Weight
