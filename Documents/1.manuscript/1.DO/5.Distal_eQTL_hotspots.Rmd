@@ -1,0 +1,614 @@
+---
+title: "Distal Hotspot Check"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+bibliography: hdm.bib 
+---
+
+## Introduction
+
+The purpose of this workflow is to address questions asked
+by Mark Keller.
+
+His first question is this:
+
+As we and others have seen previously, there are clear trans-eQTL 
+hotspots in most tissues, however, very prominent in islets. In 
+your analysis of the stronger correlation of trans vs cis eQTL 
+to clinical traits, did you try and align these observations with 
+the genomic positions of the trans-eQTL; i.e., do you see enrichment 
+for groups of predictive traits at a hotspot?
+
+To address this, we can collect all the distal eQTL and identify those
+in hotspots. We can then look at the trait correlations and loadings
+of the transcripts that are contained in the hotspot.
+
+```{r setup}
+rm(list = ls()) #clear out R environment
+```
+
+
+```{r load_code}
+is.interactive = FALSE
+#is.interactive = TRUE
+library("here")
+
+exp.name <- "tissue_sep-_-complete_mediation"
+
+results.dir <- here("Results", "DO", "High_Dim_Med", exp.name)
+if(!file.exists(results.dir)){dir.create(results.dir, recursive = TRUE)}
+
+parsed.data.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+
+all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
+for(i in 1:length(all.fun)){source(all.fun[i])}
+
+```
+
+```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
+all.packages <- c("pheatmap", "vioplot", "gprofiler2", "qtl2", "igraph")
+load_libraries(all.packages)
+```
+
+```{r load_data}
+results.dir <- here("Results", "DO", "High_Dim_Med", exp.name)
+
+local.coef <- readRDS(here("Results", "DO", "Transcriptomes", "eQTL_coef_local.RDS"))
+distal.coef <- readRDS(here("Results", "DO", "Transcriptomes", "eQTL_coef_distal.RDS"))
+
+tissue.names <- names(local.coef)
+
+adjust_numeral <- 0
+transcript_loading_file <- file.path(results.dir, paste0("Loadings_Transcripts_", adjust_numeral, ".RDS"))
+transcript_loadings <- readRDS(transcript_loading_file)
+
+tx.trait.cor.file <- here("Results", "DO", "Transcriptomes", "Trait_Transcript_Cor.RDS")
+tx.trait.cor <- readRDS(tx.trait.cor.file)
+
+all.tx <- unique(unlist(lapply(transcript_loadings, rownames)))
+gene.name.file <- here("Data", "general", "mouse_gene_names.txt")
+if(!file.exists(gene.name.file)){
+    gene.table <- gconvert(all.tx, organism = "mmusculus")
+    write.table(gene.table, gene.name.file, sep = "\t", quote = FALSE, row.names = FALSE)
+}else{
+    gene.table <- read.delim(gene.name.file)
+}
+gene.info <- as.matrix(read.delim(here("Data", "general", "mouse_gene_info.txt")))
+```
+
+## Identify hotspots {.tabset .tabset-fade .tabset-pills}
+
+The plots below show the number of eQTLs in 4Mb sliding windows 
+across each chromosome for each tissue. The horizontal line shows
+the threshold above which locations were selected as hotspots.
+
+If hotspots were more than 10Mb apart, we clustered them into
+multiple hotspots.
+
+```{r hotspot, fig.width = 10, fig.height = 5, results = "asis"}
+
+hotspot.threshold <- 30
+all.hotspot.loadings <- all.hotspot.cor <- all.hotspot.coef <- vector(mode = "list", length = length(tissue.names))
+names(all.hotspot.loadings) <- names(all.hotspot.cor) <- names(all.hotspot.coef) <- tissue.names
+for(tx in 1:length(distal.coef)){
+    cat("###", tissue.names[tx], " {.tabset .tabset-fade .tabset-pills}\n")
+    tx.loadings <- transcript_loadings[[tx]]
+    tx.cor <- tx.trait.cor[[tx]]
+
+    tx.coef <- distal.coef[[tx]]
+    split.pos <- strsplit(tx.coef$marker.id, "_")
+    coef.chr <- sapply(split.pos, function(x) x[1])
+    coef.pos <- sapply(split.pos, function(x) as.numeric(x[2]))
+
+    #table.order <- sort.by.then.by(cbind(as.numeric(coef.chr), coef.pos), col.type = c("n", "n"), return.order = TRUE)
+    #sorted.table <- tx.coef[table.order[,1][table.order[,2]],]
+
+    u_chr <- unique(coef.chr)
+    hotspot.loadings <- hotspot.cor <- hotspot.coef <- vector(mode = "list", length = length(u_chr))
+    names(hotspot.loadings) <- names(hotspot.cor) <-  names(hotspot.coef) <- u_chr
+    for(ch in 1:length(u_chr)){
+        cat("#### Chr", u_chr[ch], "\n")
+        chr.idx <- which(coef.chr == u_chr[ch])
+        chr.pos <- sort(coef.pos[chr.idx])
+        chr.windows <- sliding.window.el(seq(1, max(chr.pos), 1e6), window.size = 5, gap.size = 2)
+        distal.id <- sapply(chr.windows, function(x) intersect(which(chr.pos >= min(x)), which(chr.pos <= max(x))))
+        distal.count <- sapply(distal.id, length)
+        distal.mb <- sapply(chr.windows, mean)/1e6
+
+        plot(distal.mb, distal.count, type = "h", ylab = "Count", xlab = "Position (Mb)", 
+            main = paste(tissue.names[tx], "Chr", u_chr[ch]))
+        abline(h = hotspot.threshold)
+        hotspot.idx <- which(distal.count > hotspot.threshold)
+
+        #if no hotspots are found, move on to the next chromosome
+        if(length(hotspot.idx) == 0){cat("\n\n"); next()}
+
+        #otherwise, define multiple hotspots 
+        #find the mean position of each window that was selected
+        mean.pos <- sapply(chr.windows[hotspot.idx], mean)
+        min.pos <- sapply(chr.windows[hotspot.idx], min)
+        max.pos <- sapply(chr.windows[hotspot.idx], max)
+        
+        #find the distance between these means
+        pos.dist <- as.matrix(dist(mean.pos))
+        dist.pairs <- which(lower.tri(pos.dist), arr.ind = TRUE)
+        pair.dist <- apply(dist.pairs, 1, function(x) pos.dist[x[1], x[2]])
+        #create a network using the inverse distance as the weight
+        dist.net <- graph_from_edgelist(dist.pairs, directed = FALSE)
+        dist.mb <- pair.dist/1e6
+        E(dist.net)$weight <- 1/(dist.mb)
+
+        #if any selected locations are more than 10Mb away from each other
+        #cluster into multiple hotspots
+        if(any(dist.mb > 10)){
+            #cluster the network. Use each cluster as an independent hotspot
+            ind.hot <- cluster_fast_greedy(dist.net)$membership
+        }else{
+            ind.hot <- rep(1, length(mean.pos))
+        }
+        num.hot <- max(ind.hot)
+        hot.ind <- lapply(1:num.hot, function(x) which(ind.hot == x))
+
+        chr.loadings <- chr.cor <- chr.coef <- vector(mode = "list", length = num.hot)
+        hot.means <- sapply(hot.ind, function(x) round(mean(mean.pos[x])/1e6))
+        hot.min <- sapply(hot.ind, function(x) round(min(min.pos[x])/1e6))
+        hot.max <- sapply(hot.ind, function(x) round(max(max.pos[x])/1e6))
+        names(chr.loadings) <- names(chr.cor) <- names(chr.coef) <- 
+            paste0(".", hot.min, "-", hot.max, "Mb")
+        
+        plot.dim <- par("usr")
+        for(i in 1:length(hot.min)){
+            draw.rectangle(min.x = hot.min[i], max.x = hot.max[i], min.y = 0, 
+                max.y = plot.dim[4], fill = rgb(254/256, 174/256, 0, alpha = 0.5),
+                border = NA)
+        }
+
+        for(h in 1:length(hot.ind)){
+
+            hotspot.id <- unique(unlist(distal.id[hotspot.idx[hot.ind[[h]]]])) #group all into one hotspot
+            ch.transcripts <- tx.coef[chr.idx[hotspot.id],"gene.id"]
+
+            if(length(ch.transcripts) > 1){
+                ch.loadings <- tx.loadings[match(ch.transcripts, rownames(tx.loadings))]
+                names(ch.loadings) <- ch.transcripts
+                chr.loadings[[h]] <- ch.loadings
+
+                ch.cor <- tx.cor[match(ch.transcripts, names(tx.cor))]
+                names(ch.cor) <- ch.loadings
+                chr.cor[[h]] <- ch.cor
+
+                coef.idx <- chr.idx[hotspot.id]
+                ch.coef <- tx.coef[coef.idx,]
+                trans.names <- tx.coef[coef.idx,"gene.id"]
+                gene.names <- gene.table[match(trans.names, gene.table[,"input"]), "name"]
+                gene.names[which(is.na(gene.names))] <- trans.names[which(is.na(gene.names))]
+                dup.names <- which(duplicated(trans.names))
+                dup.id <- trans.names[dup.names]
+                if(length(dup.id) > 0){
+                    for(i in 1:length(dup.id)){
+                        dup.idx <- which(trans.names == dup.id[i])
+                        gene.names[dup.idx] <- paste(gene.names[dup.idx], 1:length(dup.idx), sep = "_")
+                    }
+                }
+                rownames(ch.coef) <- gene.names
+                chr.coef[[h]] <- ch.coef
+            }
+        } #end looping through individual hotspots 
+        hotspot.coef[[ch]] <- chr.coef
+        hotspot.loadings[[ch]] <- chr.loadings
+        hotspot.cor[[ch]] <- chr.cor
+        cat("\n\n")
+    }#end looping through chromosomes
+    
+    has.vals <- which(sapply(hotspot.loadings, length) > 0)
+    all.hotspot.loadings[[tx]] <- hotspot.loadings[has.vals]
+    all.hotspot.cor[[tx]] <- hotspot.cor[has.vals]
+    all.hotspot.coef[[tx]] <- hotspot.coef[has.vals]
+    cat("\n\n")
+}
+```
+
+```{r flatten}
+#flatten the lists for easier handling
+flat.loadings <- lapply(all.hotspot.loadings, function(x) unlist(x, recursive = FALSE))
+flat.cor <- lapply(all.hotspot.cor, function(x) unlist(x, recursive = FALSE))
+flat.coef <- lapply(all.hotspot.coef, function(x) unlist(x, recursive = FALSE))
+```
+
+## Transcript loadings in hot spots
+
+The following plots show the distribution of loadings of 
+transcripts regulated by the distal hotspots.
+
+### Absolute value {.tabset .tabset-fade .tabset-pills}
+
+These plots show the absolute values of the transcript loadings.
+This helps us compare the relative strength of the loadings
+across eQTL hotspots. All loadings for the tissue are shown in 
+the last position to show the overall distribution of loading
+strengths for the whole tissue.
+
+```{r loading_abs, results = "asis"}
+for(tx in 1:length(tissue.names)){
+    hot.load <- flat.loadings[[tx]]
+    hot.list <- lapply(hot.load, abs)
+    if(!all(is.na(unlist(hot.list)))){
+        cat("####", tissue.names[tx], "\n")
+        hot.list$all_tissue <- abs(transcript_loadings[[tx]][,1])
+        par(mar = c(8, 4, 4, 2))
+        vioplot(hot.list, xlab = "", main = paste("Transcript Loadings for", 
+            tissue.names[tx]), las = 2)
+        abline(h = median(abs(transcript_loadings[[tx]][,1])))
+        cat("\n\n")
+    }
+}
+```
+
+### With Signs {.tabset .tabset-fade .tabset-pills}
+
+These plots show the actual values of the transcript loadings.
+Here we can see whether the transcripts in each
+hotspot are associated with increased or decreased metabolic 
+disease index.
+
+```{r loading_straight, results = "asis"}
+for(tx in 1:length(tissue.names)){
+    hot.list <- flat.loadings[[tx]]
+    if(!all(is.na(unlist(hot.list)))){
+        quartz()
+        cat("####", tissue.names[tx], "\n")
+        hot.list$all_tissue <- transcript_loadings[[tx]][,1]
+        par(mar = c(8, 4, 4, 2))
+        vioplot(hot.list, xlab = "", las = 2,
+            main = paste("Transcript Loadings for", tissue.names[tx]))
+        #abline(h = median(transcript_loadings[[tx]][,1]), lty = 2)
+        abline(h = 0)
+        cat("\n\n")
+    }
+}
+```
+
+
+## Transcript-trait correlations in hot spots.
+
+The following plots show the distributions of transcript-trait 
+correlations for the transripts regulated by each distal eQTL
+hotspot.
+
+## Absolute value {.tabset .tabset-fade .tabset-pills}
+
+These plots show the aboslute value of the trait-transcript
+correlations, which allows us to better compare the relative 
+strength of the correlations for each hotspot. These mirror
+the loadings. The eQTL hotspots with stronger loadings also
+tend to have higher trait correlations.
+
+```{r vis_cor, results = "asis"}
+for(tx in 1:length(tissue.names)){
+    hot.list <- lapply(flat.cor[[tx]], abs)
+    if(!all(is.na(unlist(hot.list)))){
+        cat("###", tissue.names[tx], "\n")
+        hot.list$all_tissue <- abs(tx.trait.cor[[tx]])
+        par(mar = c(8, 4, 4, 2))
+        vioplot(hot.list, xlab = "", las = 2,
+            main = paste("Trait correlations for", tissue.names[tx]))
+        abline(h = median(abs(tx.trait.cor[[tx]])))
+        cat("\n\n")
+    }
+}
+```
+
+## With Signs {.tabset .tabset-fade .tabset-pills}
+
+The following plots show the actual transcript-trait correlations.
+This allows us to see whether the transcripts in the hotspot are 
+positively or negatively correlated with the traits.
+
+```{r correlation_straight, results = "asis"}
+for(tx in 1:length(tissue.names)){
+    hot.list <- flat.cor[[tx]]
+    if(!all(is.na(unlist(hot.list)))){
+        cat("###", tissue.names[tx], "\n")
+        hot.list$all_tissue <- tx.trait.cor[[tx]]
+        par(mar = c(8, 4, 4, 2))
+        vioplot(hot.list, xlab = "", las = 2,
+            main = paste("Transcript Correlations for", tissue.names[tx]))
+        abline(h = median(tx.trait.cor[[tx]]), lty = 2)
+        abline(h = 0)
+        cat("\n\n")
+    }
+}
+```
+
+## Functional enrichments
+
+The plots below show the enrichments of transcripts 
+regulated by each hot spot. Ones that have high loadings
+may explain broad patterns we see in the composite
+transcript.
+
+## Absolute values {.tabset .tabset-fade .tabset-pills}
+
+The following plots show the overall enrichments of all transcripts
+in the eQTL hotspots. They are not split by whether the loadings
+were positive or negative
+
+```{r enrich, fig.width = 7, fig.height = 7, results = "asis"}
+for(tx in 1:length(flat.loadings)){
+    hot.list <- flat.loadings[[tx]]
+    if(!all(is.na(unlist(hot.list)))){
+        cat("###", tissue.names[tx], "\n")
+        enrich.file <- here("Results", "hotspots", paste0("Enrichment_", tissue.names[tx], ".RDS"))
+        if(!file.exists(enrich.file)){
+            tx.enrich <- lapply(hot.list, function(x) gost(names(x), 
+                organism = "mmusculus"))
+            saveRDS(tx.enrich, enrich.file)
+        }else{
+            tx.enrich <- readRDS(enrich.file)
+        }
+        test <- plot.enrichment.group(tx.enrich, max.term.size = 3000,
+            plot.label = tissue.names[tx], return.empty.columns = TRUE)
+        cat("\n\n")
+    }
+}
+```
+
+## With signs {.tabset .tabset-fade .tabset-pills}
+
+The following plots show the enrichments of transcripts in each
+eQTL hotspot. This time they are split by whether the loadings
+were negative or positive.
+
+```{r enrich_signed, fig.width = 7, fig.height = 7, results = "asis"}
+for(tx in 1:length(all.hotspot.loadings)){
+    hot.list <- flat.loadings[[tx]]
+    if(!all(is.na(unlist(hot.list)))){
+        cat("###", tissue.names[tx], "\n")
+        tx.signed <- unlist(lapply(hot.list, function(x) list("negative" = names(x)[which(x < 0)], "positive" = names(x)[which(x > 0)])), recursive = FALSE)
+        enrich.file <- here("Results", "hotspots", paste0("Enrichment_Signed_", tissue.names[tx], ".RDS"))
+        if(!file.exists(enrich.file)){
+            tx.enrich <- lapply(tx.signed, function(x) gost(x, 
+                organism = "mmusculus"))
+            saveRDS(tx.enrich, enrich.file)
+        }else{
+            tx.enrich <- readRDS(enrich.file)
+        }
+        test <- plot.enrichment.group(tx.enrich, max.term.size = 3000,
+            plot.label = tissue.names[tx], return.empty.columns = TRUE)
+        cat("\n\n")
+    }
+}
+```
+
+## Notes
+
+In adipose tissue there was a hotspot on Chr 2 that had higher than average 
+loadings. These transcripts were enriched for GABA receptor signaling, 
+which I thought was strange, but there is a study (PMID 32601206) 
+showing that "GABA sensitivity is crucial in determining fat 
+depot-selective adipose tissue macrophage infiltration." Inflammation, 
+and in particular a macrophage signal were dominant in the adipose tissue 
+signaling. This hotspot could definitely be involved in that, and could 
+give us a better mechanistic explanation of why we are seeing these signals.
+
+In islets, the Chr 5 and 11 hotspots had higher than average loadings. 
+The Chr 5 transcripts didn't have any particular enrichments, but the Chr 
+11 transcripts were enriched for MHC and antigen-presenting functions. 
+
+## eQTL coefficient heat maps {.tabset .tabset-fade .tabset-pills}
+
+We looked at eQTL coefficients for the transcripts regulated by 
+each interesting hotspot. If there is a NOD signature in the islet
+Chr 11 hotspot, this may indicate a role for the autoimmunity of the
+NOD strain in diabetes risk in the DO.
+
+```{r eQTL_coef, results = "asis", fig.width = 5, fig.height = 9}
+for(tx in 1:length(flat.coef)){
+    tx.coef <- flat.coef[[tx]]
+    num.hot <- sapply(tx.coef, nrow)
+    if(any(num.hot > 1)){
+        cat("###", tissue.names[tx], "{.tabset .tabset-fade .tabset-pills}\n")
+        for(ch in 1:length(tx.coef)){
+            cat("#### Chr", names(tx.coef)[ch], "\n")
+            pheatmap(tx.coef[[ch]][,LETTERS[1:8]], 
+                cluster_cols = FALSE, main = paste("Chr", names(tx.coef)[ch]),
+                scale = "row")
+            cat("\n\n")
+        }
+    cat("\n\n")
+    }
+}
+
+```
+
+## eQTL coefficient boxplots {.tabset .tabset-fade .tabset-pills}
+
+The following box plots show the absolute values of the coefficients.
+This might help visualize which haplotypes are contributing to the 
+most variation.
+
+```{r eQTL_box, results = "asis", fig.width = 10, fig.height = 5}
+for(tx in 1:length(all.hotspot.coef)){
+    tx.coef <- flat.coef[[tx]]
+    num.hot <- sapply(tx.coef, nrow)
+    if(any(num.hot > 1)){
+        cat("###", tissue.names[tx], "{.tabset .tabset-fade .tabset-pills}\n")
+        for(ch in 1:length(tx.coef)){
+            cat("#### Chr", names(tx.coef)[ch], "\n")
+            par(mfrow = c(1,2))
+            vioplot(tx.coef[[ch]][,LETTERS[1:8]], 
+                main = paste("Chr", names(tx.coef)[ch], "values"),
+                col = CCcolors)
+            abline(h = mean(colMeans(tx.coef[[ch]][,LETTERS[1:8]])))
+            abline(h = 0)
+            vioplot(abs(tx.coef[[ch]][,LETTERS[1:8]]), 
+                main = paste("Chr", names(tx.coef)[ch], "absolute values"),
+                col = CCcolors)
+            abline(h = mean(colMeans(abs(tx.coef[[ch]][,LETTERS[1:8]]))))
+            cat("\n\n")
+        }
+    cat("\n\n")
+    }
+}
+
+```
+
+## eQTL coefficient decompositions {.tabset .tabset-fade .tabset-pills}
+
+The following plots show how the strains contribute to the 
+overall variation in coefficients.
+
+```{r eQTL_decomp, results = "asis", fig.width = 5, fig.height = 5}
+for(tx in 1:length(all.hotspot.coef)){
+    tx.coef <- flat.coef[[tx]]
+    num.hot <- sapply(tx.coef, nrow)
+    if(any(num.hot > 1)){
+        cat("###", tissue.names[tx], "{.tabset .tabset-fade .tabset-pills}\n")
+        for(ch in 1:length(tx.coef)){
+            cat("#### Chr", names(tx.coef)[ch], "\n")
+            plot.decomp(t(tx.coef[[ch]][,LETTERS[1:8]]), label.points = TRUE,
+                main = paste("Chr", names(tx.coef)[ch]), cols = CCcolors,
+                cex = 2)
+            cat("\n\n")
+        }
+    cat("\n\n")
+    }
+}
+
+```
+
+## Mediation
+
+For each of the regions with interesting hotspots, we can perform
+mediation analysis to see if 
+
+```{r mediation}
+load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata"))
+tx.expr <- readRDS(here("Results", "DO", "Data", "Tissue_Expression_Adjusted.RDS"))
+
+covar <- readRDS(here("Results", "DO", "Data", "Clinical_Phenotype_Covariates.RDS"))
+plot_scan = FALSE
+plot_test_example = FALSE
+plot_lod_drop = TRUE
+
+for(tx in 1:length(flat.loadings)){
+    num.hot <- length(flat.loadings[[tx]])
+    if(num.hot == 0){next()}
+    for(h in 1:num.hot){
+        hot.name <- names(flat.loadings[[tx]])[h]
+        hot.chr <- strsplit(hot.name, "..", fixed = TRUE)[[1]][1]
+
+        h.chr.idx <- which(names(genoprobs) == hot.chr)
+
+        trans.id <- names(flat.loadings[[tx]][[h]])
+        hot.expr <- tx.expr[[tx]][,trans.id]
+
+        n.pc = 4
+        expr.decomp <- plot.decomp(hot.expr, pc = n.pc, plot.results = FALSE)
+        expr.pc <- expr.decomp$u
+        rownames(expr.pc) <- rownames(hot.expr)
+        hot.scan <- scan1(genoprobs[,h.chr.idx], pheno = expr.pc)
+
+        if(plot_scan){
+            pdf(here("Results", "hotspots", paste0("Hotspot_Scan_", tissue.names[tx], "_", hot.name, ".pdf")), 
+                width = 10, height = 10)
+            par(mfrow = c(n.pc, 1))
+            for(p in 1:n.pc){
+                plot(hot.scan, map = map, main = paste(names(flat.loadings[[tx]][h]), "PC", p), lodcol = p)
+            }
+            dev.off()
+        }
+        
+        pc.peaks <- find_peaks(hot.scan, map = map)
+
+        #find the genes that are encoded in this region
+        # we want to see if the expression of any of them
+        #mediates the hotspot
+        hot.min <- as.numeric(strsplit(strsplit(hot.name, "..", fixed = TRUE)[[1]][2], "-")[[1]][1])*1e6
+        hot.max <- as.numeric(gsub("Mb", "", strsplit(strsplit(hot.name, "..", fixed = TRUE)[[1]][2], "-")[[1]][2]))*1e6
+        chr.idx <- which(gene.info[,"chromosome_name"] == hot.chr)
+        above.min <- which(as.numeric(gene.info[,"start_position"]) >= hot.min)
+        below.max <- which(as.numeric(gene.info[,"start_position"]) <= hot.max)
+        int.gene.idx <- Reduce("intersect", list(chr.idx, above.min, below.max))
+        int.gene.id <- gene.info[int.gene.idx,"ensembl_gene_id"]
+        common.id <- intersect(int.gene.id, colnames(tx.expr[[tx]]))
+        common.names <- gene.info[match(common.id, gene.info[,"ensembl_gene_id"]), "external_gene_name"]
+        common.pos <- as.numeric(gene.info[match(common.id, gene.info[,"ensembl_gene_id"]), "start_position"])/1e6
+
+        adj.peaks <- vector(mode = "list", length = length(common.id))
+        names(adj.peaks) <- common.id
+        for(i in 1:length(common.id)){
+            adj.trait <- adjust(expr.pc, tx.expr[[tx]][,common.id[i],drop=FALSE])
+            adj.scan <- scan1(genoprobs[,h.chr.idx], pheno = adj.trait)
+            
+            if(plot_test_example){
+                pdf(here("Results", "hotspots", paste0("Hotspot_Adjusted_Scan_", tissue.name[tx], "_", hot.name, ".pdf")), 
+                width = 10, height = 10)
+                par(mfrow = c(n.pc, 1))
+                for(p in 1:n.pc){
+                    plot(adj.scan, map = map, main = paste(names(flat.loadings[[tx]][h]), "PC", p), lodcol = p)
+                }
+                dev.off()
+            }
+
+            adj.peaks[[i]] <- find_peaks(adj.scan, map = map)
+        }
+        
+        if(plot_lod_drop){
+            pdf(here("Results", "hotspots", paste0("Hotspot_LOD_Drop_", tissue.names[tx], "_", hot.name, ".pdf")), 
+                width = 10, height = 10)
+            scan.pos <- as.numeric(sapply(strsplit(rownames(hot.scan), "_"), function(x) x[2]))/1e6
+            for(p in 1:n.pc){
+                final.lod <- sapply(adj.peaks, function(x) x[p,"lod"])
+            
+                plot(scan.pos, hot.scan[,p], type = "l", main = paste(hot.name, "PC", p), 
+                    xlab = "Position (Mb)", ylab = "LOD", ylim = c(0, max(hot.scan[,p])*1.15))
+                points(common.pos, final.lod, type = "p", pch = 16, cex = 0.5)
+                text(common.pos, final.lod, labels = common.names, pos = 4, cex = 0.7)
+            }
+            dev.off()
+        }    
+    }
+}
+```
+
+## Notes
+
+We are particularly interested in the three distal hotspots
+that are enriched for large loading genes:
+
+Adipose Chr 2 132-138 Mbp
+Islet Chr 5 144-150 Mbp
+Islet Chr 11 68-76 Mbp
+
+The Chr 11 hotspot overlaps that huge physiological QTL 
+that has evaded description so far.
+
+### Adipose Chr 2 132-138 Mbp
+
+The transcripts in this hotspot are enriched for transcripts
+with negative loadings, meaning their increased expression 
+is associated with lower body weight and less metabolic 
+disease.
+
+Overall, the transcripts targeted by the Adipose2 hotspot are 
+enriched for GABA receptor activity. Evidence has suggested 
+that GABA signaling in adipose is critical for macrophage 
+infiltration. It may be important in other processes as well. 
+
+The first PC of the expression of the transcripts targeted 
+by this hotspot maps to the hotspot region on Chr 2. There
+are two genes that mediate this hotspot similarly well. The
+best mediator is Pcna, and a close second is Slc23a2. 
+
+There is one paper suggesting that Slc23a2 is involved in 
+vitamin C transport in adipose tissue [PMID: 24524758]. 
+Pcna has a more established presence in the literature 
+paired with adipose tissue. It is related to cellular 
+replication and to response to xenobiotic stimulus.

@@ -1,0 +1,109 @@
+On strain separation in transcriptome space
+
+For a given group with the same cofactors, does expression
+cluster by strain? Sort of. In the plots below, each strain
+is indicated by a number 1 through 20. Individuals from a
+given strain do tend to appear in the same region of the 
+plot, however, there isn't the same tight clustering of 
+strains that we see in the inbred founders. I think this
+is because CAST and PWK are so so so different from the
+domesticus strains that they blow up the scale on which
+we are plotting expression differences. Strains appear
+to cluster very tightly because there is so much distance
+between them. In the CC-RIX, all animals have a mix of 
+CAST, PWK, and domesticus strains, so there are no individual
+mice that are very distant from the others. Individuals do 
+appear near each other, but because we are zoomed in to the
+level of noise, the strains don't appear to cluster as 
+tightly as they would if there were wildy divergent strains.
+I bet if you put BxD mice in the same plot, they would cluster
+well away from the CC-RIX in a way that distinctly separated
+the two populations. As it is, though, all CC-RIX are pretty
+close to each other in transcription space.
+
+
+plotting imputed and measured interactions
+
+```{r}
+#plot 7 measured by imputed in no treatment group
+    par(mar = c(4,4,4,2))
+    plot.with.model(cc.imputed[treat1.locale,transcript.id], 
+    cc.measured[treat1.locale,transcript.id],
+    xlab = "Imputed Expression", ylab = "Measured Expression", 
+    main = int.group[1], ylim = ylim, report = "cor.test")
+    
+    #plot 8 measured by imputed in treatment group
+    plot.with.model(cc.imputed[treat2.locale,transcript.id], 
+    cc.measured[treat2.locale,transcript.id],
+    xlab = "Imputed Expression", ylab = "Measured Expression", 
+    main = int.group[2], ylim = ylim, report = "cor.test")
+
+    #adjust the measured expression for sex and diet
+    adj.measured <- adjust(cc.measured[,transcript.id,drop=FALSE], sex.diet.covar)
+
+    #bin the imputed expression into three bins
+    binned.imputed <- round(bin.vector(cc.imputed[,transcript.id], 
+        segment.region(min(cc.imputed[,transcript.id]), max(cc.imputed[,transcript.id]), 3)), 2)
+
+    #plot 9 metformin expression interaction
+    plot_int(x.factor = as.factor(binned.imputed), 
+        int.factor = as.factor(matched.covar[,"Treatment"]), 
+        response = adj.measured, xlab = "Imputed Expression", 
+        ylab = "Measured Expression", trace.label = "Treatment",
+        main = "Interaction") 
+```
+
+From when we were fitting the imputed transcript. I can't get my head
+around why we did it, so I am taking it out for now
+
+## Model Fitting
+
+For each measured transcript we fit a model including Sex, Diet, Treatment,
+Timepoint, Strain, and all the possible interactions.
+
+
+```{r fit_models}
+common.transcripts <- intersect(colnames(adj.cc.expr), colnames(ind.auto.expr)[has.vals])
+common.cc.idx <- match(common.transcripts, colnames(adj.cc.expr))
+common.imp.idx <- match(common.transcripts, colnames(ind.auto.expr))
+
+cc.measured <- adj.cc.expr[,common.cc.idx]
+cc.imputed <- ind.auto.expr[,common.imp.idx]
+rownames(cc.imputed) <- rownames(cc.measured) #make sure both have the same rownames
+
+matched.covar <- get.xz(cc.measured, mouse.info)$Z
+
+model.coef.file <- file.path(results.dir, paste0("model_coef_", tissue.name, ".RDS"))
+model.p.file <- file.path(results.dir, paste0("model_p_", tissue.name, ".RDS"))
+
+if(!file.exists(model.coef.file) || !file.exists(model.p.file) || delete_previous){
+    all.coef <- all.p <- matrix(NA, nrow = ncol(cc.measured), ncol = 10)
+    rownames(all.coef) <- rownames(all.p) <- common.transcripts
+
+    for(i in 1:length(common.transcripts)){
+        if(is.interactive){report.progress(i, length(common.transcripts))}
+
+        df <- data.frame(cbind(cc.measured[,i], as.factor(matched.covar[,"Sex"]), 
+            as.factor(matched.covar[,"Diet"]), as.factor(matched.covar[,"Timepoint"]),
+            as.factor(matched.covar[,"Treatment"]), 
+            as.factor(matched.covar[,"User.Defined.Strain"]),
+            cc.imputed[,common.transcripts[i]]))
+        colnames(df) <- c("measured_expression", "Sex", "Diet", 
+            "Timepoint", "Treatment", "Strain", "imputed_expression")
+
+        model <- lm(measured_expression~Sex+Diet+Timepoint+Treatment+imputed_expression+Sex:imputed_expression+Diet:imputed_expression+Timepoint:imputed_expression+Treatment:imputed_expression, data = df)
+        
+        #summary(model)
+
+        model.sum <- summary(model)
+        all.coef[i,] <- model.sum$coefficients[,"Estimate"]
+        all.p[i,] <- model.sum$coefficients[,"Pr(>|t|)"]
+    }
+    colnames(all.coef) <- colnames(all.p) <- rownames(model.sum$coefficients)
+    saveRDS(all.coef, model.coef.file)
+    saveRDS(all.p, model.p.file)
+}else{
+all.coef <- readRDS(model.coef.file)
+all.p <- readRDS(model.p.file)
+}
+```

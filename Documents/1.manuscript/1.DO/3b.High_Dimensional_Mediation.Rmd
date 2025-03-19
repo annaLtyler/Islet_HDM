@@ -181,6 +181,79 @@ tissue.lod <- lapply(tissue.data.file,
 names(tissue.lod) <- tissue.names
 ```
 
+```{r marker_dist, eval = FALSE}
+
+for(chr in 1:19){
+    cat("Chr", chr, "\n")
+    split.marker <- strsplit(dimnames(genoprobs[[chr]])[[3]], "_")
+    n.markers <- length(split.marker)
+    marker.pos <- sapply(split.marker, function(x) as.numeric(x[2]))
+    consec.markers <- consec_pairs(marker.pos)
+    marker.dist <- consec.markers[,2] - consec.markers[,1]
+    #plot(sort((marker.dist)))
+    #abline(h = 100*1000)
+
+    marker.windows <- vector(mode = "list", length = n.markers)
+    #window.width <- 100*1000 #100 kb
+    #window.width <- 200*1000 #200 kb
+    window.width <- 500*1000 #500 kb
+    #window.width = 2e6 #2 Mb
+    #how many markers are in each 100kb block
+    for(i in 1:n.markers){
+        this.pos <- marker.pos[i]
+        min.pos <- this.pos - window.width
+        max.pos <- this.pos + window.width
+        above.min <- which(marker.pos >= min.pos)
+        below.max <- which(marker.pos <= max.pos)
+        in_window <- intersect(above.min, below.max)
+        marker.windows[[i]] <- in_window
+    }
+    #num.window.markers <- sapply(marker.windows, length)
+    #hist(num.window.markers)
+
+    #get all unique pairs of markers at this distance
+    all.pairs <- cbind(unlist(lapply(1:n.markers, function(x) rep(x, length(marker.windows[[x]])))), unlist(marker.windows))
+    sorted.pairs <- t(apply(all.pairs, 1, sort))
+    u_pairs <- unique(sorted.pairs)
+    pair.dist <- marker.pos[u_pairs[,2]] - marker.pos[u_pairs[,1]]
+
+    dist.mat <- matrix(NA, nrow = n.markers, ncol = n.markers)
+    dist.V <- rep(NA, nrow(u_pairs))
+    for(i in 1:nrow(u_pairs)){
+        report.progress(i, nrow(u_pairs))
+        marker1 <- u_pairs[i,1]
+        marker2 <- u_pairs[i,2]
+        marker.cor <- cor(as.vector(genoprobs[[chr]][,,marker1]), 
+            as.vector(genoprobs[[chr]][,,marker2]))
+        dist.mat[marker1, marker2] <- marker.cor
+        dist.V[i] <- marker.cor
+    }
+
+    dist.table <- cbind("pairwise_distance_bp" = pair.dist, 
+        "pairwise_correlation_R" = dist.V)
+    saveRDS(dist.table, here("Results", "For_Reviews", 
+        paste0("LD_", window.width/1000, "kb_Chr", chr, ".RDS")))
+    cat("\n")
+}
+
+
+pdf(here("Results", "For_Reviews", paste0("LD_", window.width/1000, "kb.pdf")), 
+    width = 10, height = 5)
+    for(chr in 1:19){
+        dist.table <- readRDS(here("Results", "For_Reviews", 
+            paste0("LD_", window.width/1000, "kb_Chr", chr, ".RDS")))
+        pair.dist <- dist.table[,1]
+        dist.V <- dist.table[,2]
+        test <- bin_by_hist(pair.dist/1000, dist.V, 
+            ylab = "Marker Correlation (R)",
+            xlab = "Distance (kb)", ylim = c(0, 1.1), 
+            main = paste("Chr", chr), 
+            breaks = 15, error.type = "sd")
+        abline(h = seq(0, 1, 0.1), lty = 2, col = "darkgray")
+    }        
+dev.off()
+```
+
 ## Read clinical phenotypes
 
 Read in clinical phenotypes. These were rank normalized, 
@@ -227,6 +300,7 @@ Kg_sub = lapply(1:length(gen_cent), function(x) Kg[common.ind[[x]], common.ind[[
 cent_sub <- lapply(1:length(gen_cent), function(x) gen_cent[[x]][common.ind[[x]], common.ind[[x]]])
 Kg_cent = lapply(1:length(gen_cent), function(x) Kg_sub[[x]] - cent_sub[[x]] %*% Kg_sub[[x]] - Kg_sub[[x]] %*% cent_sub[[x]] + cent_sub[[x]] %*% Kg_sub[[x]] %*% cent_sub[[x]])
 ```
+
 
 ## Process transcriptome
 

@@ -20,7 +20,7 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 		mat[which(!is.finite(mat))] <- NA
 		
 		if(length(which(is.na(mat))) == length(mat)){
-			return()
+			return("no non-NA values")
 			}
 		# if(length(light.dark) < length(col.scale)){light.dark <- rep(light.dark, length(col.scale))}
 		
@@ -58,11 +58,12 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 			class.cols <- col.scale
 			}else{
 			class.cols <- col.scale[classes]
-			}
+		}
+
 		if(length(col.scale) < num.classes){
 			extra.cols <- num.classes - length(col.scale)
 			col.scale <- c(col.scale, rep(col.scale, ceiling(extra.cols/length(col.scale))))
-			}
+		}
 			
 		get.default <- grep("h", grad.dir)
 		if(length(get.default) > 0){
@@ -78,26 +79,26 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 			for(i in 1:length(dir.list)){
 				dir.list[[i]] <- 1:max.col
 				}
-			}
+		}
+		
 		if(grad.dir == "low"){
 			for(i in 1:length(dir.list)){
 				dir.list[[i]] <- max.col:1
 				}
-			}
+		}
+
 		if(grad.dir == "middle"){
 			if(length(dir.list) != 2){stop("I can only color the middle if there are exactly two classes")}
 			dir.list[[1]] <- 1:max.col
 			dir.list[[2]] <- max.col:1
-			}
+		}
 			
 			
 		if(grad.dir == "ends"){
 			if(length(dir.list) != 2){stop("I can only color the ends if there are exactly two classes")}
 			dir.list[[1]] <- max.col:1
 			dir.list[[2]] <- 1:max.col
-			}
-
-
+		}
 
 		#============================================================================
 		#internal functions
@@ -192,12 +193,12 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 		na.locale <- which(is.na(mat))
 		if(length(na.locale) > 0){
 			mat[na.locale] <- 0
-			}
+		}
 		
 		all.ind <- which(!is.na(mat), arr.ind = TRUE)
 		if(length(na.locale) > 0){
 			mat[na.locale] <- NA
-			}
+		}
 		
 		#translate the ColorRamp matrix to rgb matrices so we can use grid.
 		rgb.mat <- col2rgb(ColorRamp)
@@ -212,7 +213,7 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 		y.coord <- matrix(segment_region(0.5, dim(mat)[1]+0.5, dim(mat)[1], "center"), nrow = dim(mat)[1], ncol = dim(mat)[2])
 		
 		if(show.text){
-		text(x.coord, rev(y.coord), labels = signif(as.vector(mat), sig.digs), cex = cex)
+			text(x.coord, rev(y.coord), labels = signif(as.vector(mat), sig.digs), cex = cex)
 		}
 		
 		if(!is.null(main)){
@@ -221,7 +222,7 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 			main.y <- max(y.coord) + (plot.range*(main.shift)) #positive numbers move out of plotting area
 			text(mean(x.coord[1,]), main.y, labels = main, cex = main.cex)
 			par(xpd = FALSE)
-			}
+		}
 			
 		if(!is.null(col.names)){
 			if(length(col.names) != dim(mat)[2]){
@@ -232,7 +233,7 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 			col.text.y <- min(y.coord) - (plot.range*(col.text.shift)) #positive numbers move out of plotting area
 			text((x.coord[1,]), col.text.y, labels = col.names, srt = col.text.rotation, 
 				adj = col.text.adj, cex = col.text.cex)
-			}
+		}
 
 		if(!is.null(row.names)){
 			if(length(row.names) != dim(mat)[1]){

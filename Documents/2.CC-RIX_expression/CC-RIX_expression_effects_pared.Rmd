@@ -1,0 +1,529 @@
+---
+title: "CC-RIX Metformin Effects"
+author: Anna L Tyler
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_document:
+    code_folding: hide
+    collapsed: no
+    toc: yes
+    toc_float: yes
+---
+
+The purpose of this workflow is to explore the effects of 
+metformin, diet, and sex, and the interactions between 
+these things on gene expression in the CC-RIX.
+
+This workflow is outside of the DO manuscript but depends 
+on running the data parsing workflows for the CC-RIX.
+
+Here we fit a linear model to each measured transcript 
+that includes sex, diet, treatment, and the corresponding
+imputed transcript (local genetic effect). This will tell 
+us the contribution of each of these factors to the 
+measured gene expression. 
+
+The imputed gene expression, is our best guess at the 
+genetic contribution to the level of each transcript.
+
+Across the CC-RIX, the measured and imputed transcript
+have some relationship. If this relationship is changed
+by metformin, we can conclude that metformin is directly
+changing the level of transcription. If we simply look
+at differential expression in treated and untreated animals,
+we do not know if metformin is directly changing expression 
+or if the expression is changing due to some downstream
+processes.
+
+
+```{r get_args}
+args <- commandArgs(trailingOnly = T)
+tissue.name <- args[1]
+cape_type <- args[2]
+delete_previous <- as.logical(args[3])
+
+if(is.na(tissue.name)){
+    tissue.name = "adipose"
+    cape_type = "query"
+    #cape_type = "original"
+    delete_previous <- FALSE
+}
+is.interactive <- FALSE
+#is.interactive <- TRUE
+```
+
+This report shows results for `r tissue.name` tissue.
+
+## Load data and code
+
+```{r source_code}
+library("here")
+all.fun <- list.files(here("Code"), pattern = ".R", full.names = TRUE)
+for(j in 1:length(all.fun)){source(all.fun[j])}
+```
+
+
+```{r load_libraries,  warning = FALSE, message = FALSE, error = FALSE}
+#update.packages("vctrs", repos = "http://cran.us.r-project.org")
+
+needed.packages <- c("pheatmap", "qtl2", "RColorBrewer", 
+    "biomaRt", "stringr")
+load_libraries(needed.packages)
+
+#these are hard-coded so as not to interfere with the 
+#HDM manuscript
+load_latest_cape("~/Documents/git_repositories/cape")
+#load query cape
+query.fun <- list.files("~/Documents/git_repositories/query_cape", pattern = ".R", full.names = TRUE)
+for(j in 1:length(query.fun)){source(query.fun[j])}
+```
+
+```{r set_dir}
+data.dir <- here("Data", "CC-RIX") #where original data are stored
+processed.data.dir <- here("Results", "CC-RIX", "Data") #where parsed data are stored
+results.dir <- here("Results", "CC-RIX", "Gene_Expression_Effects") #where results from this workflow are stored
+if(!file.exists(results.dir)){dir.create(results.dir)}
+```
+
+
+Get the expression for the specified tissue.
+
+
+```{r read_data}
+all.var <- ls()
+data.loaded <- as.logical(length(which(all.var == "expr")))
+
+if(!data.loaded){
+    annot <- read.csv(file.path(data.dir, "final_sample_annotations.csv"))
+    tissue.expr <- readRDS(file.path(processed.data.dir, "Expression.by.Tissue.RDS"))
+    manifest <- as.matrix(read.csv(file.path(data.dir, "Original_Samples_Manifest.csv")))
+    covar <- as.matrix(read.csv(file.path(processed.data.dir, "Covar.csv"), row.names = 1))
+    bw <- as.matrix(read.csv(file.path(processed.data.dir, "Weight.Summarized.csv"), header = TRUE, row.names = 1))
+    chem.mat <- read.csv(file.path(data.dir, "Blood.Chemistries.Summarized.csv"), row.names = 1)
+    groups <- read.csv(file.path(processed.data.dir, "Groups.csv"), row.names = 1)
+    group.def <- colnames(groups)
+
+    gene.info.file <- here("Data", "general", "mouse_gene_info.txt")
+    gene.info <- read.delim(gene.info.file)
+    
+}
+```
+
+
+```{r adjust, warning = FALSE, message = FALSE, error = FALSE}
+tissue.locale <- which(names(tissue.expr) == tissue.name)
+
+tissue.info <- unique(t(sapply(rownames(tissue.expr[[tissue.locale]]), 
+  function(x) get_mouse_info(x, manifest, "Barcode.1"))))
+
+orsam.id <- names(rownames(tissue.expr[[tissue.locale]]))
+orsam.idx <- match(orsam.id, rownames(covar))
+
+#adjust for age and RNASeq Batch
+rnaseq.covar <- dummy_covar(covar[orsam.idx,c("Age", "RNAseq_Batch")])
+adj.cc.expr <- adjust(tissue.expr[[tissue.locale]], rnaseq.covar)
+saveRDS(adj.cc.expr, file.path(processed.data.dir, paste0("Adjusted.Expression.", tissue.name, ".RDS")))
+
+mouse.info <- unique(t(sapply(rownames(covar), function(x) get_mouse_info(x, manifest, "User.Inputs"))))
+rownames(mouse.info) <- mouse.info[,1]
+
+#adjust phenotypes for age
+pheno.covar <- dummy_covar(mouse.info[,"Timepoint",drop=FALSE])
+num.chem <- apply(as.matrix(chem.mat[,5:ncol(chem.mat)]), 2, as.numeric)
+rownames(num.chem) <- rownames(chem.mat)
+adj.chem <- adjust(num.chem, pheno.covar)
+saveRDS(adj.chem, file.path(processed.data.dir, "Adjusted.Chem.RDS"))
+adj.bw <- adjust(bw, pheno.covar)
+saveRDS(adj.bw, file.path(processed.data.dir, "Adjusted.BW.RDS"))
+```
+
+
+## Metformin and Traits
+
+Does metformin affect the traits overall?
+Nope.
+
+```{r met_traits}
+log.chem <- log10(round(adj.chem+1))
+zero.idx <- which(log.chem == 0, arr.ind = TRUE)
+#adj.chem[zero.idx]
+log.chem[which(log.chem == 0)] <- NA
+
+scaled.chem <- apply(log.chem, 2, scale)
+boxplot(scaled.chem)
+chem.cov <- cov(scaled.chem, use = "pairwise.complete.obs")
+pheatmap(chem.cov)
+chem.decomp <- plot.decomp(chem.cov, label.points = TRUE)
+ind.cov <- cov(t(scaled.chem), use = "pairwise.complete.obs")
+plot.decomp(ind.cov)
+
+chem.idx <- match(rownames(adj.chem), tissue.info[,1])
+chem.info <- tissue.info[chem.idx,]
+
+chem.df <- data.frame("Sex" = as.factor(chem.info[,"Sex"]), 
+        "Diet" = as.factor(chem.info[,"Diet"]),
+        "Treatment" = as.factor(chem.info[,"Treatment"]),
+        "Strain" = as.numeric(as.factor(chem.info[,"User.Defined.Strain"])))
+
+outliers1 <- which(chem.decomp$u[,1] > 0.2)
+outliers2 <- which(chem.decomp$u[,2] > 0.2)
+
+chem.info[outliers1,]
+adj.chem[outliers1,]
+
+chem.info[outliers2,]
+adj.chem[outliers2,]
+
+outlier.idx <- rep(0, nrow(chem.info))
+outlier.idx[outliers1] <- 1
+outlier.idx[outliers2] <- 2
+outlier.df <- data.frame("outliers" = as.factor(outlier.idx))
+rownames(outlier.df) <- rownames(log.chem)
+chem.cor <- cor(t(scaled.chem), use = "pairwise.complete.obs")
+rownames(chem.cor) <- colnames(chem.cor) <- rownames(log.chem)
+pheatmap(chem.cor, annotation_row = outlier.df, show_rownames = FALSE, show_colnames = FALSE)
+
+test <- cov(t(scaled.chem), use = "pairwise.complete.obs")
+plot.decomp(test)
+
+plot.decomp(chem.cor, cols = chem.df[,3])
+```
+
+## Group Expression
+
+Group the measured expression based on the CC-RIX crosses.
+
+```{r group_expr}
+cross.id <- tissue.info[,"User.Defined.Strain"]
+u_cross <- unique(cross.id)
+cross.idx <- lapply(u_cross, function(x) which(cross.id == x))
+cross_expr <- lapply(cross.idx, function(x) adj.cc.expr[x,])
+names(cross_expr) <- u_cross
+mean.cross.expr <- t(sapply(cross_expr, colMeans))
+```
+
+## Expression Decomposition
+
+The following plots show the decompmosition of the gene expression
+matrix. Each point represents one individual. Its strain ID is 
+indicated by a number. Points are colored by Sex, Diet, or Treatment.
+
+```{r expr_decomp, fig.width = 8, fig.height = 8}
+expr.decomp <- plot.decomp(adj.cc.expr, plot.results = FALSE)
+xlab = paste0("PC1 (", signif(expr.decomp$var.exp[1], 2)*100, "%)")
+ylab = paste0("PC2 (", signif(expr.decomp$var.exp[2], 2)*100, "%)")
+
+if(is.interactive){quartz(width = 12, height = 12)}
+par(mfrow = c(2,2))
+plot(expr.decomp$u, xlab = xlab, ylab = ylab, main = "Colored by Diet", 
+    cex = 1.5, col = "darkgray")
+text(expr.decomp$u[,1], expr.decomp$u[,2], 
+    labels = as.numeric(as.factor(tissue.info[,"User.Defined.Strain"])),
+    col = as.numeric(as.factor(tissue.info[,"Diet"])), cex = 0.5)
+
+plot(expr.decomp$u, xlab = xlab, ylab = ylab, main = "Colored by Sex", 
+    cex = 1.5, col = "darkgray")
+text(expr.decomp$u[,1], expr.decomp$u[,2], 
+    labels = as.numeric(as.factor(tissue.info[,"User.Defined.Strain"])),
+    col = as.numeric(as.factor(tissue.info[,"Sex"])), cex = 0.5)
+
+plot(expr.decomp$u, xlab = xlab, ylab = ylab, main = "Colored by Treatment", 
+    cex = 1.5, col = "darkgray")
+text(expr.decomp$u[,1], expr.decomp$u[,2], 
+    labels = as.numeric(as.factor(tissue.info[,"User.Defined.Strain"])),
+    col = as.numeric(as.factor(tissue.info[,"Treatment"])), cex = 0.5)
+
+```
+
+For a given group with the same cofactors, does expression
+cluster by strain? Sort of. In the plots below, each strain
+is indicated by a number 1 through 20. Individuals from a
+given strain do tend to appear in the same region of the 
+plot, however, there isn't the same tight clustering of 
+strains that we see in the inbred founders. I think this
+is because CAST and PWK are so so so different from the
+domesticus strains that they blow up the scale on which
+we are plotting expression differences. Strains appear
+to cluster very tightly because there is so much distance
+between them. In the CC-RIX, all animals have a mix of 
+CAST, PWK, and domesticus strains, so there are no individual
+mice that are very distant from the others. Individuals do 
+appear near each other, but because we are zoomed in to the
+level of noise, the strains don't appear to cluster as 
+tightly as they would if there were wildy divergent strains.
+I bet if you put BxD mice in the same plot, they would cluster
+well away from the CC-RIX in a way that distinctly separated
+the two populations. As it is, though, all CC-RIX are pretty
+close to each other in transcription space.
+
+```{r group_pc, fig.width = 8, fig.height = 8}
+u_groups <- unique(tissue.info[,c("Sex", "Diet", "Treatment")])
+group.idx <- apply(u_groups, 1, function(x) Reduce("intersect", 
+    list(which(tissue.info[,"Sex"] == x[1]), which(tissue.info[,"Diet"] == x[2]), 
+    which(tissue.info[,"Treatment"] == x[3]))))
+group.expr <- lapply(group.idx, function(x) adj.cc.expr[x,])
+
+#pdf("~/Desktop/Group_Decomp.pdf", width = 16, height = 8)
+par(mfrow = c(2,2))
+for(i in 1:length(group.expr)){
+    group.decomp <- plot.decomp(group.expr[[i]], plot.results = FALSE)
+    xlab = paste0("PC1 (", signif(group.decomp$var.exp[1], 2)*100, "%)")
+    ylab = paste0("PC2 (", signif(group.decomp$var.exp[2], 2)*100, "%)")
+    plot(group.decomp$u, cex = 2.7, main = paste(u_groups[i,], collapse = ", "),
+        xlab = xlab, ylab = ylab)
+    text(group.decomp$u[,1], group.decomp$u[,2], 
+        labels = as.numeric(as.factor(tissue.info[group.idx[[i]],"User.Defined.Strain"])))
+}
+#dev.off()
+```
+
+For each measured transcript, we fit a model that indludes Sex, Diet, 
+Treatment, and strain, as well as the interaction between strain and 
+each other cofactor.
+
+```{r model_with_strain}
+
+matched.covar <- get.xz(adj.cc.expr, mouse.info)$Z
+
+model.coef.file <- file.path(results.dir, paste0("model_strain_coef_", tissue.name, ".RDS"))
+model.p.file <- file.path(results.dir, paste0("model_strain_p_", tissue.name, ".RDS"))
+
+if(!file.exists(model.coef.file) || !file.exists(model.p.file) || delete_previous){
+    all.coef <- all.p <- matrix(NA, nrow = ncol(adj.cc.expr), ncol = 8)
+    rownames(all.coef) <- rownames(all.p) <- colnames(adj.cc.expr)
+
+    for(i in 1:ncol(adj.cc.expr)){
+        if(is.interactive){report.progress(i, ncol(adj.cc.expr))}
+
+        df <- data.frame(cbind(adj.cc.expr[,i], as.factor(matched.covar[,"Sex"]), 
+            as.factor(matched.covar[,"Diet"]), as.factor(matched.covar[,"Treatment"]), 
+            as.factor(matched.covar[,"User.Defined.Strain"])))
+        colnames(df) <- c("measured_expression", "Sex", "Diet", "Treatment", "Strain")
+
+        model <- lm(measured_expression~Sex+Diet+Treatment+Strain+Sex:Strain+Diet:Strain+Treatment:Strain, data = df)
+        #summary(model)
+
+        model.sum <- summary(model)
+        all.coef[i,] <- model.sum$coefficients[,"Estimate"]
+        all.p[i,] <- model.sum$coefficients[,"Pr(>|t|)"]
+    }
+    colnames(all.coef) <- colnames(all.p) <- rownames(model.sum$coefficients)
+    saveRDS(all.coef, model.coef.file)
+    saveRDS(all.p, model.p.file)
+}else{
+all.coef <- readRDS(model.coef.file)
+all.p <- readRDS(model.p.file)
+}
+```
+
+The following box plot shows the distribution of the coefficients
+for each factor. This plot shows that sex and diet have the largest
+effects on transcription, as seen above in the expression matrix 
+decompositions. Interestingly, strain has an even smaller effect
+than metformin treatment, which already has a pretty minimal effect.
+
+```{r coef_dist}
+par(mar = c(8, 4, 2, 2))
+boxplot(abs(all.coef[,2:ncol(all.coef)]), las = 2)
+```
+
+The following plots show the p value distributions for each set of 
+factors. These are all inflated, except for Treatment, and the 
+Treatment by strain effects. I think this is because all the rest
+of the factors have widespread effects on transcription. So the 
+inflation is just an indication of the widespread effects, not 
+an indication that we've done something wrong. We do expect each
+of these factors to have widespread effects.
+
+```{r qqunif, fig.width = 10, fig.height = 6}
+par(mfrow = c(2,4))
+for(i in 2:ncol(all.p)){
+    qqunif.plot(all.p[,i], plot.label = colnames(all.p)[i])
+}
+```
+
+## Effects summary
+
+The following plots show the beta coefficients plotted against
+the -log(fdr) for all independent variables in the model. Each
+dot is a transcript
+
+```{r effect_summary, fig.width = 10, fig.height = 6}
+fdr.level = 0.1
+fdr <- apply(all.p, 2, function(x) p.adjust(x, "fdr"))
+layout.mat <- matrix(c(rep(1:3, each = 4), rep(4:7, each = 3)), nrow = 2, byrow = TRUE)
+layout(layout.mat)
+for(i in 2:ncol(all.coef)){
+    plot(all.coef[,i], -log(fdr[,i]), main = colnames(all.coef)[i], 
+    xlab = "Beta coefficient", ylab = "-log(p value)")
+    abline(h = -log(fdr.level))
+    #abline(h = -log(0.05/nrow(all.coef)))
+}
+```
+
+## Number of Significant Effects
+
+The following plot shows the number of significant effects per
+category.
+
+```{r num_sig}
+sig.transcripts <- apply(fdr, 2, function(x) rownames(all.coef)[which(x <= fdr.level)])
+sig.up <- lapply(1:ncol(fdr), function(x) rownames(all.coef)[intersect(which(fdr[,x] <= fdr.level), which(all.coef[,x] > 0))])
+sig.down <- lapply(1:ncol(fdr), function(x) rownames(all.coef)[intersect(which(fdr[,x] <= fdr.level), which(all.coef[,x] < 0))])
+names(sig.up) <- names(sig.down) <- colnames(fdr)
+
+num.sig <- sapply(sig.transcripts, length)
+num.up <- sapply(sig.up, length)
+num.down <- sapply(sig.down, length)
+par(mar = c(4, 14, 2, 2))
+barplot_with_num(num.sig, las = 2, horiz = TRUE, text.gap = 0.15, text.shift = 0.07)
+```
+
+## Enrichment of Genes Differentially Expressed by Treatment {.tabset .tabset-fade .tabset-pills}
+
+The following plot shows functional enrichment for transcripts that
+were significantly up or downregulated by metformin.
+
+```{r up_down_treat, fig.width = 8, fig.height = 7, results = "asis", eval = FALSE}
+library(gprofiler2)
+treat.up.enrich <- gost(sig.up$Treatment, organism = "mmusculus")
+treat.down.enrich <- gost(sig.down$Treatment, organism = "mmusculus")
+
+cat("### Up-regulated by Metformin\n")
+plot.enrichment(treat.up.enrich, num.terms = 20, , max.term.size = 4000,
+    plot.label = "Upregulated by Metformin", order.by = "p_value")
+cat("\n\n")
+
+cat("### Down-regulated by Metformin\n")
+plot.enrichment(treat.down.enrich, num.terms = 20, , max.term.size = 4000,
+    plot.label = "Downregulated by Metformin", order.by = "p_value")
+cat("\n\n")
+
+cat("### Interacting with Imputed Transcript\n")
+enrich <- gost(sig.transcripts[[8]], organism = "mmusculus")
+plot.enrichment(enrich, num.terms = 20, order.by = "p_value")
+```
+
+## Examples {.tabset .tabset-fade .tabset-pills}
+
+The following plots show a more detailed picture of some of
+the imputed transcripts whose relationship to the measured
+transcript was changed by metformin.
+
+```{r example}
+plot_int <- function(x.factor, int.factor, response, xlab = "", ylab = "", 
+    trace.label = "", main = ""){
+
+    df <- data.frame(cbind(response, x.factor, int.factor))
+    colnames(df) <- c("response", "x", "y")
+    model <- lm(response~x*y, data = df)
+    #summary(model)
+	p <- signif(summary(model)$coefficients[4,4], 2)
+
+    group.x <- levels(x.factor)
+    group.int <- levels(int.factor)
+    
+    comp.ids <- rbind(cbind(rep(group.x, each = length(group.int)), group.int))
+    group.names <- apply(comp.ids, 1, function(x) paste(x, collapse = "_"))
+    comp.idx <- apply(comp.ids, 1, function(x) intersect(which(x.factor == x[1]), which(int.factor == x[2])))
+
+    group.vals <- lapply(comp.idx, function(x) response[x])
+    group.means <- sapply(group.vals, mean)
+    group.se  <- sapply(group.vals, function(x) sd(x)/sqrt(length(x)))
+    names(group.vals) <- names(group.means) <- names(group.se) <- group.names
+
+    ylim <- c(min(group.means-group.se), max(group.means+group.se))
+
+    error.x <- rep(1:length(group.x), each = length(group.int))
+
+    interaction.plot(x.factor, int.factor, response, 
+        main = paste0(main, " (p = ", signif(p, 2), ")"), ylim = ylim,
+        xlab = xlab, ylab = ylab, trace.label = trace.label)
+    segments(error.x, group.means-group.se, error.x, group.means+group.se)
+    
+}
+
+
+plot_example <- function(transcript.id){
+    
+    gene.name <- gene.info[which(gene.info[,1] == transcript.id),"external_gene_name"]
+    sex.diet.covar <- dummy_covar(matched.covar[,c("Sex", "Diet")])
+
+    par(mfrow = c(1,3), mar = c(4,4,6,4))
+
+    model <- lm(cc.measured[,transcript.id]~as.factor(matched.covar[,"Sex"]))
+    f <- summary(model)$fstatistic
+	p <- signif(pf(f[1],f[2],f[3],lower.tail=F), 2)
+    plot(cc.measured[,transcript.id]~as.factor(matched.covar[,"Sex"]),
+    xlab = "Sex", ylab = "Measured Expression", main = paste("Effect of Sex\np =", p))
+
+    model <- lm(cc.measured[,transcript.id]~as.factor(matched.covar[,"Diet"]))
+    f <- summary(model)$fstatistic
+	p <- signif(pf(f[1],f[2],f[3],lower.tail=F), 2)
+    plot(cc.measured[,transcript.id]~as.factor(matched.covar[,"Diet"]),
+    xlab = "Diet", ylab = "Measured Expression", main = paste("Effect of Diet\np =", p))
+
+    model <- lm(cc.measured[,transcript.id]~as.factor(matched.covar[,"Treatment"]))
+    f <- summary(model)$fstatistic
+	p <- signif(pf(f[1],f[2],f[3],lower.tail=F), 2)
+    plot(cc.measured[,transcript.id]~as.factor(matched.covar[,"Treatment"]),
+    xlab = "Treatment", ylab = "Measured Expression", main = paste("Effect of Treatment\np =", p))
+
+    int.group <- unique(matched.covar[,"Treatment"])
+    treat1.locale <- which(matched.covar[,"Treatment"] == int.group[1])
+    treat2.locale <- which(matched.covar[,"Treatment"] == int.group[2])
+    ylim <- c(min(cc.measured[,transcript.id]), max(cc.measured[treat1.locale,transcript.id]))
+
+    mar = c(4,4,2,4)
+
+    #plot.with.model(cc.imputed[treat1.locale,transcript.id], 
+    #cc.measured[treat1.locale,transcript.id],
+    #xlab = "Imputed Expression", ylab = "Measured Expression", 
+    #main = int.group[1], ylim = ylim, report = "cor.test")
+    
+    #plot.with.model(cc.imputed[treat2.locale,transcript.id], 
+    #cc.measured[treat2.locale,transcript.id],
+    #xlab = "Imputed Expression", ylab = "Measured Expression", 
+    #main = int.group[2], ylim = ylim, report = "cor.test")
+
+    #adjust the measured expression for sex and diet
+    adj.measured <- adjust(cc.measured[,transcript.id,drop=FALSE], sex.diet.covar)
+
+    #bin the imputed expression into three bins
+    #binned.imputed <- round(bin.vector(cc.imputed[,transcript.id], 
+    #    segment.region(min(cc.imputed[,transcript.id]), max(cc.imputed[,transcript.id]), 3)), 2)
+
+    #plot_int(x.factor = as.factor(binned.imputed), 
+    #    int.factor = as.factor(matched.covar[,"Treatment"]), 
+    #    response = adj.measured, xlab = "Imputed Expression", 
+    #    ylab = "Measured Expression", trace.label = "Treatment",
+    #    main = "Interaction") 
+    
+    mtext(gene.name, side = 3, outer = TRUE, line = -1.5, font = 2)
+
+}
+```
+
+
+```{r example_plots, results = "asis"}
+cc.measured <- adj.cc.expr
+example.id <- rownames(fdr)[which(fdr[,8] <= 0.2)]
+
+#example.idx <- sample(1:nrow(fdr), 5); names(example.idx) <- rownames(fdr)[example.idx]
+num.examples <- min(length(example.id), 18)
+
+for(i in 1:num.examples){
+    gene.name <- gene.info[which(gene.info[,1] == example.id[i]), "external_gene_name"]
+    cat("###", gene.name, "\n")
+    if(is.interactive){quartz(width = 8, height = 6)}
+    plot_example(example.id[i])
+    cat("\n\n")
+}
+
+
+#gene.name = "E2f7"
+#gene.name = "BC067074"
+#gene.id <- gene.info[which(gene.info[,"external_gene_name"] == gene.name),1]
+#gene.id <- "ENSMUSG00000019787"
+#plot_example(gene.id)
+```

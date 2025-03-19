@@ -7,7 +7,12 @@
 #with standard errors. 
 
 bin_by_hist <- function(x, y, breaks = 25, plot.result = TRUE,
-    axes = TRUE, col = "gray", ylim = NULL){
+    axes = TRUE, col = "gray", ylim = NULL, error.type = c("se", "sd"),
+    xlab, ylab, main){
+
+	if(missing(main)){main = ""}
+	if(missing(xlab)){xlab = deparse(substitute(x))}
+	if(missing(ylab)){ylab = deparse(substitute(y))}
 
     xhist <- hist(x, breaks = breaks, plot = FALSE)
 
@@ -24,12 +29,17 @@ bin_by_hist <- function(x, y, breaks = 25, plot.result = TRUE,
 
     if(plot.result){
         ymeans <- sapply(yvals, function(x) mean(x, na.rm = TRUE))
-        yse <- sapply(yvals, function(x) sd(x, na.rm = TRUE)/sqrt(length(x)))
+        if(error.type == "se"){
+            yse <- sapply(yvals, function(x) sd(x, na.rm = TRUE)/sqrt(length(x)))
+        }else{
+            yse <- sapply(yvals, function(x) sd(x, na.rm = TRUE))
+        }
         ymax <- max(c(ymeans, max(ymeans+yse, na.rm = TRUE)), na.rm = TRUE)
         if(is.null(ylim)){
             ylim = c(0, ymax)
         }
-        a <- barplot(ymeans, ylim = ylim, col = col, axes = FALSE)
+        a <- barplot(ymeans, ylim = ylim, col = col, axes = FALSE,
+            xlab = xlab, ylab = ylab, main = main)
         axis(2, las = 2)
         segments(x0 = a, y0 = ymeans - yse, y1 = ymeans + yse, lwd = 3)
         if(axes){

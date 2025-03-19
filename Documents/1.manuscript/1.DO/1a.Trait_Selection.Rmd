@@ -890,21 +890,131 @@ saveRDS(paper.data$paper.data, file.path(paper.data.dir, "pheno_stats.RDS"))
 
 
 The following heat map shows the trait correlations
-in the upper and lower triangles and trait heritabilities
-on the diagonal.
+in the upper triangle, genetic correlations in the 
+lower triangle, and trait heritabilities on the diagonal
+at the request of reviewer 3.
 
-```{r cor_herit}
+```{r cor_herit, eval = FALSE}
 #keep the phenotype clustering order
 #trait.order <- hclust(dist(pheno.cor))$order
 #herit.cor <- pheno.cor
 #diag(herit.cor) <- herit
+genetic.cor.file <- file.path(parsed.data.dir, "Genetic_Correlations.RDS")
 
+if(!file.exists(genetic.cor.file)){
+  load(here("Data", "DO", "QTLViewer_Geno_V10.Rdata")) #ensembl.version, genoprobs, K, map, markers
+  trait.scan <- scan1(genoprobs, scaled.pheno, addcovar = num.covar, kinship = Kg)
+  trait.lod <- as.matrix(trait.scan)
+  #hist(rowSums(trait.lod))
+  keep.rows <- which(rowSums(trait.lod) > 8) #filter to QTL
+  #keep.rows <- 1:nrow(trait.lod) #no filter
+  #the filter doesn't make a difference
+  genetic.cor <- cor(trait.lod[keep.rows,])
+  saveRDS(genetic.cor, genetic.cor.file)
+}else{
+  genetic.cor <- readRDS(genetic.cor.file)
+}
 
 trait.clust <- hclust(dist(pheno.cor)) #ignore heritability on the diagonal
 #trait.clust <- hclust(dist(herit.cor)) #clustering with heritability on diagonal
+pheno.cor.order <- trait.clust$order
+
+geno.clust <- hclust(dist(genetic.cor))
+geno.cor.order <- geno.clust$order
+
+pheatmap(genetic.cor[geno.cor.order, geno.cor.order], cluster_rows = FALSE, cluster_cols = FALSE)
+pheatmap(genetic.cor[geno.cor.order, pheno.cor.order], cluster_rows = FALSE, cluster_cols = FALSE)
+
+#because these are laboratory animals, the phenotype 
+#and genetic correlations are highly correlated
+plot(pheno.cor, genetic.cor)
+
+#If we order the rows and columns after putting in the values
+#the triangles get mixed up. Here we put the values in alread
+#clustered by phenotype correlation
+get_tri_idx <- function(mat, label1, label2, tri.which = c("upper", "lower")){
+
+  tri.which <- tri.which[1] #default to upper tri
+
+  idx1 <- which(rownames(mat) == label1)
+  idx2 <- which(colnames(mat) == label2)
+  
+  #find the indices for each index in either row or column position
+  test.idx1 <- row_col_to_idx(idx1, idx2, n.row = nrow(mat))
+  test.idx2 <- row_col_to_idx(idx2, idx1, n.row = nrow(mat))
+
+  upper.tri.idx <- which(upper.tri(mat))
+  lower.tri.idx <- which(lower.tri(mat))
+
+  #if we have asked for the index in the upper tri
+  if(tri.which == "upper"){
+    test.upper1 <- intersect(test.idx1, upper.tri.idx)
+    test.upper2 <- intersect(test.idx2, upper.tri.idx)
+    final.idx <- union(test.upper1, test.upper2)
+  }
+  if(tri.which == "lower"){
+    test.lower1 <- intersect(test.idx1, lower.tri.idx)
+    test.lower2 <- intersect(test.idx2, lower.tri.idx)
+    final.idx <- union(test.lower1, test.lower2)
+  }
+  return(final.idx)
+}
+
+combo.mat <- cor.class <- matrix(NA, nrow = ncol(genetic.cor), ncol = ncol(genetic.cor))
+colnames(combo.mat) <- colnames(cor.class) <- colnames(genetic.cor)[geno.cor.order]
+rownames(combo.mat) <- rownames(cor.class) <- rownames(genetic.cor)[geno.cor.order]
+
+trait.pairs <- pair.matrix(colnames(genetic.cor))
+for(i in 1:nrow(trait.pairs)){
+  trait1 <- trait.pairs[i,1]
+  trait2 <- trait.pairs[i,2]
+
+  upper.tri.idx <- get_tri_idx(genetic.cor, trait1, trait2, "upper")
+  lower.tri.idx <- get_tri_idx(genetic.cor, trait1, trait2, "lower")
+
+  combo.mat[upper.tri.idx] <- genetic.cor[trait1, trait2] #put the genetic cor in the upper triangle
+  combo.mat[lower.tri.idx] <- pheno.cor[trait1, trait2] #put the phenotype cor in the lower triangle
+
+  #make the class matrix at the same time to check that 
+  #we are putting things in the right places
+  cor.class[upper.tri.idx] <- 1
+  cor.class[lower.tri.idx] <- 2
+}
+
+diag(combo.mat) <- as.numeric(herit)[trait.order]
+diag(cor.class) <- 3
+#image(class.mat)
+
+cor.class.cols <- c("red", "blue", "yellow")
+
+png(here("Results", "Paper", "Fig1G.png"), width = 6.5, height = 5, units = "in", res = 300)
+layout.mat <- matrix(c(1,2,1,3,1,4), byrow = TRUE, ncol = 2)
+layout(layout.mat, widths = c(1, 0.15))
+par(mar = c(6,1,1,8))
+imageWithText(mat = combo.mat, class.mat = cor.class, show.text = FALSE,
+  col.scale = cor.class.cols, grad.dir = "high", 
+  row.text.shift = -1.035, row.text.adj = 0, col.text.shift = 0.03)
+par(mar = c(1,2,4,3))
+imageWithTextColorbar(genetic.cor, col.scale = cor.class.cols[1], 
+  grad.dir = "high", cex = 1, global.color.scale = TRUE, 
+  global.min = 0, global.max = 1)
+mtext("Genetic\nCorrelation", side = 3, cex = 0.7, line = 0.8)
+par(mar = c(1,2,4,3))
+imageWithTextColorbar(pheno.cor, col.scale = cor.class.cols[2], 
+  grad.dir = "high", cex = 1, global.color.scale = TRUE, 
+  global.min = 0, global.max = 1)
+mtext("Phenotype\nCorrelation", side = 3, cex = 0.7, line = 0.8)
+par(mar = c(1,2,4,3))
+imageWithTextColorbar(matrix(as.numeric(herit), ncol = 1), 
+  col.scale = cor.class.cols[3], grad.dir = "high", cex = 1,
+  global.color.scale = TRUE, global.min = 0, global.max = 1)
+mtext("Heritability", side = 3, cex = 0.7, line = 0.8)
+dev.off()
+
 
 #quartz(width = 5.5, height = 5)
 pdf(here("Results", "Paper", "Fig1G.pdf"), width = 5.5, height = 5)
 pheatmap(pheno.cor, cluster_cols = trait.clust, cluster_rows = trait.clust)
 dev.off()
 ```
+
