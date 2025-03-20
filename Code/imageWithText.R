@@ -21,28 +21,28 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 		
 		if(length(which(is.na(mat))) == length(mat)){
 			return("no non-NA values")
-			}
+		}
 		# if(length(light.dark) < length(col.scale)){light.dark <- rep(light.dark, length(col.scale))}
 		
 		get.default.col.fun <- grep("lin", color.fun)
 		if(length(get.default.col.fun) > 0){
 			color.fun = "linear"
-			}
+		}
 		
 		end.fudge.factor = 10^-10
 
 		if(is.null(class.mat)){
 			class.mat <- matrix(1, dim(mat)[1], dim(mat)[2])
-			}
+		}
 
 		if(split.at.vals){
 			for(p in 1:length(split.points)){
 				class.mat[which(mat >= split.points[p])] <- class.mat[which(mat >= split.points[p])] + 1
-				}
-			# if(length(grad.dir) == 2){grad.dir <- "ends"}else{grad.dir <- "high"}		
-			}else{
-			split.points <- NULL	
 			}
+			# if(length(grad.dir) == 2){grad.dir <- "ends"}else{grad.dir <- "high"}		
+		}else{
+			split.points <- NULL	
+		}
 		class.mat[which(is.na(mat))] <- NA
 
 		while(min(class.mat, na.rm = TRUE) > 1){class.mat <- class.mat - 1}
@@ -51,12 +51,12 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 		num.classes <- length(classes)
 		if(num.classes == 1){
 			class.mat <- matrix(1, nrow(mat), ncol(mat))
-			}
+		}
 	
 			
 		if(length(col.scale) == (length(split.points)+1)){
 			class.cols <- col.scale
-			}else{
+		}else{
 			class.cols <- col.scale[classes]
 		}
 
@@ -68,7 +68,7 @@ sig.digs = 3, use.pheatmap.colors = FALSE, na.col = "lightgray", gridlines = FAL
 		get.default <- grep("h", grad.dir)
 		if(length(get.default) > 0){
 			grad.dir <- "high"
-			}
+		}
 		
 		
 		# if(light.dark == "f"){max.col = 4}else{max.col = 8}

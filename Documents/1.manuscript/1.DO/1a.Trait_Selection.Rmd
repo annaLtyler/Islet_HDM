@@ -915,19 +915,48 @@ if(!file.exists(genetic.cor.file)){
   genetic.cor <- readRDS(genetic.cor.file)
 }
 
+#=======================================
+## playing around with trait clustering
+#=======================================
+cor.decomp <- plot.decomp(pheno.cor, label.points = TRUE)
+pam.cl <- pam(cor.decomp$u, k = 4)
+plot(cor.decomp$u, col = pam.cl$clustering, pch = 16)
+text(cor.decomp$u[,1], cor.decomp$u[,2], labels = colnames(pheno.cor), pos = 4)
+
+net <- graph_from_adjacency_matrix(abs(pheno.cor), weighted = TRUE, mode = "undirected")
+net.cl <- cluster_fast_greedy(net)
+net.cl$membership
+plot(cor.decomp$u, col = net.cl$membership, pch = 16)
+text(cor.decomp$u[,1], cor.decomp$u[,2], labels = colnames(pheno.cor), pos = 4)
+
+
 trait.clust <- hclust(dist(pheno.cor)) #ignore heritability on the diagonal
 #trait.clust <- hclust(dist(herit.cor)) #clustering with heritability on diagonal
 pheno.cor.order <- trait.clust$order
 
 geno.clust <- hclust(dist(genetic.cor))
 geno.cor.order <- geno.clust$order
+#=======================================
 
-pheatmap(genetic.cor[geno.cor.order, geno.cor.order], cluster_rows = FALSE, cluster_cols = FALSE)
-pheatmap(genetic.cor[geno.cor.order, pheno.cor.order], cluster_rows = FALSE, cluster_cols = FALSE)
+
+#=======================================
+#set trait order and clustering method
+#trait.order <- geno.cor.order #order by hierarchical clustering of genetic correlations
+trait.order <- pheno.cor.order #order by hierarchical clustering of phenotype correlations
+#trait.order <- order(pam.cl$clustering) #order by pam clustering of phenotype correlation decomposition
+#trait.order <- order(net.cl$membership) #order by fast-greedy clustering of adjacency matrix
+
+#make sure clustering is compatible with the row order
+trait.cl <- pam.cl$clustering #clusters set by pam 
+#trait.cl <- net.cl$membership #clusters set by fast-greedy
+
+trait.order <- order(trait.cl)
+#=======================================
+
 
 #because these are laboratory animals, the phenotype 
 #and genetic correlations are highly correlated
-plot(pheno.cor, genetic.cor)
+#plot(pheno.cor, genetic.cor)
 
 #If we order the rows and columns after putting in the values
 #the triangles get mixed up. Here we put the values in alread
@@ -960,20 +989,21 @@ get_tri_idx <- function(mat, label1, label2, tri.which = c("upper", "lower")){
   return(final.idx)
 }
 
+
 combo.mat <- cor.class <- matrix(NA, nrow = ncol(genetic.cor), ncol = ncol(genetic.cor))
-colnames(combo.mat) <- colnames(cor.class) <- colnames(genetic.cor)[geno.cor.order]
-rownames(combo.mat) <- rownames(cor.class) <- rownames(genetic.cor)[geno.cor.order]
+colnames(combo.mat) <- colnames(cor.class) <- colnames(genetic.cor)[trait.order]
+rownames(combo.mat) <- rownames(cor.class) <- rownames(genetic.cor)[trait.order]
 
 trait.pairs <- pair.matrix(colnames(genetic.cor))
 for(i in 1:nrow(trait.pairs)){
   trait1 <- trait.pairs[i,1]
   trait2 <- trait.pairs[i,2]
 
-  upper.tri.idx <- get_tri_idx(genetic.cor, trait1, trait2, "upper")
-  lower.tri.idx <- get_tri_idx(genetic.cor, trait1, trait2, "lower")
+  upper.tri.idx <- get_tri_idx(genetic.cor[trait.order, trait.order], trait1, trait2, "upper")
+  lower.tri.idx <- get_tri_idx(genetic.cor[trait.order, trait.order], trait1, trait2, "lower")
 
-  combo.mat[upper.tri.idx] <- genetic.cor[trait1, trait2] #put the genetic cor in the upper triangle
-  combo.mat[lower.tri.idx] <- pheno.cor[trait1, trait2] #put the phenotype cor in the lower triangle
+  combo.mat[upper.tri.idx] <- genetic.cor[trait1, trait2] #put the genetic cor in the upper triangle, use names to index
+  combo.mat[lower.tri.idx] <- pheno.cor[trait1, trait2] #put the phenotype cor in the lower triangle, use names to index
 
   #make the class matrix at the same time to check that 
   #we are putting things in the right places
@@ -985,29 +1015,56 @@ diag(combo.mat) <- as.numeric(herit)[trait.order]
 diag(cor.class) <- 3
 #image(class.mat)
 
-cor.class.cols <- c("red", "blue", "yellow")
+cor.class.cols <- c("blue", "purple", "yellow")
 
-png(here("Results", "Paper", "Fig1G.png"), width = 6.5, height = 5, units = "in", res = 300)
+highlight.clusters = FALSE
+
+png(here("Results", "Paper", "Fig1G.png"), width = 5, height = 3.8, units = "in", res = 300)
 layout.mat <- matrix(c(1,2,1,3,1,4), byrow = TRUE, ncol = 2)
-layout(layout.mat, widths = c(1, 0.15))
-par(mar = c(6,1,1,8))
+layout(layout.mat, widths = c(1, 0.2))
+par(mar = c(6,1,1,8), bg = NA)
 imageWithText(mat = combo.mat, class.mat = cor.class, show.text = FALSE,
   col.scale = cor.class.cols, grad.dir = "high", 
-  row.text.shift = -1.035, row.text.adj = 0, col.text.shift = 0.03)
+  row.text.shift = -1.035, row.text.adj = 0, col.text.shift = 0.03,
+  color.fun = "exponential", exp.steepness = 1e-6)
+
+#highlight the diagonal
+for(i in 1:ncol(pheno.cor)){
+  draw.rectangle(min.x = i-0.5, max.x = i+0.5, 
+    min.y = (ncol(genetic.cor) - (i-1.5)), 
+    max.y = (ncol(genetic.cor)-(i-0.5)))
+}
+
+if(highlight.clusters){
+  #highlight clusters
+  num.cl <- max(trait.cl)
+  for(i in 1:num.cl){
+    cl.idx <- which(trait.cl[trait.order] == i)
+    min.cl <- min(cl.idx)
+    max.cl <- max(cl.idx)
+    draw.rectangle(min.x = min.cl-0.5, max.x = max.cl+0.5,
+      min.y = ncol(genetic.cor) - (min.cl-1.5), 
+      max.y = ncol(genetic.cor)-(max.cl-0.5))
+  }
+}
+
 par(mar = c(1,2,4,3))
 imageWithTextColorbar(genetic.cor, col.scale = cor.class.cols[1], 
   grad.dir = "high", cex = 1, global.color.scale = TRUE, 
-  global.min = 0, global.max = 1)
+  global.min = 0, global.max = 1,
+  color.fun = "exponential", exp.steepness = 1e-6)
 mtext("Genetic\nCorrelation", side = 3, cex = 0.7, line = 0.8)
 par(mar = c(1,2,4,3))
 imageWithTextColorbar(pheno.cor, col.scale = cor.class.cols[2], 
   grad.dir = "high", cex = 1, global.color.scale = TRUE, 
-  global.min = 0, global.max = 1)
+  global.min = 0, global.max = 1,
+  color.fun = "exponential", exp.steepness = 1e-6)
 mtext("Phenotype\nCorrelation", side = 3, cex = 0.7, line = 0.8)
 par(mar = c(1,2,4,3))
-imageWithTextColorbar(matrix(as.numeric(herit), ncol = 1), 
+imageWithTextColorbar(mat = matrix(as.numeric(herit), ncol = 1), 
   col.scale = cor.class.cols[3], grad.dir = "high", cex = 1,
-  global.color.scale = TRUE, global.min = 0, global.max = 1)
+  global.color.scale = TRUE, global.min = 0, global.max = 1,
+  color.fun = "exponential", exp.steepness = 1e-6)
 mtext("Heritability", side = 3, cex = 0.7, line = 0.8)
 dev.off()
 

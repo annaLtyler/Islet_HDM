@@ -5,7 +5,7 @@
 #col.scale = c("green", "purple", "orange", "blue", "gray"); light.dark = "f"; class.mat = NULL
 #grad.dir = c("high", "low", "middle", "ends"); color.fun = c("linear", "exponential")
 #exp.steepness = 1; global.color.scale = FALSE; global.min = NULL; global.max = NULL 
-#axis.line = -3; use.pheatmap.colors = TRUE
+#axis.line = -3; use.pheatmap.colors = FALSE
 
 imageWithTextColorbar <- function(mat, x = NULL, y = NULL, orientation = c("h", "v"), 
 cex = 0.5, split.at.vals = FALSE, split.points = 0, 
@@ -52,57 +52,56 @@ bounding.box = TRUE, bar.lwd = 1,  las = 1){
 
 		if(is.null(class.mat)){
 			class.mat <- matrix(1, dim(mat)[1], dim(mat)[2])
-			}
+		}
 
 		if(split.at.vals){
 			for(p in 1:length(split.points)){
 				class.mat[which(mat >= split.points[p])] <- p+1
-				}
+			}
 			class.boundaries <- c(mat.min, split.points, mat.max)
-			}else{
+		}else{
 			split.points <- NULL	
 			class.boundaries <- c(mat.min, mat.max)
-			}
+		}
 			
 		
-
 		num.classes <- length(unique(as.vector(class.mat[which(!is.na(class.mat))])))
 		if(num.classes == 1){
 			class.mat <- matrix(1, dim(mat)[1], dim(mat)[2])
-			}
+		}
 			
 		class.cols <- col.scale[1:num.classes]
-
 			
 		get.default <- grep("h", grad.dir)
 		if(length(get.default) > 0){
 			grad.dir <- "high"
-			}
+		}
 		
+		max.col = 4
 		dir.list <- vector(mode = "list", length = num.classes)
 		if(grad.dir == "high"){
 			for(i in 1:length(dir.list)){
-				dir.list[[i]] <- 1:3
+				dir.list[[i]] <- 1:max.col
 				}
-			}
+		}
+
 		if(grad.dir == "low"){
 			for(i in 1:length(dir.list)){
-				dir.list[[i]] <- 3:1
+				dir.list[[i]] <- max.col:1
 				}
-			}
+		}
+
 		if(grad.dir == "middle"){
 			if(length(dir.list) != 2){stop("I can only color the middle if there are exactly two classes")}
-			dir.list[[1]] <- 1:3
-			dir.list[[2]] <- 3:1
-			}
-			
+			dir.list[[1]] <- 1:max.col
+			dir.list[[2]] <- max.col:1
+		}
 			
 		if(grad.dir == "ends"){
 			if(length(dir.list) != 2){stop("I can only color the ends if there are exactly two classes")}
-			dir.list[[1]] <- 3:1
-			dir.list[[2]] <- 1:3
-			}
-	
+			dir.list[[1]] <- max.col:1
+			dir.list[[2]] <- 1:max.col
+		}
 	
 		num.classes = length(unique(as.vector(class.mat)))
 
@@ -203,7 +202,7 @@ bounding.box = TRUE, bar.lwd = 1,  las = 1){
 			#plot(as.numeric(col.key.list[[1]][,1]), col = col.key.list[[1]][,2], type = "h")
 			col.key <- col.key.list[[1]]
 			num.cols <- col.key.list[[2]]
-			}
+		}
 
 		# print(num.cols)
 		# print(dim(col.key))
@@ -215,9 +214,9 @@ bounding.box = TRUE, bar.lwd = 1,  las = 1){
 		if(is.null(ax.max)){ax.max <- mat.max}
 		if(!is.null(n.ax.ticks)){ #if a number of tick marks is specified
 			at <- signif(segment.region(ax.min, ax.max, n.ax.ticks, alignment = "ends"), 2)
-			}else{
+		}else{
 			at = NULL #otherwise use the default axis
-			}
+		}
 
 
         num.mat <- as.matrix(as.numeric(col.key[,1]), ncol = 1)
