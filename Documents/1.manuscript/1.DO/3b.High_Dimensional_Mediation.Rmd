@@ -37,7 +37,7 @@ For this workflow there are several parameters to set.
 ```{r get_args}
 rm(list = ls()) #clear out R environment
 #args <- commandArgs(trailingOnly=T)
-num.perm = 1000
+num.perm = 10
 
 args <- c(1,1,0,1,0) #merged tissues, mediation model
 #args <- c(0,0,0,1,0) #sep tissues, mediation model
@@ -51,7 +51,7 @@ weight.adjusted <- as.logical(args[3]) #if TRUE, body weight is adjusted out of 
 complete.mediation <- as.logical(args[4]) #if TRUE use a mediation network. If FALSE use a reactive network
 delete_previous <- as.logical(args[5]) #if TRUE, previous results are overwritten
 
-remove.local.effects <- FALSE #if TRUE, the effects of local genotype are
+remove.local.effects <- TRUE #if TRUE, the effects of local genotype are
                              #removed from gene expression before kernelizing.
                              #This allows us to specifically analyze the correlation 
                              #between distal heritability and trait relevance 
@@ -946,7 +946,7 @@ for(tx in 1:length(tissue.names)){
 
 ```{r cor_fig}
 if(max.tx == 4){
-    pdf(here("Results", "Paper", "Supp_Fig3.pdf"), width = 12, height = 9)
+    pdf(here("Results", "Paper", "Fig4E.pdf"), width = 12, height = 9)
     layout.mat <- matrix(c(0,1:4,5,8,11,14,17,6,9,12,15,18,7,10,13,16,19), 
         ncol = 5, byrow = TRUE)
     layout(layout.mat, widths = c(0.2, rep(1, 4)), 
@@ -1030,9 +1030,10 @@ if(max.tx == 4){
     dev.off()
 }else{
     tx = 1
-    pdf(here("Results", "Paper", "Supp_Fig3.pdf"), width = 9, height = 3)
+    png(here("Results", "Paper", "Fig4E.png"), width = 9, height = 2.8, units = "in", res = 300)
     layout.mat <- matrix(c(1:6), nrow = 2, byrow = TRUE)
     layout(layout.mat, heights = c(0.1, 1))
+    par(bg = NA)
     #add headers for correlation comparisons
     
     gvt <- expression("G"["C"]-"T"["C"])
@@ -1178,7 +1179,7 @@ plot_overlapping_dist <- function(tx.loadings){
     mtext("Density", side = 2, line = 2.5)
 }
 
-pdf(here("Results", "Paper", "Reviewer_Response_Overlapping_Transcript_Dists.pdf"), width = 10, height = 5)
+pdf(here("Results", "Paper", "Supp_Fig_transcript_load_comparison.pdf"), width = 10, height = 5)
 par(mfrow = c(1,2))
 plot_overlapping_dist(transcript_loadings)
 plot_overlapping_dist(lapply(transcript_loadings, abs))
