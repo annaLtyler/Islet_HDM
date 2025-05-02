@@ -66,6 +66,7 @@ imputed.results.dir <- here("Results", "DO", "Imputed_Transcriptomes") #result g
 if(!file.exists(imputed.results.dir)){dir.create(imputed.results.dir, recursive = TRUE)}
 data.results.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
 transcriptome.data.dir <- here("Results", "DO", "Transcriptomes") #directory holding results from 1a.Tissue_Expression.Rmd
+figure.data.dir <- here("Results", "Paper", "Source_Data") #Nature Communications requires data for all figures. Keep it here
 ```
 
 Load code and libraries.
@@ -442,6 +443,13 @@ plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "",
     print.vals = "median")
 mtext("Variance Explained", side = 2, line = 2.5, cex = 1.5)
 dev.off()
+
+local.distal.label <- unlist(lapply(1:2, function(x) rep(names(local.distal.comp)[x], nrow(local.distal.comp[[x]]))))
+fig.table <- Reduce("rbind", local.distal.comp)
+fig.table <- cbind(rownames(fig.table), local.distal.label, fig.table)
+colnames(fig.table)[1:2] <- c("geneID", "eQTL_label")
+write_table_with_header(fig.table, file.path(figure.data.dir, "Fig2A.txt"),
+ header = "#Data for Figure 2A. Variance explained by local and distal components of each transcript.")
 ```
 
 ```{r fig2A_alt, eval = FALSE}
@@ -699,6 +707,8 @@ for(tx in 1:length(trait.cor)){
 pdf(here("Results", "Paper", "Fig2B.pdf"), width = 7, height = 6)
 col.ramp <- brewer.pal(9, "BrBG")[c(3,2,2,2)]
 par(mfrow = c(2,2), mar = c(4,5,4,1))
+fig.data <- vector(mode = "list", length = length(trait.cor))
+names(fig.data) <- names(trait.cor)
 for(tx in 1:length(trait.cor)){
     
     common.tx <- intersect(names(trait.cor[[tx]]), names(local.var.exp[[tx]]))
@@ -730,9 +740,15 @@ for(tx in 1:length(trait.cor)){
         plot_linear(x, y, main = tissue.names[tx], xlab = xlab, 
             ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp)
     }
+    panel.data <- cbind(rep(names(trait.cor)[tx], length(x)), names(x), x, y)
+    colnames(panel.data) <- c("Tissue", "geneID", xlab, ylab)
+    fig.data[[tx]] <- panel.data
 }
 dev.off()
 
+fig.table <- Reduce("rbind", fig.data)
+write_table_with_header(fig.table, file.path(figure.data.dir, "Fig2B.txt"),
+ header = "#Data for figure 2B. For each transcript in each tissue the variance explained\n#by the local genetic component and the maximum correlation across all traits.")
 ```
 
 #### LOD - with line
@@ -848,6 +864,8 @@ for(tx in 1:length(trait.cor)){
 pdf(here("Results", "Paper", "Fig2C.pdf"), width = 7, height = 6)
 col.ramp <- brewer.pal(9, "Greys")[c(5,6,6,6)]
 par(mfrow = c(2,2), mar = c(4,5,4,1))
+fig.data <- vector(mode = "list", length = length(trait.cor))
+names(fig.data) <- names(trait.cor)
 for(tx in 1:length(trait.cor)){
 
     distal.herit <- tx.distal.herit[[tx]][,"residual_variance"]*tx.distal.herit[[tx]][,"residual_heritability"]
@@ -880,8 +898,17 @@ for(tx in 1:length(trait.cor)){
             ylab = ylab, xlim = xlim, ylim = ylim, col.ramp = col.ramp)
    }
 
+    panel.data <- cbind(rep(names(trait.cor)[tx], length(x)), names(x), x, y)
+    colnames(panel.data) <- c("Tissue", "geneID", xlab, ylab)
+    fig.data[[tx]] <- panel.data
+
 }
 dev.off() 
+
+fig.table <- Reduce("rbind", fig.data)
+write_table_with_header(fig.table, file.path(figure.data.dir, "Fig2C.txt"),
+ header = "#Data for figure 2C. For each transcript in each tissue the variance explained\n#by the distal genetic component and the maximum correlation across all traits.")
+
 ```
 
 

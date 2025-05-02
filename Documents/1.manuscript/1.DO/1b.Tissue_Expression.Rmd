@@ -26,6 +26,8 @@ local.col <- herit.cols["Local"]
 distal.col <- herit.cols["Distal"]
 
 overwrite.results <- FALSE
+
+figure.data.dir <- here("Results", "Paper", "Source_Data") #Nature Communications requires data for all figures. Keep it here
 ```
 
 ## Introduction
@@ -241,6 +243,11 @@ legend(0, 1, legend = tissue.names, col = tissue.cols, pch = 16, adj = 0, title 
 legend(0, 0.5, legend = c("Female", "Male"), col = "black", pch = unique(sample.sex)+16, 
   adj = 0, title = "Sex")
 dev.off()
+
+pc.table <- data.frame("Tissue" = names(tissue.col), "Sex" = sample.sex,
+  "PC1" = expr.decomp$u[,1], "PC2" = expr.decomp$u[,2])
+write_table_with_header(pc.table, file.path(figure.data.dir, "Supp_Fig2A.txt"),
+  header = "#Data for Supplemental Figure 2A. The first two principal components\n#of the gene expression matrix across all samples.\n#The sex of each animal is indicated as 0 = female and 1 = male.")
 ```
 
 ## Tissue-Specific Genes
@@ -377,6 +384,26 @@ for(tx in 1:length(tissue.data)){
   cat("\n\n")
 }
 dev.off()
+
+
+#write out data
+
+for(tx in 1:length(tissue.data)){
+  tissue.eqtl <- tissue.data[[tx]]$lod.peaks$additive
+  tissue.eqtl <- tissue.eqtl[which(tissue.eqtl[,"lod"] >= min.lod),]
+  split.eqtl <- strsplit(tissue.eqtl$marker.id, "_")
+  eqtl.chr <- sapply(split.eqtl, function(x) x[1])
+  eqtl.pos <- as.numeric(sapply(split.eqtl, function(x) x[2]))/1e6
+  allowed.chr <- which(eqtl.chr %in% c(1:19, "X"))
+
+  eqtl.table <- cbind("ID" = tissue.eqtl[allowed.chr,1], "chr" = eqtl.chr[allowed.chr], 
+    "pos" = eqtl.pos[allowed.chr], "lod" = tissue.eqtl[allowed.chr,"lod"])
+  transcript.pos.table <- as.matrix(tissue.data[[tx]]$annot.mrna[,c("gene.id", "chr", "start")])
+
+  write_table_with_header(data.table = eqtl.table, 
+  file.name = file.path(figure.data.dir, paste0("Supp_Fig2", LETTERS[(tx+1)], ".txt")), 
+    header = paste0("#Data for Supplemental Figure 2", LETTERS[(tx+1)], ". eQTL data for ", tissue.names[tx]))
+}
 
 ```
 ## eQTL hotspots {.tabset .tabset-fade .tabset-pills}
@@ -565,6 +592,7 @@ legend(x = 0, y = 0.5, legend = c("Distal", "Local"), fill = herit.cols[c("Dista
 ```
 
 ```{r supp_fig2F}
+
 pdf(here("Results", "Paper", "Supp_Fig2F.pdf"), width = 7, height = 5)
 layout(matrix(c(1,2), nrow = 1), widths = c(1,0.2))
 par(mar = c(4,4,4,1))
@@ -575,6 +603,11 @@ plot.new()
 plot.window(xlim = c(0,1), ylim = c(0,1))
 legend(x = 0, y = 0.5, legend = c("Distal", "Local"), fill = herit.cols[c("Distal", "Local")])
 dev.off()
+
+fig.table <- cbind(rownames(eqtl.count.table[c("Local", "Distal"),]), eqtl.count.table[c("Local", "Distal"),])
+colnames(fig.table)[1] <- "eQTL_type"
+write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig1F.txt"),
+ header = "Data for Supplemental Figure 1F. Counts of local and distal\n#eQTL across tissues at an FDR of 0.01.")
 ```
 
 ## Tissue Specificity {.tabset .tabset-fade .tabset-pills}
@@ -777,6 +810,12 @@ par(mar = c(1,6,0,4))
 imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
 mtext("Shared Local eQTL", side = 3, outer = TRUE, line = -1.5)
 dev.off()
+
+
+fig.table <- cbind(combo.mat, combo.counts)
+colnames(fig.table)[5] <- "eQTL Count"
+write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig1G.txt"),
+  header = "#Data for Supplemental Figure 1G. Each row identifies which tissues\n#are included in the count. The final column indicates the number of\n#shared local eQTL across the tissues indicated.")
 ```
 
 ### Distal eQTL
@@ -833,6 +872,12 @@ par(mar = c(1,6,0,4))
 imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
 mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
 dev.off()
+
+fig.table <- cbind(combo.mat, combo.counts)
+colnames(fig.table)[5] <- "eQTL Count"
+write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig1H.txt"),
+  header = "#Data for Supplemental Figure 1H. Each row identifies which tissues\n#are included in the count. The final column indicates the number of\n#shared distal eQTL across the tissues indicated.")
+
 ```
 
 ## Subspecies Effects {.tabset .tabset-fade .tabset-pills}

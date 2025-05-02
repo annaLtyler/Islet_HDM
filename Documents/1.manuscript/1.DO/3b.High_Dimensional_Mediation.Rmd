@@ -37,7 +37,7 @@ For this workflow there are several parameters to set.
 ```{r get_args}
 rm(list = ls()) #clear out R environment
 #args <- commandArgs(trailingOnly=T)
-num.perm = 10
+num.perm = 1000
 
 args <- c(1,1,0,1,0) #merged tissues, mediation model
 #args <- c(0,0,0,1,0) #sep tissues, mediation model
@@ -51,10 +51,18 @@ weight.adjusted <- as.logical(args[3]) #if TRUE, body weight is adjusted out of 
 complete.mediation <- as.logical(args[4]) #if TRUE use a mediation network. If FALSE use a reactive network
 delete_previous <- as.logical(args[5]) #if TRUE, previous results are overwritten
 
-remove.local.effects <- TRUE #if TRUE, the effects of local genotype are
+remove.local.effects <- FALSE #if TRUE, the effects of local genotype are
                              #removed from gene expression before kernelizing.
                              #This allows us to specifically analyze the correlation 
                              #between distal heritability and trait relevance 
+
+use.local.effects <- FALSE   #if TRUE, the imputed transcriptomes are used
+                            #to generate the transcriptome kernel. Cannot
+                            #be TRUE if remove.locale.effects is TRUE
+
+if(remove.local.effects && use.local.effects){
+    stop("Only one of remove.local.effects or use.local.effects can be TRUE.")
+}
 
 
 if(is.na(merge.tissues)){stop("Please set the parameters for this run.")}
@@ -111,9 +119,18 @@ is.interactive = FALSE
 library("here")
 
 results.dir <- here("Results", "DO", "High_Dim_Med", exp.name)
+if(remove.local.effects){
+    results.dir <- gsub("High_Dim_Med", "High_Dim_Med_distal", results.dir)
+}
+if(use.local.effects){
+    results.dir <- gsub("High_Dim_Med", "High_Dim_Med_local", results.dir)
+}
+
 if(!file.exists(results.dir)){dir.create(results.dir, recursive = TRUE)}
 
 parsed.data.dir <- here("Results", "DO", "Data") #a results folder that holds parsed data that we don't want to mix in with downloaded data
+
+figure.data.dir <- here("Results", "Paper", "Source_Data") #Nature Communications requires data for all figures. Keep it here
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
@@ -331,7 +348,7 @@ if(remove.local.effects){
             resid.tx  <- matrix(NA, nrow = nrow(tx.expr), ncol = ncol(tx.expr))
             dimnames(resid.tx) <- dimnames(tx.expr)
             gene.info <- gene.tables[[tx]]
-            for(ts in 1:ncol(tx.expr)){
+            for(ts in 8776:ncol(tx.expr)){
                 report.progress(ts, ncol(tx.expr))
                 nearest.marker <- gene.info$nearest.marker.id[which(gene.info$gene.id == colnames(tx.expr)[ts])]
                 if(nearest.marker == ""){next()}
@@ -354,6 +371,24 @@ if(remove.local.effects){
 residual.expr <- adj.expr
 }
 ```
+
+```{r use.local.effects}
+#if we are going to use local effects to generate the transcriptome
+if(use.local.effects){
+    local.expr.files <- list.files(here("Results", "DO", "Imputed_Transcriptomes"), 
+        pattern = "Local_Imputation", full.names = TRUE)
+    residual.expr <- lapply(local.expr.files, readRDS)
+
+    #remove transcripts for which we could not impute expression
+    #(non-autosomal)
+    for(tx in 1:length(residual.expr)){
+        keep.cols <- which(!apply(residual.expr[[tx]], 2, function(x) all(is.na(x))))
+        residual.expr[[tx]] <- residual.expr[[tx]][,keep.cols]
+    }
+}
+```
+
+
 
 ```{r scale}
 
@@ -755,6 +790,10 @@ for(tx in 1:max.tx){
     }
     
     tissue.path.stats <- path_coef(model_scores[[tx]])
+
+    #write out path stats for comparison in ms
+    saveRDS(tissue.path.stats, file.path(results.dir, "Path_Stats.RDS"))
+
     tissue.path.coef <- tissue.path.stats[1]
 
     axis.max <- max(c(all.perms[[tx]][,c("X-M", "M-Y")], tissue.path.stats[c("X-M", "M-Y")]), na.rm = TRUE)
@@ -781,7 +820,8 @@ for(tx in 1:max.tx){
 calc.emp.p(tissue.path.coef, all.perms[[tx]][,"path_coef"])
 ```
 
-```{r fig3B_C}
+```{r fig3B_C, eval = FALSE}
+#old figure panels without local and distal kernels
 pdf(here("Results", "Paper", "Fig3B_C.pdf"), width = 5, height = 5)
 tx = 1
 
@@ -806,6 +846,7 @@ hist(all.perms[[tx]][,"path_coef"], xlim = c(path.min, path.max),
 abline(v = tissue.path.coef, col = "red")
 
 dev.off()
+
 ```
 
 ```{r null_correlations}
@@ -1030,6 +1071,7 @@ if(max.tx == 4){
     dev.off()
 }else{
     tx = 1
+    #pdf(here("Results", "Paper", "Supp_Fig_Composite_Vector_Correlations.pdf"), width = 8, height = 2.8)
     png(here("Results", "Paper", "Fig4E.png"), width = 9, height = 2.8, units = "in", res = 300)
     layout.mat <- matrix(c(1:6), nrow = 2, byrow = TRUE)
     layout(layout.mat, heights = c(0.1, 1))
@@ -1084,6 +1126,11 @@ if(max.tx == 4){
         draw.rectangle(plot.dim[1], plot.dim[2], plot.dim[3], plot.dim[4])
     }
     dev.off()
+
+    fig.data <- cbind(rownames(model_scores[[tx]]), model_scores[[tx]])
+    colnames(fig.data) <- c("mouseID", "G_C", "T_C", "P_C")
+    write_table_with_header(fig.data, file.path(figure.data.dir, "Fig4E.txt"),
+        header = "#Data for Fig 4E. Composite genome (G_C), composite transcriptome\n#(T_C), and composite phenome (P_C) scores.")
 }
 ```
 
@@ -1114,6 +1161,11 @@ pdf(here("Results", "Paper", "Fig4B.pdf"), width = 5, height = 6)
 hist(model_scores[[1]][,"Outcome"], breaks = 50, ylab = "Number of Mice",
         xlab = "", main = "")
 dev.off()
+
+fig.data <- cbind("mouseID" = rownames(model_scores[[1]]), 
+    "Metabolic Disease Index (MDI)" = model_scores[[1]][,"Outcome"])
+write_table_with_header(fig.data, file.path(figure.data.dir, "Fig4B.txt"),
+    header = "#Data for Fig4B. Metabolic disease index (MDI) for each mouse.")
 ```
 
 # Transcript Loadings
@@ -1204,6 +1256,11 @@ hist(transcript_loadings[[1]], breaks = 50, , xlab = "Loading",
     main = tissue.names[1], col = tissue.cols[1])
     abline(v = 0, col = "#3182bd", lwd = 2)
 dev.off()
+
+fig.data <- cbind("geneID" = rownames(transcript_loadings[[1]]), 
+    "Loading" = transcript_loadings[[1]][,1])
+write_table_with_header(fig.data, file.path(figure.data.dir, "Fig4C.txt"),
+    header = "#Data for Figure 4C. Transcfipt loadings for Adipose transcripts.")
 ```
 
 ## Transcript Loadings and Heritability
@@ -1474,6 +1531,19 @@ if(calc_null){
 }
 dev.off()
 
+
+tissue.label <- unlist(lapply(1:length(transcript_loadings), function(x) rep(names(transcript_loadings)[x], nrow(transcript_loadings[[x]]))))
+tx.label <- unlist(lapply(transcript_loadings, rownames))
+fig.data <- cbind("Tissue" = tissue.label, "geneID" = tx.label, "Loading" = unlist(transcript_loadings))
+write_table_with_header(fig.data, file.path(figure.data.dir, "Fig4D_observed.txt"),
+    header = "#Data for Figure 4D. Observed transcript loadings across all tissues.\n#These data are also shown in Figure 3.")
+
+
+null.data <- Reduce("rbind", null_loadings)
+colnames(null.data) <- paste0("Perm_", 1:ncol(null.data))
+fig.data <- data.frame("Tissue" = tissue.label, "Transcript" = tx.label, null.data)
+write_table_with_header(fig.data, file.path(figure.data.dir, "Fig4D_null.txt"),
+    header = "#Data for Figure 4D. Null transcript loadings across all tissues for 1000 permutations.")
 ```
 
 
@@ -2140,6 +2210,10 @@ pdf(here("Results", "Paper", "Fig4A.pdf"), width = 3.5, height = 6)
 par(mar = c(4, 8, 4, 2))
 barplot(sort(all.loadings[,1]), las = 2, horiz = TRUE, xlab = "Trait Loading")
 dev.off()
+
+fig.table <- cbind("Trait" = rownames(all.loadings), "Loading" = all.loadings[,1])
+write_table_with_header(fig.table, file.path(figure.data.dir, "Fig4A.txt"),
+    header = "#Data for Figure 4A. Trait loadings.")
 ```
 
 # Polytranscriptomic risk scores
@@ -2814,3 +2888,176 @@ plot.enrichment(pair.enrich)
 Taken together, these results suggest that transcripts that are important
 for traits are differentially regulated across tissues, and thus cannot
 have strong local eQTL. 
+
+
+## Compare Paths
+
+One of the reviewers of the manuscript has asked about the
+strength of the composite score correlations given that there
+are eQTLs in the transcriptome. They thought the permutations
+did not address whether the transcriptome-phenome correlations
+were particularly strong given that there are eQTLs. 
+
+To better address this question, we have performed HDMA again 
+with two more transcriptome kernels: one derived from the 
+residual expression after local haplotype effects have been 
+removed (the distal-only kernen), and the other derived from
+the locally imputed transcripts (local-only kernel).
+
+The local-only kernel resulted in an almost perfect G-T
+correlation (0.92) because the transcriptome is based
+purely on the genome. It resulted in a very low T-P
+correlation (0.14) because the transcripts with large 
+local eQTLs are heavily weighted in this transcriptome,
+and they are not well correlated with traits. It says, 
+though, that if you share a lot of local eQTL with another 
+mouse, you will have similar traits to some extent.
+
+The distal-only kernel gave results that were extremely
+similar to the full transcriptome. The G-T correlation
+was slightly lower, which makes sense, because we removed
+some of the direct genetic effect from the transcriptome.
+The T-P correlation was still very high, suggesting that
+the T-P correlation is the result of distally inherited
+variation, not locally inherited variation. 
+
+The local-only kernel also does not give us a significant
+path coefficient.
+
+Here we plot the results of these kernels on the permutation
+plot in Figure 3C. 
+
+```{r compare_paths}
+#All use.local/use.distal combinations need to be run
+#before running this code. Make sure that the FALSE/FALSE
+#situation was the last one run so that all the figures
+#use the correct data.
+
+box_text <- function(center.point.x, center.point.y, width, height, 
+    fill = "white", border = "black", lwd = 1){
+    draw.rectangle(center.point.x-width, center.point.x+width, 
+        center.point.y-height, center.point.y+height, fill = fill, 
+        border.col = border, lwd = lwd)
+}
+
+distal.dir <- gsub("High_Dim_Med", "High_Dim_Med_distal", results.dir)
+local.dir <- gsub("High_Dim_Med", "High_Dim_Med_local", results.dir)
+
+if(file.exists(distal.dir) && file.exists(local.dir)){
+    
+    tx = 1
+
+    local.path.stats <- readRDS(file.path(local.dir, "Path_Stats.RDS"))
+    distal.path.stats <- readRDS(file.path(distal.dir, "Path_Stats.RDS"))
+
+    all.stats <- list("all" = t(as.matrix(tissue.path.stats)), 
+        "local" = t(as.matrix(local.path.stats)), 
+        "distal" = t(as.matrix(distal.path.stats)),
+        "perm" = all.perms[[tx]])
+
+    pdf(here("Results", "Paper", "Fig3B_C.pdf"), width = 5, height = 5)
+
+    tissue.path.coef <- tissue.path.stats[1]
+
+    axis.max <- max(unlist(lapply(all.stats, function(x) x[,c("X-M", "M-Y")])))
+    axis.min <- min(unlist(lapply(all.stats, function(x) x[,c("X-M", "M-Y")])))
+    #y.axis.max <- max(unlist(lapply(all.stats, function(x) x[,"M-Y"])))
+    #y.axis.min <- min(unlist(lapply(all.stats, function(x) x[,"M-Y"])))
+
+    text.size = 1.5
+    arrow.len = 0.15
+
+    plot(all.perms[[tx]][,"X-M"], all.perms[[tx]][,"M-Y"], 
+        xlim = c(axis.min, axis.max), 
+        ylim = c(axis.min, axis.max), 
+        xlab = "", ylab = "")
+    mtext(expression(paste(G[C], "-", T[C], " correlation (r)")), side = 1, 
+        line = 2.8, cex = text.size)
+    mtext(expression(paste(T[C], "-", P[C], " correlation (r)")), side = 2,
+        line = 2.5, cex = text.size)
+
+    abline(0,1)
+
+    text(x = 0.35, y = 0.2, labels = "Null", cex = text.size)
+    arrows(x0 = 0.42, x1 = 0.52, y0 = 0.2, length = arrow.len, lwd = 3)
+    
+    #local model
+    points(local.path.stats["X-M"], local.path.stats["M-Y"], 
+        col = local.col, pch = 16, cex = 2)
+    text(x = 0.78, y = 0.35, labels = "Local\nModel", cex = text.size)
+    arrows(x0 = 0.78, x1 = local.path.stats["X-M"]-0.025, 
+        y0 = 0.27, y1 = local.path.stats["M-Y"]+0.01, lwd = 3, length = 0.1)
+
+    #distal model
+    points(distal.path.stats["X-M"], distal.path.stats["M-Y"], 
+        col = distal.col, pch = 16, cex = 2)    
+    text(x = 0.18, y = 0.6, labels = "Distal\nModel", cex = text.size)
+    arrows(x0 = 0.27, x1 = distal.path.stats["X-M"]-0.02, 
+        y0 = 0.68, y1 = distal.path.stats["M-Y"]-0.007, lwd = 3, length = 0.1)
+    
+    #full model
+    points(tissue.path.stats["X-M"], tissue.path.stats["M-Y"], 
+        col = "red", pch = 16, cex = 2)
+    box_text(0.7, 0.8, 0.15, 0.05, border = NA)
+    text(x = 0.7, 0.8, "Observed", cex = text.size)
+    arrows(x0 = 0.55, x1 = tissue.path.stats["X-M"]+0.025, y0 = 0.8, 
+        y1 = tissue.path.stats["M-Y"]+0.005, lwd = 3, length = 0.1)
+
+    #=============================================
+    #density plot of null path coefficient
+    #=============================================
+
+    local.path <- local.path.stats["path.coef"]
+    distal.path <- distal.path.stats["path.coef"]
+    
+    path.min <- min(c(all.perms[[tx]][,"path_coef"], tissue.path.coef), na.rm = TRUE)
+    #path.max <- max(c(all.perms[[tx]][,"path_coef"], tissue.path.coef), na.rm = TRUE)
+    path.max = 0.40
+
+    text.size = 1.5
+
+    #hist(all.perms[[tx]][,"path_coef"], xlim = c(path.min, path.max), main = "", breaks = 100, xlab = "", ylab = "")
+    plot(density(all.perms[[tx]][,"path_coef"]), lwd = 3,
+        xlim = c(path.min, path.max), main = "", xlab = "", ylab = "")
+    plot.dim <- par("usr")
+    mtext("Path Coefficient", side = 1, line = 2.5, cex = text.size)
+    mtext("Frequency", side = 2, line = 2.5, cex = text.size)
+
+    plot.height = plot.dim[4] - plot.dim[3]
+    observed.height = plot.height*0.5
+    other.height = plot.height**0.3
+    box.height = plot.height*0.05
+    box.lwd = 2
+
+    #box_text(0.2, plot.height*0.85, 0.04, box.height, lwd = box.lwd)
+    text(0.2, plot.height*0.85, labels = "Null", cex = text.size)
+    arrows(x0 = 0.17, x1 = 0.13, y0 = plot.height*0.85, 
+        y1 = (plot.height*0.85)-1, length = arrow.len, lwd = 3)
+
+    arrows(x0 = tissue.path.coef, y0 = observed.height, y1 = 0, 
+        col = "red", lwd = 3, length = arrow.len)
+    box_text(tissue.path.coef, observed.height+1, 0.08, box.height, 
+        border = "red", lwd = box.lwd)
+    text(x = tissue.path.coef, y = observed.height+1, labels = "Observed",
+        cex = text.size)
+    
+    #arrows(x0 = local.path, y0 = other.height, y1 = 0, col = "black", lwd = 5, length = arrow.len) 
+    arrows(x0 = local.path, y0 = other.height, y1 = 0, col = local.col, lwd = 3,
+        length = arrow.len)
+    box_text(local.path, other.height+1, 0.09, box.height, 
+        border = local.col, lwd = box.lwd) 
+    text(x = local.path, y = other.height+1, labels = "Local Model",
+        cex = text.size)
+
+    arrows(x0 = distal.path, y0 = other.height, y1 = 0, col = distal.col, 
+        lwd = 3, length = arrow.len)
+    box_text(distal.path, other.height+1, 0.09, box.height, 
+        border = distal.col, lwd = box.lwd) 
+    text(x = distal.path, y = other.height+1, labels = "Distal Model",
+        cex = text.size)
+
+    dev.off()
+}
+
+stop()
+```

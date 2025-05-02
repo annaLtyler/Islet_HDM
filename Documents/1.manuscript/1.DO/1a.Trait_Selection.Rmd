@@ -29,6 +29,9 @@ paper.data.dir <- here("Results", "Paper") #for results that will be used in the
 if(!file.exists(paper.data.dir)){dir.create(paper.data.dir, recursive = TRUE)}
 paper.data <- list("paper.data" = list(), "data.idx" = 1)
 
+figure.data.dir <- here("Results", "Paper", "Source_Data") #Nature Communications requires data for all figures. Keep it here
+if(!file.exists(figure.data.dir)){dir.create(figure.data.dir, recursive = TRUE)}
+
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
 ```
@@ -253,6 +256,13 @@ glu <- num.pheno[, "glu_final"]
 weight <- num.pheno[, "weight_final"]
 sex <- as.numeric(as.factor(covar[,1]))
 not.outlier <- which(glu < 800)
+
+fig1abcde.data <- data.frame("ID" = rownames(num.pheno)[not.outlier], 
+  "Sex" = covar[not.outlier,1], 
+  "Food_Consumption" = num.pheno[not.outlier,"food_ave"], 
+  "Glucose" = glu[not.outlier], "Body_Weight" = weight[not.outlier])
+write_table_with_header(fig1abcde.data, file.path(figure.data.dir, "Fig1A-E.txt"),
+  header = "#Data for Figure 1 panels A-E")
 
 pdf(here("Results", "Paper", "Fig1A_B.pdf"), height = 3, width = 4)
 
@@ -806,6 +816,15 @@ pc.mat <- trait.decomp$v
 colnames(pc.mat) <- paste0("PC", 1:ncol(pc.mat))
 rownames(pc.mat) <- matched_names
 
+write_table_with_header(pc.mat, file.path(figure.data.dir, "Supp_Fig1A-B.txt"),
+  header = "#Data for Supplemental Figures 1B.\n#Contributions of each trait to each eigenvector derived\n#from the singular value decomposition of the trait matrix.\n#PC1 and PC2 were used to generate Supp. Fig. 1B.")
+
+pc.var = data.frame("PC" = colnames(pc.mat), 
+  "Var_Exp" = round(trait.decomp$var.exp*100))
+write_table_with_header(pc.var, file.path(figure.data.dir, "Supp_Fig1A.txt"),
+  header = "#Data for Supplemental Figure 1A.\n#Percent trait variance explained for each principal component.\n#rounded to the nearest whole number.")
+
+
 #png("~/Desktop/trait_pc.png", width = 6, height = 7, units = "in", res = 100)
 layout(matrix(c(1,2,3), ncol = 1), heights = c(0.5, 1, 0.2))
 par(mar = c(0, 7.7, 4, 3.7))
@@ -817,6 +836,8 @@ par(mar = c(4,14,0,14))
 imageWithTextColorbar(pc.mat, use.pheatmap.colors = TRUE, bar.lwd = 3, cex = 1.5,
   orientation = "h", axis.line = 1.5)
 #dev.off()
+
+
 ```
 
 The final phenotype matrix is stored in the Data folder in the file
@@ -848,6 +869,12 @@ min.herit <- as.numeric(herit) - herit_error
 xlim <- get_plot_bounds(min.val = 0, max.val = (max(max.herit)), 
   scale.factor = 20, return.even = TRUE)
 herit.order <- order(as.numeric(herit))
+
+fig1F_data <- data.frame("Trait" = names(herit_error), 
+  "Heritability_Estimate" = as.numeric(herit),
+  "Estimate_Error" = herit_error)
+write_table_with_header(fig1F_data, file.path(figure.data.dir, "Fig1F.txt"), 
+  header = "#Data for Figure 1F.")
 
 #vertical
 par(mar = c(4, 8, 4, 2))
@@ -882,6 +909,7 @@ par(xpd = NA)
 text(y = min(min.herit)-0.02, x = 1:length(herit), gsub("_", " ", names(max.herit)[herit.order]), adj = 1, srt = 90)
 par(xpd = TRUE)
 dev.off()
+
 ```
 
 ```{r save_paper_data}
@@ -1018,6 +1046,14 @@ diag(cor.class) <- 3
 cor.class.cols <- c("blue", "purple", "yellow")
 
 highlight.clusters = FALSE
+
+
+header <- c("#Data corresponding to Figure 1G. The upper triangle
+#contains genetic correlations. The lower triangle contains trait
+#correlations, and the diagonal contains trait heritabilities.")
+trait.cor.file <- file.path(figure.data.dir, "Fig1G.txt")
+write_table_with_header(combo.mat, trait.cor.file, header)
+
 
 png(here("Results", "Paper", "Fig1G.png"), width = 5, height = 3.8, units = "in", res = 300)
 layout.mat <- matrix(c(1,2,1,3,1,4), byrow = TRUE, ncol = 2)

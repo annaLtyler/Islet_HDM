@@ -18,22 +18,9 @@ This workflow is outside of the DO manuscript but depends
 on running the data parsing workflows for the CC-RIX.
 
 Here we fit a linear model to each measured transcript 
-that includes sex, diet, treatment, and the corresponding
-imputed transcript (local genetic effect). This will tell 
+that includes sex, diet, and treatment. This will tell 
 us the contribution of each of these factors to the 
 measured gene expression. 
-
-The imputed gene expression, is our best guess at the 
-genetic contribution to the level of each transcript.
-
-Across the CC-RIX, the measured and imputed transcript
-have some relationship. If this relationship is changed
-by metformin, we can conclude that metformin is directly
-changing the level of transcription. If we simply look
-at differential expression in treated and untreated animals,
-we do not know if metformin is directly changing expression 
-or if the expression is changing due to some downstream
-processes.
 
 
 ```{r get_args}
@@ -98,8 +85,6 @@ if(!data.loaded){
     tissue.expr <- readRDS(file.path(processed.data.dir, "Expression.by.Tissue.RDS"))
     manifest <- as.matrix(read.csv(file.path(data.dir, "Original_Samples_Manifest.csv")))
     covar <- as.matrix(read.csv(file.path(processed.data.dir, "Covar.csv"), row.names = 1))
-    bw <- as.matrix(read.csv(file.path(processed.data.dir, "Weight.Summarized.csv"), header = TRUE, row.names = 1))
-    chem.mat <- read.csv(file.path(data.dir, "Blood.Chemistries.Summarized.csv"), row.names = 1)
     groups <- read.csv(file.path(processed.data.dir, "Groups.csv"), row.names = 1)
     group.def <- colnames(groups)
 
@@ -136,76 +121,11 @@ started. We thus removed all animals from the earlier timepoint.
 keep.rows <- which(mouse.info[,"Timepoint"] == "57")
 keep.info <- mouse.info[keep.rows,]
 
-#match up all data matrices with covariate matrices
-num.chem <- apply(as.matrix(chem.mat[,5:ncol(chem.mat)]), 2, as.numeric)
-rownames(num.chem) <- rownames(chem.mat)
-matched.mats <- get.xz(num.chem, keep.info)
-matched.chem <- matched.mats$X
-chem.matched.info <- matched.mats$Z
-saveRDS(matched.chem, file.path(processed.data.dir, "Adjusted.Chem.RDS"))
-
-matched.mats <- get.xz(bw, keep.info)
-matched.bw <- matched.mats$X
-bw.matched.info <- matched.mats$Z
-saveRDS(matched.bw, file.path(processed.data.dir, "Adjusted.BW.RDS"))
-
 matched.mats <- get.xz(adj.cc.expr, keep.info)
 matched.expr <- matched.mats$X
 expr.matched.info <- matched.mats$Z
 saveRDS(matched.expr, file.path(processed.data.dir, paste0("Adjusted.Expression.", tissue.name, ".RDS")))
 ```
-
-
-## Metformin and Traits
-
-Log transform and scale the traits.
-
-```{r met_traits}
-log.chem <- log10(round(matched.chem+1))
-zero.idx <- which(log.chem == 0, arr.ind = TRUE)
-#adj.chem[zero.idx]
-log.chem[which(log.chem == 0)] <- NA
-
-scaled.chem <- apply(log.chem, 2, scale)
-rownames(scaled.chem) <- rownames(matched.chem)
-boxplot(scaled.chem, las = 2)
-```
-
-The traits have the following covariance structure.
-
-```{r}
-chem.cov <- cov(scaled.chem, use = "pairwise.complete.obs")
-pheatmap(chem.cov)
-```
-
-And the following PC coordinates.
-
-```{r}
-chem.decomp <- plot.decomp(chem.cov, label.points = TRUE)
-```
-
-Traits that are significantly influenced by metformin at a nominal
-p value of 0.05 are shown below.
-
-```{r metformin_effect, fig.width = 12, fig.height = 4}
-test.met <- apply(scaled.chem, 2, function(x) lm(x~factor(chem.matched.info[,"Treatment"], levels = c("None", "Metformin"))))
-test.p <- sapply(test.met, function(x) anova(x)$"Pr(>F)"[1])
-
-par(mar = c(6, 4, 4, 2))
-barplot(-log10(test.p), las = 2)
-abline(h = -log10(0.05))
-
-which.sig <- which(test.p <= 0.05)
-
-par(mfrow = c(1,3))
-for(i in 1:length(which.sig)){
-    boxplot(scaled.chem[,which.sig[i]]~chem.matched.info[,"Treatment"],
-        xlab = "Treatment", ylab = names(which.sig)[i], 
-        main = paste(names(which.sig)[i], "\np =", signif(test.p[which.sig[i]], 2)))
-}
-```
-
-
 
 ## Group Expression
 
@@ -227,7 +147,7 @@ matrix. Each point represents one individual. Its strain ID is
 indicated by a number. Points are colored by Sex, Diet, or Treatment.
 
 ```{r expr_decomp, fig.width = 8, fig.height = 8}
-expr.decomp <- plot.decomp(matched.expr, plot.results = FALSE)
+expr.decomp <- plot.decomp(matched.expr, pc = 10, plot.results = FALSE)
 xlab = paste0("PC1 (", signif(expr.decomp$var.exp[1], 2)*100, "%)")
 ylab = paste0("PC2 (", signif(expr.decomp$var.exp[2], 2)*100, "%)")
 
@@ -236,64 +156,38 @@ par(mfrow = c(2,2))
 plot(expr.decomp$u, xlab = xlab, ylab = ylab, main = "Colored by Diet", 
     cex = 1.5, col = "darkgray")
 text(expr.decomp$u[,1], expr.decomp$u[,2], 
-    labels = as.numeric(as.factor(tissue.info[,"User.Defined.Strain"])),
-    col = as.numeric(as.factor(tissue.info[,"Diet"])), cex = 0.5)
+    labels = as.numeric(as.factor(expr.matched.info[,"User.Defined.Strain"])),
+    col = as.numeric(as.factor(expr.matched.info[,"Diet"])), cex = 0.5)
 
 plot(expr.decomp$u, xlab = xlab, ylab = ylab, main = "Colored by Sex", 
     cex = 1.5, col = "darkgray")
 text(expr.decomp$u[,1], expr.decomp$u[,2], 
-    labels = as.numeric(as.factor(tissue.info[,"User.Defined.Strain"])),
-    col = as.numeric(as.factor(tissue.info[,"Sex"])), cex = 0.5)
+    labels = as.numeric(as.factor(expr.matched.info[,"User.Defined.Strain"])),
+    col = as.numeric(as.factor(expr.matched.info[,"Sex"])), cex = 0.5)
 
 plot(expr.decomp$u, xlab = xlab, ylab = ylab, main = "Colored by Treatment", 
     cex = 1.5, col = "darkgray")
 text(expr.decomp$u[,1], expr.decomp$u[,2], 
-    labels = as.numeric(as.factor(tissue.info[,"User.Defined.Strain"])),
-    col = as.numeric(as.factor(tissue.info[,"Treatment"])), cex = 0.5)
+    labels = as.numeric(as.factor(expr.matched.info[,"User.Defined.Strain"])),
+    col = as.numeric(as.factor(expr.matched.info[,"Treatment"])), cex = 0.5)
 
 ```
 
-For a given group with the same cofactors, does expression
-cluster by strain? Sort of. In the plots below, each strain
-is indicated by a number 1 through 20. Individuals from a
-given strain do tend to appear in the same region of the 
-plot, however, there isn't the same tight clustering of 
-strains that we see in the inbred founders. I think this
-is because CAST and PWK are so so so different from the
-domesticus strains that they blow up the scale on which
-we are plotting expression differences. Strains appear
-to cluster very tightly because there is so much distance
-between them. In the CC-RIX, all animals have a mix of 
-CAST, PWK, and domesticus strains, so there are no individual
-mice that are very distant from the others. Individuals do 
-appear near each other, but because we are zoomed in to the
-level of noise, the strains don't appear to cluster as 
-tightly as they would if there were wildy divergent strains.
-I bet if you put BxD mice in the same plot, they would cluster
-well away from the CC-RIX in a way that distinctly separated
-the two populations. As it is, though, all CC-RIX are pretty
-close to each other in transcription space.
+We also checked additional PCs for correlation with metformin 
+treatment
 
-```{r group_pc, fig.width = 8, fig.height = 8}
-u_groups <- unique(expr.matched.info[,c("Sex", "Diet", "Treatment")])
-group.idx <- apply(u_groups, 1, function(x) Reduce("intersect", 
-    list(which(expr.matched.info[,"Sex"] == x[1]), which(expr.matched.info[,"Diet"] == x[2]), 
-    which(expr.matched.info[,"Treatment"] == x[3]))))
-group.expr <- lapply(group.idx, function(x) matched.expr[x,])
-
-#pdf("~/Desktop/Group_Decomp.pdf", width = 16, height = 8)
-par(mfrow = c(2,2))
-for(i in 1:length(group.expr)){
-    group.decomp <- plot.decomp(group.expr[[i]], plot.results = FALSE)
-    xlab = paste0("PC1 (", signif(group.decomp$var.exp[1], 2)*100, "%)")
-    ylab = paste0("PC2 (", signif(group.decomp$var.exp[2], 2)*100, "%)")
-    plot(group.decomp$u, cex = 2.7, main = paste(u_groups[i,], collapse = ", "),
-        xlab = xlab, ylab = ylab)
-    text(group.decomp$u[,1], group.decomp$u[,2], 
-        labels = as.numeric(as.factor(expr.matched.info[group.idx[[i]],"User.Defined.Strain"])))
-}
-#dev.off()
+```{r pc_check, fig.height = 5, fig.width = 7}
+#check other PCs to see if metformin is associated with any of them
+pc.cor <- apply(expr.decomp$u, 2, function(x) cor(x, as.numeric(as.factor(expr.matched.info[,"Treatment"])), method = "spearman"))
+barplot(pc.cor, names = paste("PC", 1:ncol(expr.decomp$u)), ylab = "Spearman Correation", las = 2)
+max.pc <- which.max(abs(pc.cor))
 ```
+
+The best correlation was `r signif(max(abs(pc.cor)), 2)`. This was with PC 
+`r max.pc`, which explained `r signif(expr.decomp$var.exp[max.pc], 2)*100`\% 
+of the total variance.
+
+## Effect of treatment on individual expression
 
 For each measured transcript, we fit a model that indludes Sex, Diet, 
 Treatment, and strain, as well as the interaction between strain and 
@@ -357,16 +251,12 @@ than metformin treatment, which already has a pretty minimal effect.
 
 ```{r coef_dist}
 par(mar = c(8, 4, 2, 2))
-boxplot(abs(all.coef[,2:ncol(all.coef)]), las = 2)
+boxplot(abs(all.coef[,2:ncol(all.coef)]), las = 2, ylab = "|Coefficient|")
 ```
 
 The following plots show the p value distributions for each set of 
-factors. These are all inflated, except for Treatment, and the 
-Treatment by strain effects. I think this is because all the rest
-of the factors have widespread effects on transcription. So the 
-inflation is just an indication of the widespread effects, not 
-an indication that we've done something wrong. We do expect each
-of these factors to have widespread effects.
+factors. Overall, treatment really doesn't have any effects on 
+individual transcripts.
 
 ```{r qqunif, fig.width = 12, fig.height = 9}
 layout.mat <- get.layout.mat((ncol(all.p)-1))
@@ -409,39 +299,8 @@ num.sig <- sapply(sig.transcripts, length)
 num.up <- sapply(sig.up, length)
 num.down <- sapply(sig.down, length)
 par(mar = c(4, 14, 2, 2))
-barplot_with_num(num.sig, las = 2, horiz = TRUE, text.gap = 0.15, text.shift = 0.07)
+barplot_with_num(num.sig[2:length(num.sig)], las = 2, horiz = TRUE, text.gap = 0.15, text.shift = 0.07)
 ```
-
-## Enrichment of Genes Differentially Expressed by Treatment {.tabset .tabset-fade .tabset-pills}
-
-The following plot shows functional enrichment for transcripts that
-were significantly up or downregulated by metformin.
-
-```{r up_down_treat, fig.width = 8, fig.height = 7, results = "asis", eval = FALSE}
-library(gprofiler2)
-treat.up.enrich <- gost(sig.up$Treatment, organism = "mmusculus")
-treat.down.enrich <- gost(sig.down$Treatment, organism = "mmusculus")
-
-cat("### Up-regulated by Metformin\n")
-plot.enrichment(treat.up.enrich, num.terms = 20, , max.term.size = 4000,
-    plot.label = "Upregulated by Metformin", order.by = "p_value")
-cat("\n\n")
-
-cat("### Down-regulated by Metformin\n")
-plot.enrichment(treat.down.enrich, num.terms = 20, , max.term.size = 4000,
-    plot.label = "Downregulated by Metformin", order.by = "p_value")
-cat("\n\n")
-
-cat("### Interacting with Imputed Transcript\n")
-enrich <- gost(sig.transcripts[[8]], organism = "mmusculus")
-plot.enrichment(enrich, num.terms = 20, order.by = "p_value")
-```
-
-## Examples {.tabset .tabset-fade .tabset-pills}
-
-The following plots show a more detailed picture of some of
-the imputed transcripts whose relationship to the measured
-transcript was changed by metformin.
 
 ```{r example}
 plot_int <- function(x.factor, int.factor, response, xlab = "", ylab = "", 
@@ -509,59 +368,12 @@ plot_example <- function(transcript.id){
 
     mar = c(4,4,2,4)
 
-    #plot.with.model(cc.imputed[treat1.locale,transcript.id], 
-    #cc.measured[treat1.locale,transcript.id],
-    #xlab = "Imputed Expression", ylab = "Measured Expression", 
-    #main = int.group[1], ylim = ylim, report = "cor.test")
-    
-    #plot.with.model(cc.imputed[treat2.locale,transcript.id], 
-    #cc.measured[treat2.locale,transcript.id],
-    #xlab = "Imputed Expression", ylab = "Measured Expression", 
-    #main = int.group[2], ylim = ylim, report = "cor.test")
-
     #adjust the measured expression for sex and diet
     adj.measured <- adjust(cc.measured[,transcript.id,drop=FALSE], sex.diet.covar)
 
-    #bin the imputed expression into three bins
-    #binned.imputed <- round(bin.vector(cc.imputed[,transcript.id], 
-    #    segment.region(min(cc.imputed[,transcript.id]), max(cc.imputed[,transcript.id]), 3)), 2)
-
-    #plot_int(x.factor = as.factor(binned.imputed), 
-    #    int.factor = as.factor(matched.covar[,"Treatment"]), 
-    #    response = adj.measured, xlab = "Imputed Expression", 
-    #    ylab = "Measured Expression", trace.label = "Treatment",
-    #    main = "Interaction") 
-    
     mtext(gene.name, side = 3, outer = TRUE, line = -1.5, font = 2)
 
 }
-```
-
-
-```{r example_plots, results = "asis"}
-cc.measured <- matched.expr
-example.id <- rownames(fdr)[which(fdr[,"Treatment:Strain"] <= 0.55)]
-
-#example.idx <- sample(1:nrow(fdr), 5); names(example.idx) <- rownames(fdr)[example.idx]
-num.examples <- min(length(example.id), 18)
-
-if(num.examples > 0){
-    for(i in 1:num.examples){
-        gene.name <- gene.info[which(gene.info[,1] == example.id[i]), "external_gene_name"]
-        cat("###", gene.name, "\n")
-        if(is.interactive){quartz(width = 8, height = 6)}
-        plot_example(example.id[i])
-        cat("\n\n")
-    }
-}else{
-    plot.text("No significant genes at this threshold")
-}
-
-#gene.name = "E2f7"
-#gene.name = "BC067074"
-#gene.id <- gene.info[which(gene.info[,"external_gene_name"] == gene.name),1]
-#gene.id <- "ENSMUSG00000019787"
-#plot_example(gene.id)
 ```
 
 ## Responders and non-responders overall {.tabset .tabset-fade .tabset-pills}
@@ -571,7 +383,7 @@ that are representative of responders and non-responders:
 CC43x42 (non-responder) and CC11x5 (non-responder).
 
 We want to look at the adipose expression in these strains
-with and without metformin expression to see if their response,
+with and without metformin to see if their response,
 or lack thereof can be detected in the transcriptome.
 
 The plots below show the decomposition of the gene expression
@@ -580,22 +392,41 @@ for sex and timepoint before decomposing. The dot plot shows the
 individual mice in PC space. The plotting symbol shows diet, and
 the color shows treatment.
 
-The next two plots show the effects of diet and metformin treatment
-on the first two PCs. The bar heights show the F values, and the 
-numbers above the bars are the p values.
+The box plots show the overall effects of diet and metformin 
+treatment on the first two PCs of expression. This can tell 
+us the effect of metformin on transcription overall.
+
+The second row of plots shows interaction effects between 
+diet and metformin on overall gene expression. The line
+plots show the interaction. The bar plots show the effect
+size of each factor. The number above each bar shows the
+p value of that coefficient.
+
+Metformin does actually have a significant effect on PC1
+in the responder, but not in the non-responder when diet
+is taken into account. This suggests that metformin has
+relatively broad effects on adipose transcription overall 
+in the responder.
+
 
 ```{r, responder_comparison, fig.width = 12, fig.height = 7, results = "asis"}
 
 strain.comp  <- c("non-responder" = "CC043 X CC042", "responder" = "CC011 X CC005")
 
 plot_model <- function(model.result, text.shift = 0.05, plot.label = ""){
-    a <- barplot(anova(model.result)$"F value", names = rownames(anova(model.result)),
-        ylim  = c(0, max(anova(model.result)$"F value", na.rm = TRUE)*1.1),
-        ylab = "F", main = plot.label, las = 2)
+    effects <- coef(model.result)[2:length(coef(model.result))]
+    num.effects <- length(effects)
+    par(mar = c(8,4,4,2))
+    a <- barplot(effects, names = rownames(anova(model.result))[1:num.effects],
+        ylim  = c(min(effects), max(abs(effects), na.rm = TRUE)*1.1),
+        ylab = "Effect Size", main = plot.label, las = 2)
     plot.dim <- par("usr")
     plot.height <- plot.dim[4] - plot.dim[3]
-    pvals <- signif(anova(model.result)$"Pr(>F)", 2)
-    text(a[,1], y = (anova(model.result)$"F value"+(plot.height*text.shift)), labels = pvals)
+    pvals <- signif(anova(model.result)$"Pr(>F)", 2)[1:num.effects]
+    text.y <- effects
+    text.y[which(text.y < 0)] <- 0
+    text(a[,1], y = text.y+(plot.height*text.shift), labels = pvals)
+    abline(h = 0)
 }
 
 #pdf("~/Desktop/strain_metformin.pdf", width = 12, height = 7)
@@ -682,7 +513,7 @@ for(i in 1:length(strain.comp)){
     }
     cat("\n\n")
 }
-dev.off()
+#dev.off()
 ```
 
 ## Responders and non-responders by gene {.tabset .tabset-fade .tabset-pills}
@@ -690,7 +521,7 @@ dev.off()
 We next looked at the effect of metformin and diet on individual 
 genes in these strains. The plots below show the statistics for 
 tests of the effects of diet and treatment on individual genes.
-The two boxplots show distributions of effect sizes and p values
+The volcano plots show distributions of effect sizes and p values
 for the main effects of diet and treatment as well as the interaction
 between them. 
 
@@ -740,7 +571,7 @@ for(i in 1:length(strain.comp)){
     #layout.show(7)
 
     par(mar = c(0,0,0,0))    
-    plot.text(paste(names(strain.comp)[i], ", ", strain.comp[i]), cex = 2)
+    plot.text(paste(names(strain.comp)[i], ", ", strain.comp[i]))
 
     par(mar = c(4,4,4,2))
     for(p in 1:ncol(p.table)){
@@ -814,7 +645,7 @@ has.vals <- which(apply(responder.table[[f]][,1:4], 1, function(x) !all(is.na(x)
 datatable(responder.table[[f]][has.vals,])
 ```
 
-The table below shows the genes that were affected by an interactin
+The table below shows the genes that were affected by an interaction
 between diet and treatment.
 
 ```{r diet_by_treatment}
