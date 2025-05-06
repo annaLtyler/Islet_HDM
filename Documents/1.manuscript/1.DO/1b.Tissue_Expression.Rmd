@@ -247,7 +247,9 @@ dev.off()
 pc.table <- data.frame("Tissue" = names(tissue.col), "Sex" = sample.sex,
   "PC1" = expr.decomp$u[,1], "PC2" = expr.decomp$u[,2])
 write_table_with_header(pc.table, file.path(figure.data.dir, "Supp_Fig2A.txt"),
-  header = "#Data for Supplemental Figure 2A. The first two principal components\n#of the gene expression matrix across all samples.\n#The sex of each animal is indicated as 0 = female and 1 = male.")
+  header = "Data for Supplemental Figure 2A. The first two principal 
+  components of the gene expression matrix across all samples.
+  The sex of each animal is indicated as 0 = female and 1 = male.")
 ```
 
 ## Tissue-Specific Genes
@@ -402,7 +404,8 @@ for(tx in 1:length(tissue.data)){
 
   write_table_with_header(data.table = eqtl.table, 
   file.name = file.path(figure.data.dir, paste0("Supp_Fig2", LETTERS[(tx+1)], ".txt")), 
-    header = paste0("#Data for Supplemental Figure 2", LETTERS[(tx+1)], ". eQTL data for ", tissue.names[tx]))
+    header = paste0("Data for Supplemental Figure 2", LETTERS[(tx+1)], 
+    ". eQTL data for ", tissue.names[tx]))
 }
 
 ```
@@ -607,7 +610,8 @@ dev.off()
 fig.table <- cbind(rownames(eqtl.count.table[c("Local", "Distal"),]), eqtl.count.table[c("Local", "Distal"),])
 colnames(fig.table)[1] <- "eQTL_type"
 write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig1F.txt"),
- header = "Data for Supplemental Figure 1F. Counts of local and distal\n#eQTL across tissues at an FDR of 0.01.")
+ header = "Data for Supplemental Figure 1F. Counts of local and distal
+ eQTL across tissues at an FDR of 0.01.")
 ```
 
 ## Tissue Specificity {.tabset .tabset-fade .tabset-pills}
@@ -815,7 +819,9 @@ dev.off()
 fig.table <- cbind(combo.mat, combo.counts)
 colnames(fig.table)[5] <- "eQTL Count"
 write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig1G.txt"),
-  header = "#Data for Supplemental Figure 1G. Each row identifies which tissues\n#are included in the count. The final column indicates the number of\n#shared local eQTL across the tissues indicated.")
+  header = "Data for Supplemental Figure 1G. Each row identifies which tissues
+  are included in the count. The final column indicates the number of
+  shared local eQTL across the tissues indicated.")
 ```
 
 ### Distal eQTL
@@ -876,7 +882,9 @@ dev.off()
 fig.table <- cbind(combo.mat, combo.counts)
 colnames(fig.table)[5] <- "eQTL Count"
 write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig1H.txt"),
-  header = "#Data for Supplemental Figure 1H. Each row identifies which tissues\n#are included in the count. The final column indicates the number of\n#shared distal eQTL across the tissues indicated.")
+  header = "Data for Supplemental Figure 1H. Each row identifies which 
+  tissues are included in the count. The final column indicates the 
+  number of shared distal eQTL across the tissues indicated.")
 
 ```
 

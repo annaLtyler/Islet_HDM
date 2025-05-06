@@ -261,8 +261,9 @@ fig1abcde.data <- data.frame("ID" = rownames(num.pheno)[not.outlier],
   "Sex" = covar[not.outlier,1], 
   "Food_Consumption" = num.pheno[not.outlier,"food_ave"], 
   "Glucose" = glu[not.outlier], "Body_Weight" = weight[not.outlier])
+
 write_table_with_header(fig1abcde.data, file.path(figure.data.dir, "Fig1A-E.txt"),
-  header = "#Data for Figure 1 panels A-E")
+  header = "Data for Figure 1 panels A-E")
 
 pdf(here("Results", "Paper", "Fig1A_B.pdf"), height = 3, width = 4)
 
@@ -817,12 +818,17 @@ colnames(pc.mat) <- paste0("PC", 1:ncol(pc.mat))
 rownames(pc.mat) <- matched_names
 
 write_table_with_header(pc.mat, file.path(figure.data.dir, "Supp_Fig1A-B.txt"),
-  header = "#Data for Supplemental Figures 1B.\n#Contributions of each trait to each eigenvector derived\n#from the singular value decomposition of the trait matrix.\n#PC1 and PC2 were used to generate Supp. Fig. 1B.")
+  header = "Data for Supplemental Figures 1B. Contributions 
+  of each trait to each eigenvector derived from the singular
+  value decomposition of the trait matrix. PC1 and PC2 were 
+  used to generate Supp. Fig. 1B.")
 
 pc.var = data.frame("PC" = colnames(pc.mat), 
   "Var_Exp" = round(trait.decomp$var.exp*100))
 write_table_with_header(pc.var, file.path(figure.data.dir, "Supp_Fig1A.txt"),
-  header = "#Data for Supplemental Figure 1A.\n#Percent trait variance explained for each principal component.\n#rounded to the nearest whole number.")
+  header = "Data for Supplemental Figure 1A. Percent trait 
+  variance explained for each principal component
+  rounded to the nearest whole number.")
 
 
 #png("~/Desktop/trait_pc.png", width = 6, height = 7, units = "in", res = 100)
@@ -870,11 +876,13 @@ xlim <- get_plot_bounds(min.val = 0, max.val = (max(max.herit)),
   scale.factor = 20, return.even = TRUE)
 herit.order <- order(as.numeric(herit))
 
+
 fig1F_data <- data.frame("Trait" = names(herit_error), 
   "Heritability_Estimate" = as.numeric(herit),
   "Estimate_Error" = herit_error)
+
 write_table_with_header(fig1F_data, file.path(figure.data.dir, "Fig1F.txt"), 
-  header = "#Data for Figure 1F.")
+  header = "Data for Figure 1F.")
 
 #vertical
 par(mar = c(4, 8, 4, 2))
@@ -1047,12 +1055,10 @@ cor.class.cols <- c("blue", "purple", "yellow")
 
 highlight.clusters = FALSE
 
-
-header <- c("#Data corresponding to Figure 1G. The upper triangle
-#contains genetic correlations. The lower triangle contains trait
-#correlations, and the diagonal contains trait heritabilities.")
-trait.cor.file <- file.path(figure.data.dir, "Fig1G.txt")
-write_table_with_header(combo.mat, trait.cor.file, header)
+write_table_with_header(combo.mat, file.path(figure.data.dir, "Fig1G.txt"), 
+  header = "Data corresponding to Figure 1G. The upper triangle
+  contains genetic correlations. The lower triangle contains trait
+  correlations, and the diagonal contains trait heritabilities.")
 
 
 png(here("Results", "Paper", "Fig1G.png"), width = 5, height = 3.8, units = "in", res = 300)

@@ -929,6 +929,13 @@ for(i in 1:nrow(herit.table)){
 }
 legend("topright", legend = c("Local", "distal"), fill = herit.cols, cex = 1.5)
 dev.off()
+
+colnames(herit.table) <- tissue.names
+fig.table <- cbind(gsub("gene.", "", rownames(herit.table)), herit.table)
+colnames(fig.table)[1] <- "Heritability type"
+write_table_with_header(fig.table, file.path(figure.data.dir, "Fig6C.txt"),
+    header = "Data associated with Figure 6C. Local and distal heritabilities
+    for the gene Pparg in each tissue.")
 ```
 
 ## Distal Tails {.tabset .tabset-fade .tabset-pills}

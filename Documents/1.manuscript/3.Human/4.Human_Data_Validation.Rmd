@@ -52,6 +52,7 @@ results.dir <- here("Results", "Human_Validation") #folder for writing results
 if(!file.exists(results.dir)){dir.create(results.dir, recursive = TRUE)}
 
 hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-complete_mediation")
+figure.data.dir <- here("Results", "Paper", "Source_Data") #Nature Communications requires data for all figures. Keep it here
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
@@ -363,6 +364,15 @@ text(x = c(1,2), y = rep(-4.5e-4, 2),
 plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
     adj = 1, cex = 2)
 dev.off()
+
+status.label <- unlist(lapply(1:length(status_list), function(x) rep(names(status_list)[x], length(status_list[[x]]))))
+fig.data <- data.frame("ID" = unlist(lapply(status_list, names)), 
+    "Status" = status.label, "MDI" = unlist(status_list))
+write_table_with_header(fig.data, file.path(figure.data.dir, "Fig8D4_lower_right.txt"),
+    header = "Data associated with lower-right panel of Figure 8D.
+    Table derived from data at GEO accession GSE152517 and includes
+    individual ID, diabetic status and the predicted metabolic disease
+    index (MDI) based on adipose transcription.")
 ```
 
 ## Obesity Status in post-menopausal women
@@ -412,6 +422,7 @@ ortho.idx <- match(common.tx, aligned.ortho[,"Mouse.Ortholog.Ensembl"]) #these i
 
 loaded.expr <- aligned.expr[ortho.idx,] * tx.loadings[common.tx,]
 ind.means <- colMeans(loaded.expr)
+names(ind.means) <- subj.table$Name
 
 status <- subj.table[,"Status"]
 u_status <- unique(status)
@@ -442,6 +453,15 @@ text(x = c(1,2), y = rep(-0.0055, 2),
 plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
     adj = 1, cex = 2)
 dev.off()
+
+status.label <- unlist(lapply(1:length(status_list), function(x) rep(names(status_list)[x], length(status_list[[x]]))))
+id <- unlist(lapply(status_list, names))
+fig.data <- data.frame("ID" = id, "Status" = status.label, "MDI" = unlist(status_list))
+write_table_with_header(fig.data, file.path(figure.data.dir, "Fig8D2_upper_right.txt"),
+    header = "Data associated with upper-right panel of Figure 8D.
+    Table derived from data at GEO accession GSE44000 and includes
+    individual ID, diabetic status, and the predicted metabolic disease
+    index (MDI) based on adipose transcription.")
 ```
 
 ## Obesity in Children
@@ -484,8 +504,10 @@ covar.table <- read_seq_meta(accession, named.numbers = c("Pt_Label" = 31, "sex"
 sex <- dummy_covar(covar.table[,"sex", drop=FALSE])
 age <- as.numeric(gsub("age: ", "", covar.table[,"age"]))
 status <- gsub("disease state: ", "", covar.table[,"status"])
+pt.id <- covar.table[,"Pt_Label"]
 
 adj.expr <- adjust(t(dat), cbind(sex, age))
+rownames(adj.expr) <- pt.id
 
 scaled.expr <- apply(adj.expr, 2, scale)
 rownames(scaled.expr) <- rownames(adj.expr)
@@ -495,6 +517,7 @@ hum.ensembl <- substr(colnames(scaled.expr), 1, 15)
 common.ensembl <- intersect(hum.ensembl, mus.hum[,"Human.Ensembl"])
 mus.ensembl <- mus.hum[match(common.ensembl, mus.hum[,"Human.Ensembl"]), "Mouse.Ortholog.Ensembl"]
 matched.expr <- scaled.expr[,match(common.ensembl, hum.ensembl)]
+rownames(matched.expr) <- pt.id
 
 #see if obesity can be predicted from gene expression
 #pdf("~/Desktop/Diet.pdf", width = 10, height = 5)
@@ -534,6 +557,17 @@ text(x = c(1,2), y = rep(-0.0019, 2),
 plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
     adj = 1, cex = 2)
 dev.off()
+
+
+status.label <- unlist(lapply(1:length(status_list), function(x) rep(names(status_list)[x], length(status_list[[x]]))))
+id <- unlist(lapply(status_list, names))
+fig.data <- data.frame("ID" = id, "Status" = status.label, "MDI" = unlist(status_list))
+write_table_with_header(fig.data, file.path(figure.data.dir, "Fig8D1_upper_left.txt"),
+    header = "Data associated with upper-left panel of Figure 8D.
+    Table derived from data at GEO accession GSE205668 and includes
+    individual ID, metabolic status, and the predicted metabolic disease
+    index (MDI) based on adipose transcription.")
+```
 ```
 
 
@@ -654,4 +688,14 @@ text(x = c(1,2), y = rep(-0.0025, 2),
 plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
     adj = 1, cex = 2)
 dev.off()
+
+status.label <- unlist(lapply(1:length(status_list), function(x) rep(names(status_list)[x], length(status_list[[x]]))))
+id <- unlist(lapply(status_list, names))
+fig.data <- data.frame("ID" = id, "Status" = status.label, "MDI" = unlist(status_list))
+write_table_with_header(fig.data, file.path(figure.data.dir, "Fig8D3_lower_left.txt"),
+    header = "Data associated with lower-left panel of Figure 8D.
+    Table derived from data at GEO accession GSE205668 and includes
+    individual ID, metabolic status, and the predicted metabolic disease
+    index (MDI) based on adipose transcription.")
+
 ```

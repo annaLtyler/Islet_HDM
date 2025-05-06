@@ -109,6 +109,7 @@ hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-com
 cc.parsed.data.dir <- here("Results", "CC-RIX", "Data")
 results.dir <- here("Results", "CC-RIX", "Validation")
 if(!file.exists(results.dir)){dir.create(results.dir)}
+figure.data.dir <- here("Results", "Paper", "Source_Data") #Nature Communications requires data for all figures. Keep it here
 ```
 
 ```{r load_code}
@@ -619,7 +620,8 @@ if(plot.individuals){
     }
     dev.off()
 }else{
-
+    fig.data <- vector(mode = "list", length = length(tissue.expr))
+    
     #with strain means
     pdf(paste0(here("Results", "Paper", fig.name)), width = 3.5, height = 9)
     par(mfrow =c(3,1))
@@ -641,6 +643,13 @@ if(plot.individuals){
         norm.pheno <- apply(adj.pheno, 2, rankZ)
         strain.pheno <- t(sapply(u_strain_idx, function(x) colMeans(norm.pheno[x,], na.rm = TRUE)))
         pheno.error <- t(sapply(u_strain_idx, function(x) apply(norm.pheno[x,], 2, function(y) sd(y, na.rm = TRUE))))
+
+        fig.table <- cbind(names(strain.mge), 
+            rep(names(tissue.expr)[i], length(strain.mge)), strain.mge, 
+            strain.pheno[,"Body.Weight"], pheno.error[,"Body.Weight"])
+        colnames(fig.table) <- c("Strain", "Tissue", "Predicted Metabolic Index", 
+            "Avg Body Weight", "Std Dev")
+        fig.data[[i]] <- fig.table
 
         points(strain.mge, strain.pheno[,"Body.Weight"], col = "gray10", cex = 2)
         segments(x0 = strain.mge, y0 = strain.pheno[,"Body.Weight"]+pheno.error[,"Body.Weight"], 
@@ -664,6 +673,15 @@ if(plot.individuals){
         text(x = -2, y = 1.25, labels = paste0("p = ", signif(stats[2], 2)), adj = 0, cex = 1.2)
     }
     dev.off()
+
+    all.fig.data <- Reduce("rbind", fig.data)
+    write_table_with_header(all.fig.data, 
+        file.path(figure.data.dir, gsub(".pdf", ".txt", fig.name)),
+        header = paste("Data associated with", gsub(".pdf", "", fig.name), 
+        "Table contains the CC-RIX strain, tissue name, the predicted
+        metabolic index based on the results from the given tissue, the
+        average body weight of the strain, and the standard deviation of
+        the body weight in each strain."))
 }
 
 ```
