@@ -2,7 +2,7 @@ plot.grouped.boxes <- function(group.list, group.labels = names(group.list),
 group.cols = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3"),
 main = "", type = c("list", "matrix"), plot.grouping = c("outer", "inner"),
 plot.type = c("box", "stripchart", "vioplot"), strip.method = "jitter", strip.offset = 0.1, 
-print.vals = c("mean", "median"), ylab = "",
+print.vals = c("mean", "median", "n"), ylab = "",
 stats.cex = 0.7, label.srt = 0, legend.x = NULL, legend.y = NULL, legend.title = NULL, 
 legend.horiz = FALSE, notch = FALSE,
 cex = 1, cex.names = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group.sep = 1.3){
@@ -92,12 +92,22 @@ cex = 1, cex.names = 1, pch = 16, las = 1, within.group.sep = 0.7, between.group
 			if(length(data.vals) > 0){
 				if(print.vals == "mean"){
 					print.val1 <- signif(mean(data.vals, na.rm = TRUE), 2)
-					}else{
-					print.val1 <- signif(median(data.vals, na.rm = TRUE), 2)
+					print.val2 <- signif(sd(data.vals, na.rm = TRUE), 2)
+					print.val.sep = "+/-"
 					}
-				print.val2 <- signif(sd(data.vals, na.rm = TRUE), 2)
+				if(print.vals == "median"){
+					print.val1 <- signif(median(data.vals, na.rm = TRUE), 2)
+					print.val2 <- signif(sd(data.vals, na.rm = TRUE), 2)
+					print.val.sep = "+/-"
+					}
+				if(print.vals == "n"){
+					print.val1 <- "n ="
+					print.val2 = length(which(!is.na(data.vals)))
+					print.val.sep = ""
+				}
+				
 				text(x = box.pos, y = (ymin - (plot.height*0.05)), labels = print.val1, cex = stats.cex)
-				text(x = box.pos, y = (ymin - (plot.height*0.075)), labels = "+/-", cex = stats.cex)
+				text(x = box.pos, y = (ymin - (plot.height*0.075)), labels = print.val.sep, cex = stats.cex)
 				text(x = box.pos, y = (ymin - (plot.height*0.1)), labels = print.val2, cex = stats.cex)
 				par(xpd = FALSE)
 				}

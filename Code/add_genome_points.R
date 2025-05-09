@@ -20,6 +20,7 @@ type = "p", ylab = ""){
   marker.chr <- rep(NA, nrow(info.table))
   marker.pos <- rep(NA, nrow(info.table))
   for(i in 1:nrow(info.table)){
+    #report.progress(i, nrow(info.table))
     marker.locale <- which(marker.label == rownames(info.table)[i])
     if(length(marker.locale) > 0){
       marker.chr[i] <- map.chr[marker.locale]
@@ -32,7 +33,6 @@ type = "p", ylab = ""){
     }
   }
   
-    
   for(i in 1:length(u_chr)){
     gene.chr.locale <- which(marker.chr == u_chr[i])
     gene.pos <- marker.pos[gene.chr.locale]

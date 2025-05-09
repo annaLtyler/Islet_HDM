@@ -609,8 +609,8 @@ dev.off()
 
 fig.table <- cbind(rownames(eqtl.count.table[c("Local", "Distal"),]), eqtl.count.table[c("Local", "Distal"),])
 colnames(fig.table)[1] <- "eQTL_type"
-write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig1F.txt"),
- header = "Data for Supplemental Figure 1F. Counts of local and distal
+write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig2F.txt"),
+ header = "Data for Supplemental Figure 2F. Counts of local and distal
  eQTL across tissues at an FDR of 0.01.")
 ```
 
@@ -801,6 +801,7 @@ mtext("Shared Local eQTL", side = 3, outer = TRUE, line = -1.5)
 
 ```{r supp_fig2G}
 png(here("Results", "Paper", "Supp_Fig2G.png"), width = 8, height = 5, units = "in", res = 300)
+#pdf(here("Results", "Paper", "Supp_Fig2G.pdf"), width = 8, height = 5)
 par(bg = NA)
 bar.col <- rep("gray", nrow(combo.mat))
 single.tissue <- which(rowSums(combo.mat) == 1)
@@ -811,15 +812,15 @@ a <- barplot(combo.counts, ylab = "eQTL Count", col = bar.col, ylim = c(0, 5000)
 text(x = a[single.tissue], y = combo.counts[single.tissue]+100, 
   labels = rev(tissue.names), srt = 90, adj = 0)
 par(mar = c(1,6,0,4))
-imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
+imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.04)
 mtext("Shared Local eQTL", side = 3, outer = TRUE, line = -1.5)
 dev.off()
 
 
 fig.table <- cbind(combo.mat, combo.counts)
 colnames(fig.table)[5] <- "eQTL Count"
-write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig1G.txt"),
-  header = "Data for Supplemental Figure 1G. Each row identifies which tissues
+write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig2G.txt"),
+  header = "Data for Supplemental Figure 2G. Each row identifies which tissues
   are included in the count. The final column indicates the number of
   shared local eQTL across the tissues indicated.")
 ```
@@ -865,6 +866,7 @@ mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
 
 ```{r supp_fig2H}
 png(here("Results", "Paper", "Supp_Fig2H.png"), width = 8, height = 5, units = "in", res = 300)
+#pdf(here("Results", "Paper", "Supp_Fig2H.pdf"), width = 8, height = 5)
 par(bg = NA)
 bar.col <- rep("gray", nrow(combo.mat))
 single.tissue <- which(rowSums(combo.mat) == 1)
@@ -875,14 +877,14 @@ a <- barplot(combo.counts, ylab = "eQTL Count", col = bar.col, ylim = c(0, 5000)
 text(x = a[single.tissue], y = combo.counts[single.tissue]+100, 
   labels = rev(tissue.names), srt = 90, adj = 0)
 par(mar = c(1,6,0,4))
-imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.02)
+imageWithText(t(combo.mat), col.scale = "blue", row.text.shift = 0.04)
 mtext("Shared Distal eQTL", side = 3, outer = TRUE, line = -1.5)
 dev.off()
 
 fig.table <- cbind(combo.mat, combo.counts)
 colnames(fig.table)[5] <- "eQTL Count"
-write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig1H.txt"),
-  header = "Data for Supplemental Figure 1H. Each row identifies which 
+write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig2H.txt"),
+  header = "Data for Supplemental Figure 2H. Each row identifies which 
   tissues are included in the count. The final column indicates the 
   number of shared distal eQTL across the tissues indicated.")
 

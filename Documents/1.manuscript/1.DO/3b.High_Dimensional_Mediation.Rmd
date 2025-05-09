@@ -998,13 +998,13 @@ if(max.tx == 4){
         plot.text(tissue.names[tx], cex = 2, font = 2, adj = 0.5, x = 0.4, y = 0.25)
     }
     #add plot labels
-    gvt <- expression("G"["C"]-"T"["C"])
-    tvp <- expression("T"["C"]-"P"["C"])
-    gvp <- expression("G"["C"]-"P"["C"])
-    plot.labels <- c(gvt, tvp, gvp)
+    gvt <- bquote(italic(G[C])~"-"~italic(T[C]))
+    tvp <- bquote(italic(T[C])~"-"~italic(P[C]))
+    gvp <- bquote(italic(G[C])~"-"~italic(P[C]))
+    plot.labels <- list(gvt, tvp, gvp)
     for(l in 1:length(plot.labels)){
         par(mar = c(4,0,0,0))
-        plot.text(plot.labels[l], x = 0.3 , y = 0.5, cex = 2, font = 2, srt = 90, adj = 0.5)
+        plot.text(plot.labels[[l]], x = 0.3 , y = 0.5, cex = 2, font = 2, srt = 90, adj = 0.5)
     }
 
     panel.counter <- 8
@@ -1020,10 +1020,14 @@ if(max.tx == 4){
         #change from generic names to specific names
         if(complete.mediation){
             colnames(curr_scores) <- c("Genome", "Transcriptome", "Phenotype")
-            axis.labels <- c(expression("G"["C"]), expression("T"["C"]), expression("P"["C"]))
+            axis.labels <- list(bquote(italic(G[C])), 
+                bquote(italic(T[C])), 
+                bquote(italic(P[C])))
         }else{
             colnames(curr_scores) <- c("Genome", "Phenotype", "Transcriptome")
-            axis.labels <- c(expression("G"["C"]), expression("P"["C"]), expression("T"["C"]))
+            axis.labels <- c(bquote(italic(G[C])), 
+                bquote(italic(P[C])), 
+                bquote(italic(T[C])))
         }
         
         path.coef <- path_coef(curr_scores)
@@ -1045,15 +1049,15 @@ if(max.tx == 4){
             plot(adj.x, adj.y, pch = 16, col = tissue.cols[tx], xlab = "", 
                 ylab = "")
             abline(model, col = "#3182bd", lwd = 3)
-            plot.text(paste("r =", signif(cor(adj.y, adj.x), 2)), rel.x = 0.05, rel.y = 0.95, add = TRUE, adj = 0, cex = 1.2)
+            plot.text(bquote(italic(r)~"="~.(signif(cor(adj.y, adj.x), 2))), rel.x = 0.05, rel.y = 0.95, add = TRUE, adj = 0, cex = 1.2)
             plot.text(p.text, rel.x = 0.05, rel.y = 0.88, add = TRUE, adj = 0, cex = 1.2)
             
 
             #if(panel.counter %in% c(8, 9, 10)){
                 #mtext(axis.labels[var2], side = 2, line = 0.5, adj = 0, cex = 0.8)
                 #mtext(axis.labels[var1], side = 1, line = 0.5, adj = 0, cex = 0.8)
-                mtext(axis.labels[var2], side = 2, line = 2.5)
-                mtext(axis.labels[var1], side = 1, line = 2.5)
+                mtext(axis.labels[[var2]], side = 2, line = 2.5)
+                mtext(axis.labels[[var1]], side = 1, line = 2.5)
             #}
             #if(panel.counter %in% c(11, 12, 13)){
                 #mtext(colnames(curr_scores)[var1], side = 1)
@@ -1071,20 +1075,20 @@ if(max.tx == 4){
     dev.off()
 }else{
     tx = 1
-    #pdf(here("Results", "Paper", "Supp_Fig_Composite_Vector_Correlations.pdf"), width = 8, height = 2.8)
-    png(here("Results", "Paper", "Fig4E.png"), width = 9, height = 2.8, units = "in", res = 300)
+    pdf(here("Results", "Paper", "Fig4E.pdf"), width = 9, height = 2.8)
+    #png(here("Results", "Paper", "Fig4E.png"), width = 9, height = 2.8, units = "in", res = 300)
     layout.mat <- matrix(c(1:6), nrow = 2, byrow = TRUE)
     layout(layout.mat, heights = c(0.1, 1))
     par(bg = NA)
     #add headers for correlation comparisons
     
-    gvt <- expression("G"["C"]-"T"["C"])
-    tvp <- expression("T"["C"]-"P"["C"])
-    gvp <- expression("G"["C"]-"P"["C"])
-    plot.labels <- c(gvt, tvp, gvp)
+    gvt <- bquote(italic(G[C])~"-"~italic(T[C]))
+    tvp <- bquote(italic(T[C])~"-"~italic(P[C]))
+    gvp <- bquote(italic(G[C])~"-"~italic(P[C]))
+    plot.labels <- list(gvt, tvp, gvp)
     for(l in 1:length(plot.labels)){
         par(mar = c(0,4,0,4))
-        plot.text(plot.labels[l], x = 0.5 , y = 0.1, cex = 2, font = 2, adj = c(0.5, 0))
+        plot.text(plot.labels[[l]], x = 0.5 , y = 0.1, cex = 2, font = 2, adj = c(0.5, 0))
     }
 
     #find the correlations between the scores
@@ -1093,10 +1097,14 @@ if(max.tx == 4){
     #change from generic names to specific names
     if(complete.mediation){
         colnames(curr_scores) <- c("Genome", "Transcriptome", "Phenotype")
-        axis.labels <- c(expression("G"["C"]), expression("T"["C"]), expression("P"["C"]))
+        axis.labels <- list(bquote(italic(G[C])), 
+                bquote(italic(T[C])), 
+                bquote(italic(P[C])))
     }else{
         colnames(curr_scores) <- c("Genome", "Phenotype", "Transcriptome")
-        axis.labels <- c(expression("G"["C"]), expression("P"["C"]), expression("T"["C"]))
+        axis.labels <- c(bquote(italic(G[C])), 
+            bquote(italic(P[C])), 
+            bquote(italic(T[C])))
     }
     
     path.coef <- path_coef(curr_scores)
@@ -1118,10 +1126,10 @@ if(max.tx == 4){
         p.text <- threshold_p(pval, return.text = TRUE)
         plot(adj.x, adj.y, pch = 16, xlab = "", ylab = "")
         abline(model, col = "#3182bd", lwd = 3)
-        plot.text(paste("r =", signif(cor(adj.y, adj.x), 2)), rel.x = 0.05, rel.y = 0.95, add = TRUE, adj = 0, cex = 1.2)
+        plot.text(bquote(italic(r)~"="~.(signif(cor(adj.y, adj.x), 2))), rel.x = 0.05, rel.y = 0.95, add = TRUE, adj = 0, cex = 1.2)
         plot.text(p.text, rel.x = 0.05, rel.y = 0.88, add = TRUE, adj = 0, cex = 1.2)
-        mtext(axis.labels[var2], side = 2, line = 2.5)
-        mtext(axis.labels[var1], side = 1, line = 2.5)
+        mtext(axis.labels[[var2]], side = 2, line = 2.5)
+        mtext(axis.labels[[var1]], side = 1, line = 2.5)
         plot.dim <- par("usr")
         draw.rectangle(plot.dim[1], plot.dim[2], plot.dim[3], plot.dim[4])
     }
@@ -1261,7 +1269,7 @@ dev.off()
 fig.data <- cbind("geneID" = rownames(transcript_loadings[[1]]), 
     "Loading" = transcript_loadings[[1]][,1])
 write_table_with_header(fig.data, file.path(figure.data.dir, "Fig4C.txt"),
-    header = "Data for Figure 4C. Transcfipt loadings for Adipose transcripts.")
+    header = "Data for Figure 4C. Transcript loadings for Adipose transcripts.")
 ```
 
 ## Transcript Loadings and Heritability
@@ -1538,7 +1546,7 @@ tx.label <- unlist(lapply(transcript_loadings, rownames))
 fig.data <- cbind("Tissue" = tissue.label, "geneID" = tx.label, "Loading" = unlist(transcript_loadings))
 write_table_with_header(fig.data, file.path(figure.data.dir, "Fig4D_observed.txt"),
     header = "Data for Figure 4D. Observed transcript loadings 
-    across all tissues. These data are also shown in Figure 3.")
+    across all tissues. These data are also shown in Supplementary Figure 3.")
 
 
 null.data <- Reduce("rbind", null_loadings)
@@ -1586,6 +1594,21 @@ if(!file.exists(enrich.file) || delete_previous){
         write.table(cmap.table, 
             file.path(results.dir, paste0("CMAP_Transcript_Loadings_", tissue.names[tx], "_", adjust_numeral, ".txt")),
             quote = FALSE, row.names = FALSE, sep = "\t")
+
+        if(tx == 1 || tx == 2){
+            up.down.trimmed <- lapply(1:2, function(x) cmap.table[which(!is.na(cmap.table[,x]))[1:150],x])
+            up.down.label <- unlist(lapply(1:2, function(x) rep(c("up", "down")[x], 150)))
+            fig.data <- data.frame("Up_Down" = up.down.label, "Human_entrez_gene_ID" = unlist(up.down.trimmed))
+            fig.num <- c("10-12", "11-13")[tx]
+            write_table_with_header(fig.data, file.path(figure.data.dir, paste0("Supp_Fig", fig.num, ".txt")),
+                header = paste("Data corresponding to Supplementary Figures", 
+                gsub("-", " and ", fig.num), 
+                "Table includes 150 genes with positive loadings and 150 genes with 
+                negative loadings in", tissue.names[tx], "for input into the clue.io
+                associated with the connectivity map of the Broad Institute. The clue.io
+                tool generated the tables seen in Supplementary Figures", 
+                gsub("-", " and ", fig.num)))
+        }
 
         all.enrich[[tx]] <- list("top" = top.enrich, "bottom" = bottom.enrich)
     }
@@ -1944,7 +1967,8 @@ load.gene.info <- plot_gene_stats(gene.stats)
 dev.off()
 
 
-png(here("Results", "Paper", "Fig5A.png"), width = 5, height = 12, units = "in", res = 300)
+#png(here("Results", "Paper", "Fig5A.png"), width = 5, height = 12, units = "in", res = 300)
+pdf(here("Results", "Paper", "Fig5A.pdf"), width = 5, height = 12)
 load.gene.info <- plot_gene_stats(gene.set.stats = gene.stats)
 dev.off()
 
@@ -2023,7 +2047,8 @@ png(file.path(results.dir, "gene_stats_combined_local_herit.png"), width = 5, he
 local.gene.info <- plot_gene_stats(local.gene.stats, loading.lim = c(-0.06, 0.06))
 dev.off()
 
-png(here("Results", "Paper", "Fig5C.png"), width = 5, height = 12, units = "in", res = 300)
+#png(here("Results", "Paper", "Fig5C.png"), width = 5, height = 12, units = "in", res = 300)
+pdf(here("Results", "Paper", "Fig5C.pdf"), width = 5, height = 12)
 local.gene.info <- plot_gene_stats(local.gene.stats, loading.lim = c(-0.06, 0.06))
 dev.off()
 
@@ -2168,7 +2193,8 @@ png(file.path(results.dir, "gene_stats_combined_twas.png"), width = 5, height = 
 twas.gene.info <- plot_gene_stats(twas.gene.stats, loading.lim = c(-0.06, 0.06))
 dev.off()
 
-png(here("Results", "Paper", "Fig5B.png"), width = 5, height = 12, units = "in", res = 300)
+#png(here("Results", "Paper", "Fig5B.png"), width = 5, height = 12, units = "in", res = 300)
+pdf(here("Results", "Paper", "Fig5B.pdf"), width = 5, height = 12)
 twas.gene.info <- plot_gene_stats(twas.gene.stats, loading.lim = c(-0.06, 0.06))
 dev.off()
 
@@ -2543,6 +2569,8 @@ plot_clustered_values <- function(cluster_results, max.term.size = 3000,
     }
 
     par(mar = c(6,20,2,2))
+    layout.mat <- matrix(c(1,2,1,0), nrow = 2, byrow = TRUE)
+    layout(layout.mat, widths = c(1,0.2))
     if(cluster.borders == "bars" || cluster.borders == "both"){
         imageWithText(value.mat, show.text = FALSE, use.pheatmap.colors = TRUE, 
             row.names = row.labels, row.text.shift = 0.36, col.text.shift = 0.01)
@@ -2576,6 +2604,12 @@ plot_clustered_values <- function(cluster_results, max.term.size = 3000,
         }
 
     }
+
+    #plot a color bar for the heatmap
+    par(mar = c(4,3,4,3))
+    imageWithTextColorbar(value.mat, use.pheatmap.colors = TRUE, 
+        bar.lwd = 3, cex = 1, round.nearest = max(abs(value.mat)/100),
+        axis.line = -4)
 
     if(enrichment.tables){
         #further descriptions of enrichments for groups
@@ -2699,7 +2733,8 @@ write.table(full.table, file.path(toa.cluster.dir, "Tissues_of_Action_Genes.txt"
 
 ```{r Fig6A}
 
-png(here("Results", "Paper", "Fig6A.png"), width = 6, height = 7, units = "in", res = 300)
+#png(here("Results", "Paper", "Fig6A.png"), width = 6, height = 7, units = "in", res = 300)
+pdf(here("Results", "Paper", "Fig6A.pdf"), width = 6.5, height = 7)
 val.mat <- plot_clustered_values(cluster_results = toa.results, 
     enrichment.tables = FALSE, loading.viols = FALSE,
     alt.labels = alt.labels[,1], cluster.borders = "boxes")
@@ -3023,11 +3058,10 @@ if(file.exists(distal.dir) && file.exists(local.dir)){
         xlim = c(axis.min, axis.max), 
         ylim = c(axis.min, axis.max), 
         xlab = "", ylab = "")
-    mtext(expression(paste(G[C], "-", T[C], " correlation (r)")), side = 1, 
-        line = 2.8, cex = text.size)
-    mtext(expression(paste(T[C], "-", P[C], " correlation (r)")), side = 2,
-        line = 2.5, cex = text.size)
-
+    mtext(bquote(italic(G[C])~"-"~italic(T[C])~" correlation ("*italic(r)~")"), 
+        side = 1, line = 2.8, cex = text.size)
+    mtext(bquote(italic(T[C])~"-"~italic(P[C])~" correlation ("*italic(r)~")"), 
+        side = 2, line = 2.5, cex = text.size)
     abline(0,1)
 
     text(x = 0.35, y = 0.2, labels = "Null", cex = text.size)
@@ -3113,7 +3147,7 @@ if(file.exists(distal.dir) && file.exists(local.dir)){
 
 
 write_table_with_header(all.perms[[1]][,1,drop=FALSE], file.path(figure.data.dir,
-    "Fig3B_Null.txt"), header = "Data corresponding to Figure 3B 
+    "Fig3B_null.txt"), header = "Data corresponding to Figure 3B 
     null distribution. Null path coefficients for 1000 permutations.")
 
 fig.table <- matrix(c(tissue.path.coef, local.path, distal.path),  nrow = 1)
@@ -3125,17 +3159,65 @@ write_table_with_header(fig.table, file.path(figure.data.dir, "Fig3B_stats.txt")
 
 fig.table <- all.stats$perm[,c("X-M", "M-Y")]
 colnames(fig.table) <- c("G-T correlation", "T-P correlation")
-write_table_with_header(fig.table, file.path(figure.data.dir, "Fig3C_Null.txt"),
+write_table_with_header(fig.table, file.path(figure.data.dir, "Fig3C_null.txt"),
     header = "Data corresponding to null distribution in Figure 3C. 
     Null distribution of G-T correlation and T-P correlation from 1000 
     permutations.")
 
+
 fig.table <- t(sapply(all.stats[1:3], function(x) x[,c("X-M", "M-Y")]))
 fig.table <- cbind(rownames(fig.table), fig.table)
 colnames(fig.table) <- c("Genetic Contributions", "G-T", "T-P")
-write_table_with_header(fig.table, "Data corresponding to observed 
+write_table_with_header(fig.table, file.path(figure.data.dir, "Fig3C_stats.txt"),
+    header = "Data corresponding to observed 
     statistics in Figure 3C. G-T and T-P correlations for models 
     including all genetic effects, local genetic effects only, and 
     distal genetic effects only.")
 ```
 
+
+## Nucb2
+
+Nucb2 has high distal heritability in the islet.
+Perform a qtl scan to see if it has an significant
+distal eQTL.
+
+```{r nucb2, fig.width = 10, fig.height = 3.5}
+gene.name = "Nucb2"; tissue.name = "Islet"
+
+gene.idx <- which(gene.info$external_gene_name == gene.name)
+gene.id <- gene.info$ensembl_gene_id[gene.idx]
+gene.chr <- gene.info$chromosome_name[gene.idx]
+gene.pos <- gene.info$start_position[gene.idx]/1e6
+tissue.idx <- which(names(scaled.expr) == tissue.name)
+common.ind <- Reduce("intersect", lapply(Kt, colnames))
+gene.expr <- adj.expr[[tissue.idx]][common.ind,gene.id]
+gene.scan <- scan1(genoprobs, gene.expr, addcovar = covar, kinship = Kg)
+plot(gene.scan, map = map, main = paste(gene.name, "in", tissue.name))
+```
+
+
+```{r nucb2_fig}
+pdf(here("Results", "Paper", "Supp_Fig_14_Nucb2.pdf"), width = 10, 
+    height = 3.5)
+par(mar = c(2,4,2,0))
+plot_scan1(gene.scan, map, lodcol = 1, ylim = c(0, 9), 
+    chr = c(1:19, "X"), main = substitute(paste(italic("Nucb2"), " in islet")), 
+    type = "l", ylab = "LOD score",
+    col = "gray20", mark.chr = gene.chr, mark.pos = gene.pos, mark.col = "red", 
+    mark.lwd = 2, mark.type = "arrow", arrow.len = 0.1, arrow.max = 6,
+    mark.label = "Nucb2", mark.font = 3)
+plot.dim <- par("usr")
+segments(x0 = plot.dim[1], x1 = plot.dim[2]*0.95, y0 = 8, lty = 2)
+dev.off()
+
+fig.table <- data.frame("marker_name" = rownames(gene.scan),
+    "lod" = gene.scan[,1])
+write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig14.txt"),
+    header = "Data corresponding to Supplementary Figure 14. Table includes
+    all marker names, which are formatted with the chromosome name and
+    the marker position in base pairs separated by an underscore.
+    It also includes the LOD score
+    measured at each marker for the transcript level of Nucb2 in pancreatic
+    islet in the DO. Nucb2 is encoded on chromosome 7 at 116.5Mb.")
+```

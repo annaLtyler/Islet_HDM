@@ -37,6 +37,7 @@ go.result.dir <- here("Results", "GO")
 if(!file.exists(go.result.dir)){dir.create(go.result.dir, recursive = TRUE)}
 
 hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-complete_mediation")
+figure.data.dir <- here("Results", "Paper", "Source_Data") #Nature Communications requires data for all figures. Keep it here
 
 signed.gsea <- TRUE #If TRUE, GSEA is run on the transcript loadings as is
         #This means that genes pathways with lots of positive
@@ -209,11 +210,21 @@ for(tx in 1:length(tissue.names)){
         text(x = rep(-0.1, 10), y = head(a, 10), labels = head(names(extreme.enrich), 10), adj = 1)
     }
     mtext("Normalized Enrichment Score", side = 1, line = 2.5)
-    top.scores[[tx]] <- names(extreme.enrich)
+    top.scores[[tx]] <- extreme.enrich
     abline(v = seq(-4, 4, 1), col = "gray", lty = 2)
     cat("\n\n")
 }
 dev.off()
+
+
+tissue.label <- unlist(lapply(1:length(top.scores), function(x) rep(names(top.scores)[x], length(top.scores[[x]]))))
+kegg.label <- unlist(lapply(top.scores, names))
+fig.data <- data.frame("Tissue" = tissue.label, "KEGG term" = kegg.label,
+    "NES" = unlist(top.scores))
+write_table_with_header(fig.data, file.path(figure.data.dir, "Supp_Fig4.txt"),
+    header = "Data corresponding to Supplemental Figure 4. Table includes
+    normalized enrichment scores for the most strongly enriched KEGG terms
+    for transcripts ordered by loading in each tissue.")
 
 ```
 
@@ -225,7 +236,7 @@ The p value above each distribution is from a t test testing
 whether the mean loading is non-zero.
 
 ```{r plot_all_dist, warning = FALSE, message = FALSE, error = FALSE, fig.width = 9, fig.height = 9}
-all.extreme.kegg <- unique(unlist(top.scores))
+all.extreme.kegg <- unique(unlist(lapply(top.scores, names)))
 top.kegg.mat <- path_enrich[match(all.extreme.kegg, rownames(path_enrich)),]
 
 kegg.loading.file <- file.path(kegg.result.dir, paste0("Kegg_Pathway_Loadings_", signed.text, ".pdf"))
@@ -316,9 +327,12 @@ plot_kegg_picture <- function(search.term, quote.level = "####", fig.width = 100
     #vioplot(tissue.path.loadings, col = tissue.cols);abline(h = 0)
 
     scale.factor <- max(sapply(transcript_loadings, function(x) max(abs(x), na.rm = TRUE)))
+    fig.data <- vector(mode = "list", length = length(tissue.names))
+    names(fig.data) <- tissue.names
 
     for(tx in 1:length(tissue.names)){
         cat(quote.level, tissue.names[tx], "\n")
+        fig.data[[tx]] <- tissue.path.loadings[[tx]]/scale.factor
         pv.out <- pathview(gene.data = tissue.path.loadings[[tx]]/scale.factor, 
             pathway.id = path.id, species = "mmu", 
             out.suffix = paste(tissue.names[tx], gsub(" ", "_", search.term), signed.text, sep = "_"),
@@ -336,21 +350,53 @@ plot_kegg_picture <- function(search.term, quote.level = "####", fig.width = 100
 
         cat("\n\n")
     }
+    invisible(fig.data)
 }
 ```
 
 #### Oxidative Phosphorylation  {.tabset .tabset-fade .tabset-pills}
 
 ```{r oxphos, results = "asis", error = FALSE, message = FALSE, warning = FALSE}
-plot_kegg_picture(search.term = "Oxidative phosphorylation", quote.level = "#####", fig.width = 100)
+oxphos.data <- plot_kegg_picture(search.term = "Oxidative phosphorylation", quote.level = "#####", fig.width = 100)
+
+fig.data <- data.frame("entrezID" = names(oxphos.data$Adipose),
+    "Scaled_Loading" = oxphos.data$Adipose)
+write_table_with_header(fig.data, file.path(figure.data.dir, "Supp_Fig6.txt"),
+    header = "Data used to generate Supplementary Figure 6 using the R package
+    pathview. Table includes the entrez gene ID of each gene in the mouse
+    Oxidative Phosphorylation pathway as well as the loading of that gene 
+    in adipose tissue scaled to run between 0 and 1. Transcripts with NAs
+    were not represented in the gene expression data set.")
 ```
 
 #### Branched-chain amino acid degradation  {.tabset .tabset-fade .tabset-pills}
 
 ```{r another, results = "asis", error = FALSE, message = FALSE, warning = FALSE}
-plot_kegg_picture("Valine, leucine and isoleucine degradation", quote.level = "#####", fig.width = 75)
+
 #plot_kegg_picture("PPAR signaling pathway", quote.level = "#####", fig.width = 75)
-plot_kegg_picture("Citrate cycle (TCA cycle)", quote.level = "#####", fig.width = 75)
+tca.data <- plot_kegg_picture("Citrate cycle (TCA cycle)", quote.level = "#####", fig.width = 75)
+
+fig.data <- data.frame("entrezID" = names(tca.data$Adipose),
+    "Scaled_Loading" = tca.data$Adipose)
+write_table_with_header(fig.data, file.path(figure.data.dir, "Supp_Fig7.txt"),
+    header = "Data used to generate Supplementary Figure 7 using the R package
+    pathview. Table includes the entrez gene ID of each gene in the mouse
+    TCA cycle pathway as well as the loading of 
+    that gene in adipose tissue scaled to run between 0 and 1. Transcripts 
+    with NAs were not represented in the gene expression data set.")
+
+
+branched.data <- plot_kegg_picture("Valine, leucine and isoleucine degradation", quote.level = "#####", fig.width = 75)
+
+fig.data <- data.frame("entrezID" = names(branched.data$Adipose),
+    "Scaled_Loading" = branched.data$Adipose)
+write_table_with_header(fig.data, file.path(figure.data.dir, "Supp_Fig8.txt"),
+    header = "Data used to generate Supplementary Figure 8 using the R package
+    pathview. Table includes the entrez gene ID of each gene in the mouse
+    branched-chain amino acid degradation pathway as well as the loading of 
+    that gene in adipose tissue scaled to run between 0 and 1. Transcripts 
+    with NAs were not represented in the gene expression data set.")
+
 ```
 
 
@@ -545,6 +591,16 @@ for(tx in 1:length(tissue.names)){
     cat("\n\n")
 }
 dev.off()
+
+tissue.label <- unlist(lapply(1:length(extreme.go), function(x) rep(names(extreme.go)[x], length(extreme.go[[x]]))))
+go.label <- unlist(lapply(extreme.go, names))
+fig.data <- data.frame("Tissue" = tissue.label, "GO term" = go.label,
+    "NES" = unlist(extreme.go))
+write_table_with_header(fig.data, file.path(figure.data.dir, "Supp_Fig5.txt"),
+    header = "Data corresponding to Supplemental Figure 5. Table includes
+    normalized enrichment scores for the most strongly enriched GO terms
+    for transcripts ordered by loading in each tissue.")
+
 ```
 
 ### GO Term Loading Distributions

@@ -669,8 +669,8 @@ if(plot.individuals){
 
         draw.rectangle(-2.1, -0.7, 1, 2, fill = "white")
 
-        text(x = -2, y = 1.75, labels = bquote(R^2 == .(stats[1])), adj = 0, cex = 1.2)
-        text(x = -2, y = 1.25, labels = paste0("p = ", signif(stats[2], 2)), adj = 0, cex = 1.2)
+        text(x = -2, y = 1.75, labels = bquote(italic(R)^2 ==.(stats[1])), adj = 0, cex = 1.2)
+        text(x = -2, y = 1.25, labels = bquote(italic(p)==.(signif(stats[2], 2))), adj = 0, cex = 1.2)
     }
     dev.off()
 

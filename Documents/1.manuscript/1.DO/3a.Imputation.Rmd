@@ -437,7 +437,7 @@ saveRDS(local.distal.comp, here("Results", "Paper", "Local_Distal_Comparison.RDS
 
 ```{r fig2A}
 pdf(here("Results", "Paper", "Fig2A.pdf"), width = 8, height = 5)
-plot.grouped.boxes(local.distal.comp, type = "matrix", ylab = "",
+plot.grouped.boxes(group.list = local.distal.comp, type = "matrix", ylab = "",
     main = "", group.cols = c(local.col, distal.col), cex.names = 1.5,
     plot.type = "vioplot", within.group.sep = 0.9, between.group.sep = 1.5,
     print.vals = "median")
@@ -449,7 +449,8 @@ fig.table <- Reduce("rbind", local.distal.comp)
 fig.table <- cbind(rownames(fig.table), local.distal.label, fig.table)
 colnames(fig.table)[1:2] <- c("geneID", "eQTL_label")
 write_table_with_header(fig.table, file.path(figure.data.dir, "Fig2A.txt"),
- header = "#Data for Figure 2A. Variance explained by local and distal components of each transcript.")
+ header = "Data for Figure 2A. Variance explained by local and 
+ distal components of each transcript.")
 ```
 
 ```{r fig2A_alt, eval = FALSE}
@@ -624,9 +625,9 @@ plot_with_centiles <- function(x, y, main = "", xlab = "",
     spear.cor <- cor.test(x, y, use = "pairwise.complete.obs", method = "spearman")
     spear.p <- threshold_p(spear.cor$p.value, return.text = TRUE)
     spear.rho <- spear.cor$estimate
-    plot.text(paste("rho =", signif(spear.rho, 2)), rel.x = 0.95, rel.y = 0.95, add = TRUE, adj = 1)
+    plot.text(bquote("Spearman" ~ rho == .(signif(spear.rho, 2))), rel.x = 0.95, rel.y = 0.95, add = TRUE, adj = 1)
+    #plot.text(paste("rho =", signif(spear.rho, 2)), rel.x = 0.95, rel.y = 0.95, add = TRUE, adj = 1)
     plot.text(spear.p, rel.x = 0.95, rel.y = 0.85, add = TRUE, adj = 1)
-
 }
 
 plot_linear <- function(x, y, main = "", xlab = "", 
@@ -748,7 +749,9 @@ dev.off()
 
 fig.table <- Reduce("rbind", fig.data)
 write_table_with_header(fig.table, file.path(figure.data.dir, "Fig2B.txt"),
- header = "#Data for figure 2B. For each transcript in each tissue the variance explained\n#by the local genetic component and the maximum correlation across all traits.")
+    header = "Data for figure 2B. For each transcript in each 
+    tissue the variance explained by the local genetic component 
+    and the maximum correlation across all traits.")
 ```
 
 #### LOD - with line
@@ -907,7 +910,9 @@ dev.off()
 
 fig.table <- Reduce("rbind", fig.data)
 write_table_with_header(fig.table, file.path(figure.data.dir, "Fig2C.txt"),
- header = "#Data for figure 2C. For each transcript in each tissue the variance explained\n#by the distal genetic component and the maximum correlation across all traits.")
+    header = "Data for figure 2C. For each transcript in each 
+    tissue the variance explained by the distal genetic 
+    component and the maximum correlation across all traits.")
 
 ```
 

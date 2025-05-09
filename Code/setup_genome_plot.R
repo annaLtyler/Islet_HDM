@@ -20,6 +20,8 @@ setup_genome_plot <- function(map, ylim = c(0,8), chr = c(1:19, "X")){
   plot.window(xlim = c(0, length(u_chr)+1), ylim = ylim)
   label.shift <- ymin - (plot.height*0.02)
 
+  chr.x <- vector(mode = "list", length = length(u_chr))
+  names(chr.x) <- u_chr
   for(i in 1:length(u_chr)){
     xmin <- (chr.min[i]/chr.max[i] + (i-1))
     xmax <- ((chr.min[i]/chr.max[i])+i)
@@ -27,7 +29,10 @@ setup_genome_plot <- function(map, ylim = c(0,8), chr = c(1:19, "X")){
       draw.rectangle(xmin, xmax, ymin, ymax, fill = rgb(0.8, 0.8, 0.8), border.col = NA)
       }
   text(x = mean(c(xmin, xmax)), y = label.shift, labels = u_chr[i], adj = 0.5)
+  chr.x[[i]] <- c(xmin, xmax)
   }
   par(xpd = FALSE)
+
+  invisible(chr.x)
 }
 

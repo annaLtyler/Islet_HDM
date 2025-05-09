@@ -303,8 +303,10 @@ Does this make sense?
 
 ```{r fig8A}
 all.types <- c(adipose_type_loadings, islet_cell_loadings)
+all.n <- sapply(adipose_type_loadings, length)
 all.min <- min(sapply(all.types, function(x) min(x, na.rm = TRUE)))
 all.max <- max(sapply(all.types, function(x) max(x, na.rm = TRUE)))
+names(adipose_type_loadings) <- paste0(names(adipose_type_loadings), "\n(", all.n, ")")
 
 pdf(here("Results", "Paper", "Fig8A.pdf"), width = 5, height = 5)
 par(mar = c(11,7,2,2))

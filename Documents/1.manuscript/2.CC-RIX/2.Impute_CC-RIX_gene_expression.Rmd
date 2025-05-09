@@ -29,6 +29,7 @@ hdma.results.dir <- here("Results", "DO", "High_Dim_Med", "tissue_together-_-com
 data.results.dir <- here("Results", "CC-RIX", "Data") #directory holding parsed data for downstream workflows
 results.dir <- here("Results", "CC-RIX", "Imputed") #directory holding results from this workflow
 if(!file.exists(results.dir)){dir.create(results.dir)}
+figure.data.dir <- here("Results", "Paper", "Source_Data") #Nature Communications requires data for all figures. Keep it here
 
 all.fun <- list.files(here("Code"), full.names = TRUE, pattern = ".R")
 for(i in 1:length(all.fun)){source(all.fun[i])}
@@ -326,6 +327,7 @@ for(tx in 1:length(cc.tissues)){
 pdf(here("Results", "Paper", "Supp_Fig_CC-RIX_ImputationA.pdf"), height = 11, width = 8)
 layout(matrix(1:6, ncol = 2, byrow = TRUE))
 par(mar = c(4,4.5,2,4))
+fig.data <- vector(mode = "list", length = length(cc.tissues))
 for(tx in 1:length(cc.tissues)){
   eqtl.idx <- grep(cc.tissues[tx], names(local.eqtl), ignore.case = TRUE)
   imp.idx <- which(names(tx.imp.expr) == cc.tissues[tx])
@@ -360,8 +362,22 @@ for(tx in 1:length(cc.tissues)){
     pch = 16, col = tissue.cols[tx])
   abline(h = 0)
 
+  fig.table <- data.frame("Tissue" = rep(cc.tissues[tx], length(common.with.var)), 
+    "geneID" = names(measured.imp.cor),
+    "eQTL_LOD" = local.eqtl[[eqtl.idx]][common.with.var,"lod"], 
+    "Measured_Imputed_Correlation" = measured.imp.cor)
+  fig.data[[tx]] <- fig.table
 }
 dev.off()
+
+fig.table <- Reduce("rbind", fig.data)
+write_table_with_header(fig.table, file.path(figure.data.dir, "Supp_Fig9A-B.txt"),
+  header = "Data associated with Supplementary Figures 9A and B. Table 
+  includes all transcripts in the three CC-RIX tissues with their local
+  eQTL LOD score, and the correlation between the measured transcript level
+  and the imputed transcript level across individuals. Transcripts with 
+  higher local eQTL LOD scores had higher correlations between measured
+  and imputed values.")
 
 ```
 
@@ -408,6 +424,16 @@ plot.dim <- par("usr")
 segments(x0 = plot.dim[1], x1 = plot.dim[2], y0 = 0)
 dev.off()
 
+pop.label <- unlist(lapply(1:length(comp.list), function(x) rep(names(comp.list)[x], nrow(comp.list[[x]]))))
+gene.label <- unlist(lapply(comp.list, rownames))
+var.table <- Reduce("rbind", comp.list)
+fig.data <- data.frame("Population" = pop.label, "geneID" = gene.label,
+  var.table)
+
+write_table_with_header(fig.data, file.path(figure.data.dir, "Supp_Fig9C.txt"),
+  header = "Data associated with Supplementary Figure 9C. Table includes
+  the variance explained by each transcript by local genetics in each of
+  three tissues in two mouse populations, the DO and the CC-RIX.")
 ```
 ## Imputation and Trait Relevance {.tabset .tabset-fade .tabset-pills}
 
