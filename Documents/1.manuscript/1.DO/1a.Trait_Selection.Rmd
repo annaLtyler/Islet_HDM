@@ -348,12 +348,13 @@ legend(45, 0.05, fill = c(fcol, mcol), cex = 0.8,
 
 dev.off()
 
+
 sex.label = c("Female", "Male")
 pdf(here("Results", "Paper", "Fig1C.pdf"), height = 4, width = 4)
 par(mar = c(4,8,4,4))
-model <- lm(glu[not.outlier]~sex[not.outlier]) 
-f <- summary(model)$fstatistic
-p.text <- threshold_p(pf(f[1],f[2],f[3],lower.tail=F), return.text = TRUE)
+groups <- lapply(2:1, function(x) glu[not.outlier][which(sex[not.outlier] == x)])
+sex.test <- t.test(groups[[1]], groups[[2]])
+p.text <- threshold_p(sex.test$p.value, return.text = TRUE, sig.dig = 3)
 n.fm <- sapply(1:2, function(x) length(which(sex[not.outlier] == x)))
 boxplot(glu[not.outlier]~sex[not.outlier], names = NA, , xlab = "",
   ylab = "Fasting Glucose (mg/dL)", col = c(fcol, mcol))
@@ -369,8 +370,9 @@ dev.off()
 
 pdf(here("Results", "Paper", "Fig1D_E.pdf"), height = 3, width = 4)
 par(mar = c(4,4,1,2))
-weight.glu.stats <- plot.with.model(weight[not.outlier], glu[not.outlier], xlab = "",
-  ylab = "", col = sex+2, write.results = FALSE)
+weight.glu.stats <- plot.with.model(x = weight[not.outlier], 
+  y = glu[not.outlier], xlab = "",
+  ylab = "", col = sex+2, write.results = FALSE, return.full.model = FALSE)
 mtext("Weight (g)", side = 1, line = 2.5, cex = 1)
 mtext("Fasting Glucose (mg/dL)", side = 2, line = 2.5, cex = 1)
 text(x = 15, y = 365, labels = bquote(italic(R)^2 == .(weight.glu.stats[1])), adj = 0)
@@ -379,7 +381,7 @@ paper.data <- record_result(weight.glu.stats, paper.data$paper.data, "weight_glu
 
 food.weight.stats <- plot.with.model(num.pheno[,"food_ave"], num.pheno[,"weight_final"],
   ylab = "", xlab = "", col = sex+2,
-  write.results = FALSE)
+  write.results = FALSE, return.full.model = FALSE)
 mtext("Avg Food Consumption (AU)", side = 1, line = 2.5, cex = 1)
 mtext("Weight (g)", side = 2, line = 2.5, cex = 1)
 text(x = 1.8, y = 68, labels = bquote(italic(R)^2 == .(food.weight.stats[1])), adj = 0)

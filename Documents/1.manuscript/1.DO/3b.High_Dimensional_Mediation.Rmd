@@ -1049,7 +1049,7 @@ if(max.tx == 4){
             plot(adj.x, adj.y, pch = 16, col = tissue.cols[tx], xlab = "", 
                 ylab = "")
             abline(model, col = "#3182bd", lwd = 3)
-            plot.text(bquote(italic(r)~"="~.(signif(cor(adj.y, adj.x), 2))), rel.x = 0.05, rel.y = 0.95, add = TRUE, adj = 0, cex = 1.2)
+            plot.text(bquote(italic(R^2)~"="~.(signif(cor(adj.y, adj.x), 2))), rel.x = 0.05, rel.y = 0.95, add = TRUE, adj = 0, cex = 1.2)
             plot.text(p.text, rel.x = 0.05, rel.y = 0.88, add = TRUE, adj = 0, cex = 1.2)
             
 
@@ -1124,9 +1124,10 @@ if(max.tx == 4){
         f <- summary(model)$fstatistic
         pval <- signif(pf(f[1],f[2],f[3],lower.tail=F), 2)
         p.text <- threshold_p(pval, return.text = TRUE)
+        R2 <- summary(model)$r.squared
         plot(adj.x, adj.y, pch = 16, xlab = "", ylab = "")
         abline(model, col = "#3182bd", lwd = 3)
-        plot.text(bquote(italic(r)~"="~.(signif(cor(adj.y, adj.x), 2))), rel.x = 0.05, rel.y = 0.95, add = TRUE, adj = 0, cex = 1.2)
+        plot.text(bquote(italic(R^2)~"="~.(signif(R2, 2))), rel.x = 0.05, rel.y = 0.95, add = TRUE, adj = 0, cex = 1.2)
         plot.text(p.text, rel.x = 0.05, rel.y = 0.88, add = TRUE, adj = 0, cex = 1.2)
         mtext(axis.labels[[var2]], side = 2, line = 2.5)
         mtext(axis.labels[[var1]], side = 1, line = 2.5)
@@ -1972,6 +1973,8 @@ pdf(here("Results", "Paper", "Fig5A.pdf"), width = 5, height = 12)
 load.gene.info <- plot_gene_stats(gene.set.stats = gene.stats)
 dev.off()
 
+load.sig.test <- t.test(load.gene.info$Local_Heritability, load.gene.info$Distal_Heritability)
+
 write_table_with_header(load.gene.info, file.path(figure.data.dir, "Fig5A.txt"),
     header = "Data associated with Figure 5A. Genes with the top 10 largest
     loadings in each tissue. Table includes the tissue in which each gene is
@@ -2051,6 +2054,9 @@ dev.off()
 pdf(here("Results", "Paper", "Fig5C.pdf"), width = 5, height = 12)
 local.gene.info <- plot_gene_stats(local.gene.stats, loading.lim = c(-0.06, 0.06))
 dev.off()
+
+local.sig.test <- t.test(local.gene.info$Local_Heritability, local.gene.info$Distal_Heritability)
+
 
 write_table_with_header(local.gene.info, file.path(figure.data.dir, "Fig5C.txt"),
     header = "Data associated with Figure 5C. Genes with the top 10 largest
@@ -2197,6 +2203,8 @@ dev.off()
 pdf(here("Results", "Paper", "Fig5B.pdf"), width = 5, height = 12)
 twas.gene.info <- plot_gene_stats(twas.gene.stats, loading.lim = c(-0.06, 0.06))
 dev.off()
+
+twas.sig.test <- t.test(twas.gene.info$Local_Heritability, twas.gene.info$Distal_Heritability)
 
 write_table_with_header(twas.gene.info, file.path(figure.data.dir, "Fig5B.txt"),
     header = "Data associated with Figure 5B. Genes with the top 10 largest

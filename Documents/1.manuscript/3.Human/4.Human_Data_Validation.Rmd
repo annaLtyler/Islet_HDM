@@ -62,7 +62,8 @@ fig.main.cex = 1.8
 ```
 
 ```{r load_libraries, message = FALSE, warning = FALSE, error = FALSE}
-all.packages <- c("pheatmap", "gprofiler2", "RColorBrewer", "GEOquery")
+all.packages <- c("pheatmap", "gprofiler2", "RColorBrewer", "GEOquery", 
+    "stringr")
 load_libraries(all.packages)
 ```
 
@@ -350,19 +351,22 @@ abline(h = 0)
 ```
 
 ```{r fig8D4}
+
 pdf(here("Results", "Paper", "Fig8D4.pdf"), width = 5, height = 5)
 par(mar = c(4,4,6,4))
 boxplot(status_list[mean.order], xlab = "", ylab = "", 
     main = "", names = NA)
-mtext("score", side = 2, line = 2.5, cex = 2)
+mtext("MDI", side = 2, line = 2.5, cex = 2)
 abline(h = 0)
 par(xpd = NA)
 mtext("diabetic vs. non-diabetic", side = 3, line = 1, cex = fig.main.cex)
+n.group <- sapply(status_list, length)
 text(x = c(1,2), y = rep(-4.5e-4, 2), 
-    labels = str_to_lower(gsub("_", "\n", names(status_list[mean.order]))), 
+    labels = paste0(str_to_lower(gsub("_", "\n", names(status_list[mean.order]))), 
+    "\n(", n.group[mean.order], ")"), 
     cex = fig.label.cex)
-plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
-    adj = 1, cex = 2)
+plot.text(bquote(italic(p) == .(signif(p, 2))), rel.x = 0.98, 
+    rel.y = 0.07, add = TRUE, adj = 1, cex = 2)
 dev.off()
 
 status.label <- unlist(lapply(1:length(status_list), function(x) rep(names(status_list)[x], length(status_list[[x]]))))
@@ -439,20 +443,22 @@ abline(h = 0)
 
 
 ```{r fig8D2}
-stop()
+
 pdf(here("Results", "Paper", "Fig8D2.pdf"), width = 5, height = 5)
 par(mar = c(4,4,6,4))
 boxplot(status_list[mean.order], xlab = "", ylab = "", 
     main = "", names = NA)
-mtext("score", side = 2, line = 2.5, cex = 2)
+mtext("MDI", side = 2, line = 2.5, cex = 2)
 abline(h = 0)
 par(xpd = NA)
 mtext("obesity in post-menopausal women", side = 3, line = 1, cex = fig.main.cex)
+n.group <- sapply(status_list, length)
 text(x = c(1,2), y = rep(-0.0055, 2), 
-    labels = str_to_lower(gsub("_", "\n", names(status_list[mean.order]))), 
+    labels = paste0(str_to_lower(gsub("_", "\n", names(status_list[mean.order]))),
+        " (", n.group[mean.order], ")"), 
     cex = fig.label.cex)
-plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
-    adj = 1, cex = 2)
+plot.text(bquote(italic(p) == .(signif(p, 2))), rel.x = 0.98, 
+    rel.y = 0.07, add = TRUE, adj = 1, cex = 2)
 dev.off()
 
 status.label <- unlist(lapply(1:length(status_list), function(x) rep(names(status_list)[x], length(status_list[[x]]))))
@@ -550,15 +556,15 @@ par(mar = c(4,4,6,4))
 boxplot(status_list[mean.order], xlab = "", ylab = "", 
     main = "", names = NA)
 mtext("obesity in children", side = 3, line = 1, cex = fig.main.cex)
-mtext("score", side = 2, line = 2.5, cex = 2)
+mtext("MDI", side = 2, line = 2.5, cex = 2)
 abline(h = 0)
 par(xpd = NA)
 text(x = c(1,2), y = rep(-0.0019, 2), 
     labels = paste0(str_to_lower(gsub("_", "\n", 
     names(status_list[mean.order]))), " (", group.n[mean.order], ")"), 
     cex = fig.label.cex)
-plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
-    adj = 1, cex = 2)
+plot.text(bquote(italic(p) == .(signif(p, 2))), rel.x = 0.98, 
+    rel.y = 0.07, add = TRUE, adj = 1, cex = 2)
 dev.off()
 
 
@@ -681,15 +687,16 @@ pdf(here("Results", "Paper", "Fig8D3.pdf"), width = 5, height = 5)
 par(mar = c(4,4,6,4))
 boxplot(status_list[mean.order], xlab = "", ylab = "", 
     main = "", names = NA)
-mtext("score", side = 2, line = 2.5, cex = 2)
+mtext("MDI", side = 2, line = 2.5, cex = 2)
 abline(h = 0)
 par(xpd = NA)
 mtext("diabetic vs. non-diabetic", side = 3, line = 1, cex = fig.main.cex)
+n.group <- sapply(status_list, length)
 text(x = c(1,2), y = rep(-0.0025, 2), 
-    labels = str_to_lower(gsub("visceral", "", gsub("_", "\n", names(status_list[mean.order])))), 
-    cex = fig.label.cex)
-plot.text(paste("p =", signif(p, 2)), rel.x = 0.98, rel.y = 0.07, add = TRUE, 
-    adj = 1, cex = 2)  
+    labels = paste0(str_to_lower(gsub("visceral", "", gsub("_", "\n", names(status_list[mean.order])))), " (", n.group[mean.order], ")"), 
+        cex = fig.label.cex)
+plot.text(bquote(italic(p) == .(signif(p, 2))), rel.x = 0.98, 
+    rel.y = 0.07, add = TRUE, adj = 1, cex = 2)  
 dev.off()
 
 status.label <- unlist(lapply(1:length(status_list), function(x) rep(names(status_list)[x], length(status_list[[x]]))))

@@ -84,7 +84,7 @@ args = commandArgs(trailingOnly=TRUE)
 use.cc.imputed.transcriptome <- as.logical(args[1])
 
 if(is.na(use.cc.imputed.transcriptome)){
-    use.cc.imputed.transcriptome = FALSE #set this to TRUE to do the equivalent of genomic prediction
+    use.cc.imputed.transcriptome = TRUE #set this to TRUE to do the equivalent of genomic prediction
 }
 
 ```
@@ -539,7 +539,7 @@ for(i in 1:length(tissue.expr)){
         pheno.cor <- t(sapply(1:ncol(adj.pheno), 
             function(x) plot.with.model(rankZ(mean.mge), rankZ(adj.pheno[,x]), 
             ylab = colnames(adj.pheno)[x], report = "lm", 
-            main = colnames(adj.pheno)[x], xlab = "Predicted Metabolic Index")))
+            main = colnames(adj.pheno)[x], xlab = "Predicted MDI")))
     }else{
         u_strain <- unique(cc_strains)
         u_strain_idx <- lapply(u_strain, function(x) which(cc_strains == x))
@@ -558,7 +558,7 @@ for(i in 1:length(tissue.expr)){
         for(ph in 1:ncol(strain.pheno)){
             pheno.cor[ph,] <- plot.with.model(strain.mge, strain.pheno[,ph], 
                 ylab = colnames(strain.pheno)[ph], report = "lm", 
-                main = colnames(strain.pheno)[ph], xlab = "Predicted Metabolic Index",
+                main = colnames(strain.pheno)[ph], xlab = "Predicted MDI",
                 ylim = c(ymin, ymax), xlim = c(xmin, xmax))
             segments(x0 = strain.mge, y0 = strain.pheno[,ph]+pheno.error[,ph], 
                 y1 = strain.pheno[,ph]-pheno.error[,ph])
@@ -610,7 +610,7 @@ if(plot.individuals){
             report = "cor.test", main = "", xlab = "", ylab = "", write.results = FALSE,
             col = tissue.cols[i], add = TRUE, line.col = "darkgray")
             
-        mtext("Predicted Metabolic Index", side = 1, line = 2.5)
+        mtext("Predicted MDI", side = 1, line = 2.5)
         mtext("Body Weight", side = 2, line = 2.5)
 
         draw.rectangle(-3.2, -1, 1.9, 3.3, fill = "white")
@@ -647,7 +647,7 @@ if(plot.individuals){
         fig.table <- cbind(names(strain.mge), 
             rep(names(tissue.expr)[i], length(strain.mge)), strain.mge, 
             strain.pheno[,"Body.Weight"], pheno.error[,"Body.Weight"])
-        colnames(fig.table) <- c("Strain", "Tissue", "Predicted Metabolic Index", 
+        colnames(fig.table) <- c("Strain", "Tissue", "Predicted MDI", 
             "Avg Body Weight", "Std Dev")
         fig.data[[i]] <- fig.table
 
@@ -663,8 +663,12 @@ if(plot.individuals){
         stats <- plot.with.model(strain.mge, strain.pheno[,"Body.Weight"], 
             report = "lm", main = "", xlab = "", ylab = "", write.results = FALSE,
             col = tissue.cols[i], add = TRUE, line.col = "darkgray", cex = 2)
-            
-        mtext("Predicted Metabolic Index", side = 1, line = 2.5)
+
+        model <- plot.with.model(strain.mge, strain.pheno[,"Body.Weight"],
+            return.full.model = TRUE, plot.results = FALSE)
+        #summary(model)
+
+        mtext("Predicted MDI", side = 1, line = 2.5)
         mtext("Body Weight", side = 2, line = 2.5)
 
         draw.rectangle(-2.1, -0.7, 1, 2, fill = "white")

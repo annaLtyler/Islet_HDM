@@ -5,7 +5,7 @@
 plot.with.model <- function(x, y, xlim = NULL, ylim = NULL, col = "black", 
 line.col = "#a6bddb", pch = 16, main, xlab, ylab, report = c("lm", "cor.test"), 
 cex = 1, plot.results = TRUE, write.results = TRUE, add = FALSE, plot.type = "p",
-p.value.thresh = 2.2e-16){
+p.value.thresh = 2.2e-16, return.full.model = FALSE){
 	
 	if(missing(main)){main = ""}
 	if(missing(xlab)){xlab = deparse(substitute(x))}
@@ -62,7 +62,11 @@ p.value.thresh = 2.2e-16){
 		abline(model, col = line.col, lwd = 3)
 	}
 	}
-	
-	invisible(c("r" = r2, "p" = p))
+
+	if(!return.full.model){	
+		invisible(c("r" = r2, "p" = p))
+	}else{
+		invisible(model)
+	}
 	
 }
